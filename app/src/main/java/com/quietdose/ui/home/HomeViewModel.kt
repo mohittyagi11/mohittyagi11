@@ -109,7 +109,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun anchorMinute(g: GroupEntity): Int = when (g.trigger) {
         TriggerType.WAKE -> 7 * 60
-        TriggerType.TIME_WINDOW ->
+        TriggerType.TIME_WINDOW, TriggerType.CADENCE_DAYS ->
             runCatching { JSONObject(g.triggerConfig).optInt("startMin", 14 * 60) }.getOrDefault(14 * 60)
         TriggerType.ARRIVE_HOME, TriggerType.ARRIVE_PLACE -> 18 * 60 + 30
         TriggerType.LEAVE -> 18 * 60
