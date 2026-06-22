@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.quietdose.ui.home.HomeScreen
 import com.quietdose.ui.insights.InsightsScreen
+import com.quietdose.ui.settings.SettingsScreen
 import com.quietdose.ui.stack.StackScreen
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.AccentSoft
@@ -69,16 +71,27 @@ class MainActivity : ComponentActivity() {
 
                 val hour = remember { LocalTime.now().hour }
                 var tab by rememberSaveable { mutableIntStateOf(0) }
+                var showSettings by rememberSaveable { mutableStateOf(false) }
 
                 Box(Modifier.fillMaxSize().background(Ambient.backdrop(hour))) {
-                    Scaffold(
-                        containerColor = Color.Transparent,
-                        bottomBar = { BottomBar(tab) { tab = it } },
-                    ) { inner ->
-                        when (tab) {
-                            0 -> HomeScreen(modifier = Modifier.padding(inner))
-                            1 -> StackScreen(modifier = Modifier.padding(inner))
-                            else -> InsightsScreen(modifier = Modifier.padding(inner))
+                    if (showSettings) {
+                        SettingsScreen(
+                            modifier = Modifier.fillMaxSize(),
+                            onBack = { showSettings = false },
+                        )
+                    } else {
+                        Scaffold(
+                            containerColor = Color.Transparent,
+                            bottomBar = { BottomBar(tab) { tab = it } },
+                        ) { inner ->
+                            when (tab) {
+                                0 -> HomeScreen(
+                                    modifier = Modifier.padding(inner),
+                                    onOpenSettings = { showSettings = true },
+                                )
+                                1 -> StackScreen(modifier = Modifier.padding(inner))
+                                else -> InsightsScreen(modifier = Modifier.padding(inner))
+                            }
                         }
                     }
                 }

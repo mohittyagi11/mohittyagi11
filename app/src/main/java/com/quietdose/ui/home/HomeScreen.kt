@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -69,7 +70,11 @@ import java.time.LocalTime
 private enum class Mode { Timeline, Checklist }
 
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier, vm: HomeViewModel = viewModel()) {
+fun HomeScreen(
+    modifier: Modifier = Modifier,
+    vm: HomeViewModel = viewModel(),
+    onOpenSettings: () -> Unit = {},
+) {
     val state by vm.state.collectAsStateWithLifecycle()
     val focusTint = state.focus?.let { GroupStyle.tint(it.group) } ?: TintNeutral
     var mode by remember { mutableStateOf(Mode.Timeline) }
@@ -86,6 +91,7 @@ fun HomeScreen(modifier: Modifier = Modifier, vm: HomeViewModel = viewModel()) {
                 tint = focusTint,
                 allDone = state.allDone,
                 statusLine = statusLine(state),
+                onOpenSettings = onOpenSettings,
             )
         }
         item {
@@ -131,7 +137,14 @@ private fun statusLine(state: HomeUiState): String {
 }
 
 @Composable
-private fun SlimHeader(taken: Int, due: Int, tint: Color, allDone: Boolean, statusLine: String) {
+private fun SlimHeader(
+    taken: Int,
+    due: Int,
+    tint: Color,
+    allDone: Boolean,
+    statusLine: String,
+    onOpenSettings: () -> Unit,
+) {
     val greeting = remember {
         when (LocalTime.now().hour) {
             in 5..11 -> "Good morning"
@@ -166,6 +179,18 @@ private fun SlimHeader(taken: Int, due: Int, tint: Color, allDone: Boolean, stat
                 }
             }
         }
+        Spacer(Modifier.size(10.dp))
+        Icon(
+            Icons.Rounded.Settings,
+            contentDescription = "Settings",
+            tint = TextMid,
+            modifier = Modifier
+                .size(24.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { onOpenSettings() },
+        )
     }
 }
 
