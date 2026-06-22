@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.quietdose.brain.BrainProvider
 import com.quietdose.brain.analysis.ModelCapability
+import com.quietdose.brain.analysis.ProductSignals
 import com.quietdose.brain.skills.DraftItem
 import com.quietdose.brain.skills.IdentifyProductSkill
 import com.quietdose.data.model.DoseUnit
@@ -34,13 +35,23 @@ object ProductEnricher {
         val url: String,
         val sourceTitle: String?,
         val note: String?,
+        val signals: ProductSignals = ProductSignals(),
     )
 
-    /** Pull the first http(s) URL out of arbitrary shared text. */
+    /**
+     * Pull a URL out of arbitrary shared/pasted text and normalize it. Accepts a
+     * full http(s) link, or a bare domain like "amazon.in/dp/…" (parsed, then
+     * assumed https). Returns null only when there's no plausible link at all.
+     */
     fun extractUrl(text: String?): String? {
         if (text.isNullOrBlank()) return null
-        val m = Regex("https?://[^\\s\"'<>]+").find(text) ?: return null
-        return m.value.trim().trimEnd('.', ',', ')')
+        Regex("https?://[^\\s\"'<>]+", RegexOption.IGNORE_CASE).find(text)?.let {
+            return it.value.trim().trimEnd('.', ',', ')')
+        }
+        // No scheme — look for a bare domain/path and assume https.
+        val bare = Regex("\\b([a-z0-9-]+\\.)+[a-z]{2,}(/[^\\s\"'<>]*)?", RegexOption.IGNORE_CASE).find(text)
+            ?: return null
+        return "https://" + bare.value.trim().trimEnd('.', ',', ')')
     }
 
     suspend fun enrich(context: Context, url: String): EnrichResult = withContext(Dispatchers.IO) {
@@ -56,6 +67,9 @@ object ProductEnricher {
             ?: meta(html, "product:brand")
             ?: detectBrand(html)
         val category = jsonLdCategory(jsonld) ?: meta(html, "product:category")
+        val (priceText, priceAmount, priceCurrency) = extractPrice(jsonld, html)
+        val (ratingValue, ratingCount) = extractRating(jsonld, html)
+        val servings = detectServings(title.orEmpty() + " " + html.take(6000))
 
         val cleanedTitle = cleanTitle(title)
         val combined = listOfNotNull(cleanedTitle, jsonld?.optString("description")?.take(300)).joinToString(". ")
@@ -100,6 +114,17 @@ object ProductEnricher {
             url = url,
             sourceTitle = title,
             note = null,
+            signals = ProductSignals(
+                brand = brand?.take(60),
+                priceText = priceText,
+                priceAmount = priceAmount,
+                priceCurrency = priceCurrency,
+                ratingValue = ratingValue,
+                ratingCount = ratingCount,
+                servings = servings,
+                sourceTitle = title,
+                url = url,
+            ),
         )
     }
 
@@ -211,6 +236,71 @@ object ProductEnricher {
             is JSONObject -> c.optString("name").ifBlank { null }
             else -> null
         }
+    }
+
+    /** Price from JSON-LD offers, then OpenGraph/meta, then a currency-symbol scan. */
+    private fun extractPrice(product: JSONObject?, html: String): Triple<String?, Double?, String?> {
+        // 1) JSON-LD offers.price / priceCurrency
+        val offers = product?.opt("offers")
+        val offer = when (offers) {
+            is JSONObject -> offers
+            is JSONArray -> offers.optJSONObject(0)
+            else -> null
+        }
+        val ldPrice = offer?.optString("price")?.ifBlank { null }
+            ?: offer?.optString("lowPrice")?.ifBlank { null }
+        val ldCurrency = offer?.optString("priceCurrency")?.ifBlank { null }
+        if (ldPrice != null) {
+            val amt = ldPrice.replace(Regex("[^0-9.]"), "").toDoubleOrNull()
+            return Triple(formatPrice(amt, ldCurrency) ?: ldPrice, amt, ldCurrency)
+        }
+        // 2) meta tags
+        val metaPrice = meta(html, "product:price:amount") ?: meta(html, "og:price:amount")
+        val metaCurrency = meta(html, "product:price:currency") ?: meta(html, "og:price:currency")
+        if (metaPrice != null) {
+            val amt = metaPrice.replace(Regex("[^0-9.]"), "").toDoubleOrNull()
+            return Triple(formatPrice(amt, metaCurrency) ?: metaPrice, amt, metaCurrency)
+        }
+        // 3) a visible price with a currency symbol (₹, $, £, €) — best-effort, hedged.
+        Regex("([₹$£€])\\s?([0-9][0-9.,]{1,9})").find(html)?.let {
+            val sym = it.groupValues[1]
+            val amt = it.groupValues[2].replace(",", "").toDoubleOrNull()
+            return Triple("$sym${it.groupValues[2]}", amt, currencyForSymbol(sym))
+        }
+        return Triple(null, null, null)
+    }
+
+    private fun formatPrice(amount: Double?, currency: String?): String? {
+        if (amount == null) return null
+        val n = if (amount % 1.0 == 0.0) amount.toLong().toString() else amount.toString()
+        val sym = when (currency?.uppercase()) {
+            "INR" -> "₹"; "USD" -> "$"; "GBP" -> "£"; "EUR" -> "€"; else -> null
+        }
+        return if (sym != null) "$sym$n" else listOfNotNull(currency, n).joinToString(" ")
+    }
+
+    private fun currencyForSymbol(sym: String): String? = when (sym) {
+        "₹" -> "INR"; "$" -> "USD"; "£" -> "GBP"; "€" -> "EUR"; else -> null
+    }
+
+    /** Aggregate rating + review count from JSON-LD, then meta. */
+    private fun extractRating(product: JSONObject?, html: String): Pair<Double?, Int?> {
+        val agg = product?.optJSONObject("aggregateRating")
+        if (agg != null) {
+            val value = agg.optString("ratingValue").replace(Regex("[^0-9.]"), "").toDoubleOrNull()
+            val count = (agg.optString("reviewCount").ifBlank { agg.optString("ratingCount") })
+                .replace(Regex("[^0-9]"), "").toIntOrNull()
+            if (value != null) return value to count
+        }
+        val mv = meta(html, "og:rating")?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull()
+        return mv to null
+    }
+
+    /** Count of capsules/tablets/servings per pack, when stated. */
+    private fun detectServings(text: String): Int? {
+        val m = Regex("(\\d{2,3})\\s*(capsules|tablets|softgels|gummies|servings|veg(?:etarian)? caps|count|pcs)", RegexOption.IGNORE_CASE)
+            .find(text) ?: return null
+        return m.groupValues[1].toIntOrNull()?.takeIf { it in 5..1000 }
     }
 
     /** Last-resort brand extraction from common marketplace markup (e.g. Amazon byline). */

@@ -54,6 +54,8 @@ data class AnalysisReport(
     val safety: List<SafetyFinding>,
     /** Categories that were reviewed and came back clear (shown for honesty/structure). */
     val safetyReviewedClear: List<SafetyCategory>,
+    /** The dynamic, brain-composed page: ordered template blocks the UI renders. */
+    val blocks: List<ReportBlock>,
     val grounded: List<String>,
     val byModel: Boolean,
 )

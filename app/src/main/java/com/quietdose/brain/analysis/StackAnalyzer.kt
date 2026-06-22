@@ -34,6 +34,7 @@ object StackAnalyzer {
         source: SourceKind?,
         sourceName: String?,
         concern: String?,
+        product: ProductSignals? = null,
     ): AnalysisReport {
         val app = context.applicationContext
         val tier = ModelCapability.tier(app)
@@ -120,7 +121,13 @@ object StackAnalyzer {
         val cautionsDistinct = cautions.distinct()
         cautions.clear(); cautions.addAll(cautionsDistinct)
 
-        // Verdict + rationale.
+        // --- Aspect chapters: small grounded contexts, one per AnalysisAspect ---
+        var aspectBlocks = buildAspectBlocks(
+            matched, goodLines, fitLines, safety, safetyClear, source, goal, concern,
+            currentDoseAmount, currentDoseUnit, dependencies, product, stackIng, alreadyHave,
+        )
+
+        // Verdict label is deterministic; the rationale + per-aspect prose come from the model.
         val verdict = when {
             alreadyHave -> "Already in your stack"
             matched == null -> "Worth tracking"
@@ -131,14 +138,34 @@ object StackAnalyzer {
         val placement = matched?.let { placementText(it) }
         var rationale = buildRationale(matched, goal, dependencies, cautions)
         var byModel = false
-        if (tier.isModel && ModelCapability.engineReady(app)) {
+        val engineUp = tier.isModel && ModelCapability.engineReady(app)
+        if (engineUp) {
+            // Incremental: let a capable model fill each chapter's prose (small contexts)…
+            if (tier == ModelTier.CAPABLE) {
+                aspectBlocks = aspectBlocks.map { block ->
+                    if (block.state == AspectState.NOT_ASSESSED) return@map block
+                    val enriched = runCatching {
+                        BrainProvider.engine(app).complete(aspectPrompt(name, matched, block, goal, concern)).trim()
+                    }.getOrNull()?.let { sanitize(it) }
+                    if (!enriched.isNullOrBlank()) { byModel = true; block.copy(summary = enriched) } else block
+                }
+            }
+            // …then synthesize the larger picture from those contexts.
             val enriched = runCatching {
                 BrainProvider.engine(app).complete(
-                    synthesisPrompt(name, matched, goal, source, concern, stackIng.map { it.first.displayName }, dependencies, safety, safetyClear, tier),
+                    verdictPrompt(name, matched, goal, source, concern, verdict, aspectBlocks, tier),
                 ).trim()
-            }.getOrNull()
-            val cleaned = enriched?.let { sanitize(it) }
-            if (!cleaned.isNullOrBlank()) { rationale = cleaned; byModel = true }
+            }.getOrNull()?.let { sanitize(it) }
+            if (!enriched.isNullOrBlank()) { rationale = enriched; byModel = true }
+        }
+
+        // Overall score = weighted roll-up of the chapter scores (safety counts double).
+        val overallScore = rollUpScore(aspectBlocks)
+        val verdictTags = buildList {
+            add(verdict)
+            if (source?.skeptical == true) add("Verify source")
+            if (alreadyHave) add("Possible duplicate")
+            if (dependencies.isNotEmpty()) add("Pairs with ${dependencies.first()}")
         }
 
         // Accrue context for reuse.
@@ -175,6 +202,15 @@ object StackAnalyzer {
             pairings = dependencies,
         )
 
+        // --- Compose the dynamic page: big picture first, then facts, chapters, trail ---
+        val blocks = buildList<ReportBlock> {
+            add(ReportBlock.Verdict(verdict, rationale, overallScore, verdictTags, byModel))
+            buildFactsBlock(matched, product)?.let { add(it) }
+            buildDoseMeter(matched, recDose, recUnit)?.let { add(it) }
+            addAll(aspectBlocks)
+            if (grounded.isNotEmpty()) add(ReportBlock.Reasoning(grounded.distinct().take(8), byModel))
+        }
+
         return AnalysisReport(
             title = matched?.displayName ?: name,
             matchedIngredientKey = matched?.key,
@@ -189,6 +225,7 @@ object StackAnalyzer {
             ),
             safety = safety,
             safetyReviewedClear = safetyClear,
+            blocks = blocks,
             grounded = grounded.distinct(),
             byModel = byModel,
         )
@@ -395,46 +432,267 @@ object StackAnalyzer {
         if (cautions.isEmpty() && deps.isEmpty()) append("It slots into your stack without conflicts.")
     }.trim()
 
-    private fun synthesisPrompt(
+    // --- Aspect chapters (the dynamic page's small contexts) ----------------
+
+    private fun stateFor(score: Int?): AspectState = when {
+        score == null -> AspectState.NOT_ASSESSED
+        score >= 80 -> AspectState.GOOD
+        score >= 60 -> AspectState.MIXED
+        else -> AspectState.CAUTION
+    }
+
+    private fun round2(d: Double): Double = Math.round(d * 100.0) / 100.0
+
+    private fun rollUpScore(blocks: List<ReportBlock.Aspect>): Int? {
+        val weighted = blocks.mapNotNull { b ->
+            b.score?.let { s -> (if (b.aspect == AnalysisAspect.SAFETY) 2 else 1) to s }
+        }
+        if (weighted.isEmpty()) return null
+        val num = weighted.sumOf { it.first * it.second }
+        val den = weighted.sumOf { it.first }
+        return Math.round(num.toDouble() / den).toInt()
+    }
+
+    /** Naive but honest goal-alignment: keyword overlap with benefits/category/name. */
+    private fun goalAligns(goal: String, matched: Ingredient): Boolean {
+        val g = goal.lowercase()
+        val hay = (matched.benefits + matched.category + matched.displayName).joinToString(" ").lowercase()
+        val tokens = g.split(Regex("[^a-z0-9]+")).filter { it.length >= 4 }
+        return tokens.any { hay.contains(it) }
+    }
+
+    private fun buildAspectBlocks(
+        matched: Ingredient?,
+        goodLines: List<AnalysisLine>,
+        fitLines: List<AnalysisLine>,
+        safety: List<SafetyFinding>,
+        safetyClear: List<SafetyCategory>,
+        source: SourceKind?,
+        goal: String?,
+        concern: String?,
+        enteredDose: Double,
+        enteredUnit: DoseUnit,
+        dependencies: List<String>,
+        product: ProductSignals?,
+        stackIng: List<Pair<Ingredient, ItemEntity>>,
+        alreadyHave: Boolean,
+    ): List<ReportBlock.Aspect> {
+        val out = mutableListOf<ReportBlock.Aspect>()
+        fun add(aspect: AnalysisAspect, lines: List<AnalysisLine>, score: Int?, state: AspectState, summary: String) {
+            out += ReportBlock.Aspect(aspect, summary, lines.ifEmpty { listOf(AnalysisLine("Nothing notable here.")) }, score, state)
+        }
+
+        // WHAT_FOR
+        run {
+            val lines = mutableListOf<AnalysisLine>()
+            if (matched != null) {
+                matched.benefits.forEach { lines += AnalysisLine(it, Severity.GOOD) }
+                lines += AnalysisLine("It supports these — it won't fix everything around them.", Severity.NEUTRAL)
+            } else lines += AnalysisLine("Not in the curated reference yet — tracked on what you entered.")
+            val score = matched?.let { when (it.tier) { 1 -> 90; 2 -> 75; else -> 60 } } ?: 50
+            val sum = if (matched != null) "Mainly for ${matched.benefits.firstOrNull()?.lowercase() ?: "general support"}." else "Tracked on what you entered."
+            add(AnalysisAspect.WHAT_FOR, lines, score, stateFor(score), sum)
+        }
+
+        // QUALITY & bioavailability
+        run {
+            val lines = mutableListOf<AnalysisLine>()
+            var score = 75
+            if (matched != null) {
+                val f = matched.timingFlags
+                if (f and ItemFlags.FAT_SOLUBLE != 0) lines += AnalysisLine("Fat-soluble — needs dietary fat to absorb well", Severity.NEUTRAL)
+                val unit = matched.doseUnit.name.lowercase()
+                if (enteredUnit == matched.doseUnit && enteredDose > 0) {
+                    when {
+                        enteredDose < matched.typicalDoseLow * 0.5 -> { lines += AnalysisLine("Your ${fmt(enteredDose)} $unit looks under-dosed vs the typical ${doseRange(matched)}", Severity.CAUTION); score = 50 }
+                        enteredDose in matched.typicalDoseLow..matched.typicalDoseHigh -> { lines += AnalysisLine("Your dose sits in the effective range (${doseRange(matched)})", Severity.GOOD); score = 85 }
+                        enteredDose > matched.typicalDoseHigh -> { lines += AnalysisLine("Above the typical range (${doseRange(matched)}) — more isn't always better", Severity.CAUTION); score = 60 }
+                        else -> lines += AnalysisLine("Near the effective range (${doseRange(matched)})")
+                    }
+                } else lines += AnalysisLine("Aim within the effective range, ${doseRange(matched)}", Severity.NEUTRAL)
+            } else { lines += AnalysisLine("Can't judge form or dose without a reference match."); score = 50 }
+            add(AnalysisAspect.QUALITY, lines, score, stateFor(score), "Form and dose checked against the typical effective range.")
+        }
+
+        // FIT_CONDITION
+        run {
+            if (goal.isNullOrBlank()) {
+                add(AnalysisAspect.FIT_CONDITION, listOf(AnalysisLine("Tell me your goal and I'll judge the fit.")), null, AspectState.NOT_ASSESSED, "No goal given yet.")
+            } else {
+                val lines = mutableListOf<AnalysisLine>()
+                val aligned = matched != null && goalAligns(goal, matched)
+                if (aligned) lines += AnalysisLine("Looks aligned with “${goal.trim()}”", Severity.GOOD)
+                else lines += AnalysisLine("Not an obvious match for “${goal.trim()}” — confirm it targets it", Severity.CAUTION)
+                if (!concern.isNullOrBlank()) lines += AnalysisLine("Your worry — ${concern.trim()}", Severity.NEUTRAL)
+                val score = if (aligned) 80 else 55
+                add(AnalysisAspect.FIT_CONDITION, lines, score, stateFor(score), if (aligned) "Fits your stated goal." else "May not target your goal — verify.")
+            }
+        }
+
+        // CLAIMS & honesty
+        run {
+            if (matched == null) {
+                add(AnalysisAspect.CLAIMS, listOf(AnalysisLine("No reference claims to weigh.")), null, AspectState.NOT_ASSESSED, "No reference to compare claims against.")
+            } else {
+                val lines = mutableListOf<AnalysisLine>()
+                lines += AnalysisLine("Marketed for: ${matched.benefits.joinToString(", ")}", Severity.NEUTRAL)
+                val honesty = when (matched.tier) {
+                    1 -> "Claims generally match the evidence."
+                    2 -> "Some claims run ahead of the evidence."
+                    else -> "Marketing likely overstates early findings."
+                }
+                lines += AnalysisLine(honesty, severityForTier(matched.tier))
+                if (source?.skeptical == true) lines += AnalysisLine("From a promotional source — verify bold claims independently", Severity.CAUTION)
+                var score = when (matched.tier) { 1 -> 85; 2 -> 70; else -> 55 }
+                if (source?.skeptical == true) score -= 15
+                add(AnalysisAspect.CLAIMS, lines, score, stateFor(score), honesty)
+            }
+        }
+
+        // TRUST & source
+        run {
+            val lines = mutableListOf<AnalysisLine>()
+            var score = 50
+            if (source != null) {
+                lines += AnalysisLine(source.trust, if (source.skeptical) Severity.CAUTION else Severity.GOOD)
+                score = (source.credibility * 18).coerceAtMost(92)
+                source.verify.forEach { lines += AnalysisLine("Verify — $it", Severity.NEUTRAL) }
+            } else lines += AnalysisLine("No source given — add where you heard it for a credibility read.", Severity.NEUTRAL)
+            matched?.let { lines += AnalysisLine("Research support: ${evidenceMaturity(it.tier).removeSuffix(".")}", severityForTier(it.tier)) }
+            if (product?.ratingValue != null) {
+                val cnt = product.ratingCount?.let { " across $it reviews" } ?: ""
+                lines += AnalysisLine("Peers rate it ${product.ratingValue}/5$cnt", if (product.ratingValue >= 4.0) Severity.GOOD else Severity.NEUTRAL)
+                if (product.ratingValue >= 4.3 && (product.ratingCount ?: 0) >= 50) score = (score + 6).coerceAtMost(95)
+            } else lines += AnalysisLine("No peer rating captured — check reviews on the store page.", Severity.NEUTRAL)
+            add(AnalysisAspect.TRUST_SOURCE, lines, score, stateFor(score), "Weighs the source, the research and what peers say.")
+        }
+
+        // VALUE
+        run {
+            if (product?.priceText != null) {
+                val lines = mutableListOf<AnalysisLine>()
+                lines += AnalysisLine("Listed at ${product.priceText}", Severity.NEUTRAL)
+                product.servings?.let { lines += AnalysisLine("~$it servings per pack", Severity.NEUTRAL) }
+                if (product.priceAmount != null && (product.servings ?: 0) > 0) {
+                    lines += AnalysisLine("≈ ${product.priceCurrency.orEmpty()} ${round2(product.priceAmount / product.servings!!)} per serving", Severity.NEUTRAL)
+                }
+                lines += AnalysisLine("Compare cost per day against other brands before committing.", Severity.NEUTRAL)
+                add(AnalysisAspect.VALUE, lines, null, AspectState.MIXED, "Price captured — compare value across brands.")
+            } else {
+                add(AnalysisAspect.VALUE, listOf(AnalysisLine("No price captured — add it from a link to weigh value.")), null, AspectState.NOT_ASSESSED, "No price to assess.")
+            }
+        }
+
+        // STACK
+        run {
+            val lines = mutableListOf<AnalysisLine>()
+            lines += fitLines
+            safety.filter { it.category == SafetyCategory.STACK_OVERLAP }.forEach { lines += AnalysisLine(it.text, it.severity) }
+            val cautionCount = lines.count { it.severity == Severity.CAUTION }
+            val score = if (stackIng.isEmpty()) null else (100 - 25 * cautionCount).coerceIn(30, 100)
+            val state = if (stackIng.isEmpty()) AspectState.CLEAR else stateFor(score)
+            val sum = when {
+                stackIng.isEmpty() -> "Your stack is empty — this would be the first."
+                cautionCount > 0 -> "Some overlap to manage with what you take."
+                else -> "Sits alongside your stack cleanly."
+            }
+            add(AnalysisAspect.STACK, lines, score, state, sum)
+        }
+
+        // SAFETY (full taxonomy, in order)
+        run {
+            val lines = mutableListOf<AnalysisLine>()
+            safety.sortedBy { it.category.ordinal }.forEach { lines += AnalysisLine("${it.category.title}: ${it.text}", it.severity) }
+            if (safetyClear.isNotEmpty()) {
+                lines += AnalysisLine("Checked & clear — ${safetyClear.sortedBy { it.ordinal }.joinToString(", ") { it.title.lowercase() }}", Severity.GOOD)
+            }
+            val cautionCount = safety.count { it.severity == Severity.CAUTION }
+            val score = if (matched == null && safety.isEmpty()) null else (100 - 25 * cautionCount).coerceIn(30, 100)
+            add(AnalysisAspect.SAFETY, lines, score, stateFor(score), if (cautionCount == 0) "Nothing major flagged." else "$cautionCount thing${if (cautionCount > 1) "s" else ""} to mind.")
+        }
+
+        return out
+    }
+
+    private fun aspectPrompt(name: String, matched: Ingredient?, block: ReportBlock.Aspect, goal: String?, concern: String?): String = buildString {
+        appendLine("You are a calm, precise supplement advisor. Write ONE short sentence (max 28 words) summarizing this single chapter for the user.")
+        appendLine("Use ONLY the grounded points; add no facts, doses, or claims. Conversational, no labels, no quotes.")
+        appendLine()
+        appendLine("Item: $name${matched?.let { " (${it.displayName})" } ?: ""}")
+        appendLine("Chapter: ${block.aspect.title} — ${block.aspect.question}")
+        if (!goal.isNullOrBlank()) appendLine("Their goal: $goal")
+        if (!concern.isNullOrBlank()) appendLine("Their worry: $concern")
+        appendLine("Grounded points:")
+        block.lines.forEach { appendLine("- ${it.text}") }
+        appendLine()
+        appendLine("Reply with only the sentence.")
+    }
+
+    private fun verdictPrompt(
         name: String,
         matched: Ingredient?,
         goal: String?,
         source: SourceKind?,
         concern: String?,
-        stack: List<String>,
-        deps: List<String>,
-        safety: List<SafetyFinding>,
-        safetyClear: List<SafetyCategory>,
+        verdict: String,
+        blocks: List<ReportBlock.Aspect>,
         tier: ModelTier,
     ): String = buildString {
-        appendLine("You are a calm, precise, slightly skeptical supplement advisor. Using ONLY the grounded facts below,")
-        appendLine("write a short, natural synthesis (${if (tier == ModelTier.CAPABLE) "2-3 sentences" else "1-2 sentences"}) — conversational, no bullet labels.")
-        appendLine("Reason WITHIN the fixed safety framework below — do not introduce new categories, doses, or interactions.")
-        appendLine("Lead with their goal and the source's credibility; if a safety category is flagged, weave the most important one in plainly. No medical claims.")
+        appendLine("You are a calm, precise, slightly skeptical supplement advisor.")
+        appendLine("Write the big-picture synthesis (${if (tier == ModelTier.CAPABLE) "2-3 sentences" else "1-2 sentences"}) from the chapters below — conversational, no labels.")
+        appendLine("Reason ONLY within these chapters; invent no facts, doses, or interactions. No medical claims.")
+        appendLine("Lead with their goal and the source's credibility; surface the most important caution plainly.")
         appendLine()
         appendLine("Item: $name${matched?.let { " (${it.displayName})" } ?: ""}")
         if (!goal.isNullOrBlank()) appendLine("Their goal: $goal")
-        if (source != null) appendLine("Heard from: ${source.label} (${if (source.skeptical) "weak source — verify" else "credible"})")
+        if (source != null) appendLine("Source: ${source.label} (${if (source.skeptical) "weak — verify" else "credible"})")
         if (!concern.isNullOrBlank()) appendLine("Their worry: $concern")
-        if (matched != null) {
-            appendLine("Benefits: ${matched.benefits.joinToString("; ")}.")
-        }
-        appendLine("Current stack: ${if (stack.isEmpty()) "empty" else stack.joinToString(", ")}")
-        if (deps.isNotEmpty()) appendLine("Suggested pairings: ${deps.joinToString(", ")}")
+        appendLine("Working verdict: $verdict")
         appendLine()
-        appendLine("SAFETY FRAMEWORK (the only dimensions you may reason over):")
-        SafetyCategory.entries.forEach { cat ->
-            val hits = safety.filter { it.category == cat }
-            val state = when {
-                hits.any { it.severity == Severity.CAUTION } -> "FLAGGED: " + hits.joinToString(" | ") { it.text }
-                hits.isNotEmpty() -> "noted: " + hits.joinToString(" | ") { it.text }
-                cat in safetyClear -> "checked, clear"
-                else -> "not assessed"
-            }
-            appendLine("- ${cat.title}: $state")
+        appendLine("CHAPTERS (the only dimensions you may reason over):")
+        blocks.forEach { b ->
+            val body = b.summary?.takeIf { it.isNotBlank() } ?: b.lines.joinToString("; ") { it.text }
+            appendLine("- ${b.aspect.title} [${b.state.name.lowercase()}${b.score?.let { ", $it/100" } ?: ""}]: $body")
         }
         appendLine()
         appendLine("Reply with only the synthesis text.")
+    }
+
+    /** Brand / price / rating facts lifted from the product page (grounded). */
+    private fun buildFactsBlock(matched: Ingredient?, product: ProductSignals?): ReportBlock.Facts? {
+        val rows = buildList {
+            product?.brand?.let { add("Brand" to it) }
+            (matched?.category)?.let { add("Category" to it) }
+            product?.priceText?.let { add("Price" to it) }
+            product?.servings?.let { add("Servings" to "$it") }
+            product?.ratingValue?.let { r ->
+                val c = product.ratingCount?.let { " ($it)" } ?: ""
+                add("Rating" to "$r/5$c")
+            }
+        }
+        return if (rows.isEmpty()) null else ReportBlock.Facts("Product", rows)
+    }
+
+    /** Dose as a position on its typical band, with the upper limit marked. */
+    private fun buildDoseMeter(matched: Ingredient?, recDose: Double, recUnit: DoseUnit): ReportBlock.Meter? {
+        if (matched == null) return null
+        val unit = recUnit.name.lowercase()
+        val ceiling = matched.upperLimitDose
+        val trackMax = maxOf(matched.typicalDoseHigh * 1.4, ceiling ?: 0.0, recDose).takeIf { it > 0 } ?: return null
+        fun frac(v: Double) = (v / trackMax).toFloat().coerceIn(0f, 1f)
+        val caption = buildString {
+            append("typical ${doseRange(matched)}")
+            ceiling?.let { append(" · ceiling ${fmt(it)} $unit") }
+        }
+        return ReportBlock.Meter(
+            label = "Suggested dose",
+            valueText = "${fmt(recDose)} $unit",
+            fraction = frac(recDose),
+            bandLow = frac(matched.typicalDoseLow),
+            bandHigh = frac(matched.typicalDoseHigh),
+            markerFraction = ceiling?.let { frac(it) },
+            caption = caption,
+        )
     }
 
     private fun sanitize(raw: String): String? {

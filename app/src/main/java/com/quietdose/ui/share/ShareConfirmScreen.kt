@@ -84,6 +84,7 @@ fun ShareConfirmScreen(url: String?, onClose: () -> Unit, onSaved: () -> Unit) {
 
     var phase by remember { mutableStateOf<SharePhase>(SharePhase.Reading) }
     var pendingItem by remember { mutableStateOf<ItemEntity?>(null) }
+    var pendingSignals by remember { mutableStateOf<com.quietdose.brain.analysis.ProductSignals?>(null) }
 
     LaunchedEffect(url) {
         if (url.isNullOrBlank()) {
@@ -114,7 +115,7 @@ fun ShareConfirmScreen(url: String?, onClose: () -> Unit, onSaved: () -> Unit) {
                 result = p.result,
                 groups = groups,
                 onClose = onClose,
-                onConfirm = { item -> pendingItem = item },
+                onConfirm = { item -> pendingItem = item; pendingSignals = p.result.signals },
             )
         }
     }
@@ -128,6 +129,7 @@ fun ShareConfirmScreen(url: String?, onClose: () -> Unit, onSaved: () -> Unit) {
                 onSaved()
             },
             onDismiss = { pendingItem = null },
+            product = pendingSignals,
         )
     }
 }

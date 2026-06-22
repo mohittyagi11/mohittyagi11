@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,12 +55,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.quietdose.brain.analysis.AnalysisReport
-import com.quietdose.brain.analysis.AnalysisSection
+import com.quietdose.brain.analysis.AspectState
 import com.quietdose.brain.analysis.IngredientCatalog
 import com.quietdose.brain.analysis.ModelCapability
 import com.quietdose.brain.analysis.ModelTier
-import com.quietdose.brain.analysis.SafetyCategory
-import com.quietdose.brain.analysis.SafetyFinding
+import com.quietdose.brain.analysis.ProductSignals
+import com.quietdose.brain.analysis.ReportBlock
 import com.quietdose.brain.analysis.Severity
 import com.quietdose.brain.analysis.SourceKind
 import com.quietdose.brain.analysis.StackAnalyzer
@@ -97,7 +98,12 @@ private enum class Phase { INTENT, ANALYZING, REPORT }
  * pairings) → add. [onAdd] receives the *configured* item.
  */
 @Composable
-fun AnalysisScreen(item: ItemEntity, onAdd: (ItemEntity) -> Unit, onDismiss: () -> Unit) {
+fun AnalysisScreen(
+    item: ItemEntity,
+    onAdd: (ItemEntity) -> Unit,
+    onDismiss: () -> Unit,
+    product: ProductSignals? = null,
+) {
     val context = LocalContext.current
     val repo = remember { ServiceLocator.repository(context) }
     val stack by remember { repo.observeAllItems() }
@@ -123,6 +129,7 @@ fun AnalysisScreen(item: ItemEntity, onAdd: (ItemEntity) -> Unit, onDismiss: () 
                         context, item.name, item.category, stack, groups,
                         item.doseAmount, item.doseUnit,
                         goal.ifBlank { null }, source, sourceName.ifBlank { null }, concern.ifBlank { null },
+                        product,
                     )
                 }.getOrNull()
             }
@@ -320,17 +327,9 @@ private fun ReportStep(
             ItemHero(item)
 
             Spacer(Modifier.height(16.dp))
-            SynthesisCard(report)
-
-            Spacer(Modifier.height(10.dp))
-            if (report.grounded.isNotEmpty()) ReasoningCard(report)
-
-            Spacer(Modifier.height(10.dp))
-            report.sections.forEach { SectionCard(it); Spacer(Modifier.height(10.dp)) }
-
-            // Structured safety review — the full taxonomy, flagged + checked-clear.
-            if (report.safety.isNotEmpty() || report.safetyReviewedClear.isNotEmpty()) {
-                SafetyCard(report.safety, report.safetyReviewedClear)
+            // Dynamic, brain-composed page: walk the template blocks in order.
+            report.blocks.forEach { block ->
+                BlockView(block)
                 Spacer(Modifier.height(10.dp))
             }
 
@@ -454,60 +453,142 @@ private fun BottomBar(content: @Composable androidx.compose.foundation.layout.Co
     )
 }
 
+/* --------------------- Dynamic template block renderers --------------------- */
+
 @Composable
-private fun SectionCard(section: AnalysisSection) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface1).padding(16.dp)) {
-        Text(section.title.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextLow)
+private fun BlockView(block: ReportBlock) {
+    when (block) {
+        is ReportBlock.Verdict -> VerdictBlock(block)
+        is ReportBlock.Facts -> FactsBlock(block)
+        is ReportBlock.Meter -> MeterBlock(block)
+        is ReportBlock.Aspect -> AspectBlock(block)
+        is ReportBlock.Reasoning -> ReasoningBlock(block)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun VerdictBlock(b: ReportBlock.Verdict) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Accent.copy(alpha = 0.10f)).padding(18.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(b.verdict, style = MaterialTheme.typography.titleLarge, color = TextHigh, modifier = Modifier.weight(1f))
+            b.score?.let { ScoreBadge(it) }
+        }
         Spacer(Modifier.height(8.dp))
-        section.lines.forEach { line ->
-            Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 3.dp)) {
-                Box(Modifier.padding(top = 6.dp).size(7.dp).clip(CircleShape).background(severityColor(line.severity)))
-                Spacer(Modifier.width(10.dp))
-                Text(line.text, style = MaterialTheme.typography.bodyMedium, color = TextMid)
+        Text(b.rationale, style = MaterialTheme.typography.bodyLarge, color = TextMid)
+        if (b.tags.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                b.tags.forEach { TagChip(it) }
             }
         }
     }
 }
 
 @Composable
-private fun SafetyCard(safety: List<SafetyFinding>, reviewedClear: List<SafetyCategory>) {
+private fun ScoreBadge(score: Int) {
+    val c = when { score >= 80 -> Done; score >= 60 -> Accent; else -> Accent }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(c.copy(alpha = 0.16f)).padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text("$score", style = MaterialTheme.typography.titleMedium, color = c)
+    }
+}
+
+@Composable
+private fun TagChip(text: String) {
+    Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Surface2).padding(horizontal = 10.dp, vertical = 5.dp)) {
+        Text(text, style = MaterialTheme.typography.labelMedium, color = TextMid)
+    }
+}
+
+@Composable
+private fun AspectBlock(b: ReportBlock.Aspect) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface1).padding(16.dp)) {
-        Text("SAFETY REVIEW", style = MaterialTheme.typography.labelSmall, color = TextLow)
-        Spacer(Modifier.height(10.dp))
-        // Findings grouped under their category title, in taxonomy order.
-        val byCat = safety.groupBy { it.category }
-        byCat.keys.sortedBy { it.ordinal }.forEach { cat ->
-            Text(cat.title, style = MaterialTheme.typography.labelMedium, color = TextHigh)
-            Spacer(Modifier.height(2.dp))
-            byCat.getValue(cat).forEach { f ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(b.aspect.title.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextLow, modifier = Modifier.weight(1f))
+            StateChip(b.state)
+        }
+        b.summary?.takeIf { it.isNotBlank() }?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, style = MaterialTheme.typography.bodyLarge, color = TextHigh)
+        }
+        if (b.lines.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            b.lines.forEach { line ->
                 Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 3.dp)) {
-                    Box(Modifier.padding(top = 6.dp).size(7.dp).clip(CircleShape).background(severityColor(f.severity)))
+                    Box(Modifier.padding(top = 6.dp).size(7.dp).clip(CircleShape).background(severityColor(line.severity)))
                     Spacer(Modifier.width(10.dp))
-                    Text(f.text, style = MaterialTheme.typography.bodyMedium, color = TextMid)
+                    Text(line.text, style = MaterialTheme.typography.bodyMedium, color = TextMid)
                 }
             }
-            Spacer(Modifier.height(8.dp))
         }
-        if (reviewedClear.isNotEmpty()) {
-            Row(verticalAlignment = Alignment.Top) {
-                Icon(Icons.Rounded.Check, contentDescription = null, tint = Done, modifier = Modifier.size(14.dp).padding(top = 2.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "Checked & clear — ${reviewedClear.sortedBy { it.ordinal }.joinToString(", ") { it.title.lowercase() }}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextLow,
-                )
+    }
+}
+
+@Composable
+private fun StateChip(state: AspectState) {
+    val (label, color) = when (state) {
+        AspectState.GOOD -> "good" to Done
+        AspectState.MIXED -> "mixed" to Accent
+        AspectState.CAUTION -> "mind it" to Accent
+        AspectState.CLEAR -> "clear" to Done
+        AspectState.NOT_ASSESSED -> "n/a" to TextLow
+    }
+    Box(Modifier.clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.16f)).padding(horizontal = 8.dp, vertical = 3.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+    }
+}
+
+@Composable
+private fun MeterBlock(b: ReportBlock.Meter) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface1).padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(b.label, style = MaterialTheme.typography.titleMedium, color = TextHigh, modifier = Modifier.weight(1f))
+            Text(b.valueText, style = MaterialTheme.typography.titleMedium, color = Accent)
+        }
+        Spacer(Modifier.height(10.dp))
+        // Track with the typical band shaded and the dose filled to its position.
+        Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)).background(Outline)) {
+            if (b.bandLow != null && b.bandHigh != null && b.bandHigh > b.bandLow) {
+                Row(Modifier.fillMaxSize()) {
+                    Spacer(Modifier.weight(b.bandLow.coerceIn(0.0001f, 1f)))
+                    Box(Modifier.weight((b.bandHigh - b.bandLow).coerceIn(0.01f, 1f)).fillMaxHeight().background(Done.copy(alpha = 0.22f)))
+                    Spacer(Modifier.weight((1f - b.bandHigh).coerceIn(0.0001f, 1f)))
+                }
+            }
+            Box(Modifier.fillMaxWidth(b.fraction.coerceIn(0.02f, 1f)).fillMaxHeight().clip(RoundedCornerShape(5.dp)).background(Accent.copy(alpha = 0.85f)))
+        }
+        b.caption?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, style = MaterialTheme.typography.labelSmall, color = TextLow)
+        }
+    }
+}
+
+@Composable
+private fun FactsBlock(b: ReportBlock.Facts) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface1).padding(16.dp)) {
+        Text(b.title.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextLow)
+        Spacer(Modifier.height(8.dp))
+        b.rows.forEach { (k, v) ->
+            Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 3.dp)) {
+                Text(k, style = MaterialTheme.typography.bodyMedium, color = TextLow, modifier = Modifier.width(96.dp))
+                Text(v, style = MaterialTheme.typography.bodyMedium, color = TextHigh, modifier = Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun ReasoningCard(report: AnalysisReport) {
+private fun ReasoningBlock(b: ReportBlock.Reasoning) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface2).padding(16.dp)) {
         Text("REASONING", style = MaterialTheme.typography.labelSmall, color = TextLow)
         Spacer(Modifier.height(8.dp))
-        report.grounded.forEach {
+        b.items.forEach {
             Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 3.dp)) {
                 Text("·  ", style = MaterialTheme.typography.bodyMedium, color = Accent)
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = TextMid)
@@ -515,33 +596,10 @@ private fun ReasoningCard(report: AnalysisReport) {
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            if (report.byModel) "Reasoned on-device, grounded in references." else "Derived from the on-device knowledge base.",
+            if (b.byModel) "Reasoned on-device, grounded in references." else "Derived from the on-device knowledge base.",
             style = MaterialTheme.typography.labelSmall,
             color = TextLow,
         )
-    }
-}
-
-@Composable
-private fun SynthesisCard(report: AnalysisReport) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Accent.copy(alpha = 0.10f)).padding(18.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(report.synthesis.verdict, style = MaterialTheme.typography.titleLarge, color = TextHigh)
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(report.synthesis.rationale, style = MaterialTheme.typography.bodyLarge, color = TextMid)
-        report.synthesis.placement?.let { Spacer(Modifier.height(10.dp)); Labeled("When", it) }
-        if (report.synthesis.cautions.isNotEmpty()) { Spacer(Modifier.height(8.dp)); Labeled("Mind", report.synthesis.cautions.joinToString("; ")) }
-    }
-}
-
-@Composable
-private fun Labeled(label: String, value: String) {
-    Row(verticalAlignment = Alignment.Top) {
-        Text("$label  ", style = MaterialTheme.typography.labelMedium, color = Accent, modifier = Modifier.width(56.dp))
-        Text(value, style = MaterialTheme.typography.bodyMedium, color = TextHigh)
     }
 }
 
