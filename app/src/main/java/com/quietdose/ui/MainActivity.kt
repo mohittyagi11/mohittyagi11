@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.quietdose.ui.home.HomeScreen
+import com.quietdose.ui.insights.InsightsScreen
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.AccentSoft
 import com.quietdose.ui.theme.Ambient
@@ -81,12 +82,7 @@ class MainActivity : ComponentActivity() {
                                 "Stack",
                                 "Your editable, playful supplement config will live here.",
                             )
-                            else -> Placeholder(
-                                Modifier.padding(inner),
-                                Icons.Rounded.AutoAwesome,
-                                "Insights",
-                                "Patterns, adherence and on-device suggestions — coming soon.",
-                            )
+                            else -> InsightsScreen(modifier = Modifier.padding(inner))
                         }
                     }
                 }

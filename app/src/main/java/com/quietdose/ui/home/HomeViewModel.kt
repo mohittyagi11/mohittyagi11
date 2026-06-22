@@ -10,6 +10,8 @@ import com.quietdose.data.model.TriggerType
 import com.quietdose.di.ServiceLocator
 import com.quietdose.notify.Notifier
 import com.quietdose.ui.theme.GroupStyle
+import com.quietdose.ui.viz.DayEvent
+import com.quietdose.ui.viz.EventSource
 import com.quietdose.util.DateUtils
 import com.quietdose.util.Format
 import org.json.JSONObject
@@ -44,6 +46,7 @@ data class TimelineNode(
 data class HomeUiState(
     val cards: List<GroupCard> = emptyList(),
     val timeline: List<TimelineNode> = emptyList(),
+    val dayEvents: List<DayEvent> = emptyList(),
     val focusGroupId: Long? = null,
     val epochDay: Long = 0,
     val loading: Boolean = true,
@@ -83,6 +86,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 HomeUiState(
                     cards = cards,
                     timeline = buildTimeline(cards, focusId),
+                    dayEvents = buildEvents(cards),
                     focusGroupId = focusId,
                     epochDay = epochDay,
                     loading = false,
@@ -105,6 +109,19 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 TimelineNode(c, status, anchorShort(c.group), summaryFor(c, status))
             }
+    }
+
+    /** Project the day's routines into source-agnostic events for the day graph. */
+    private fun buildEvents(cards: List<GroupCard>): List<DayEvent> = cards.map { c ->
+        DayEvent(
+            minuteOfDay = anchorMinute(c.group),
+            category = c.group.name,
+            label = c.group.name,
+            magnitude = c.total.toFloat(),
+            done = c.done,
+            color = GroupStyle.tint(c.group),
+            source = EventSource.SUPPLEMENT,
+        )
     }
 
     private fun anchorMinute(g: GroupEntity): Int = when (g.trigger) {
