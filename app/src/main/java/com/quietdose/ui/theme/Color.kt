@@ -27,3 +27,12 @@ val AccentText = Color(0xFF0B0B0D) // text on accent
 // Semantic (used sparingly)
 val Done = Color(0xFF6FCF97)       // calm green for completion
 val WarnSoft = Color(0xFFE2B36B)   // low-stock amber, muted
+
+// Per-group tints — deliberately desaturated so colour codes the day without
+// shouting on the near-black canvas. One hue per routine.
+val TintMorning = Color(0xFFE0B877) // warm gold — on waking
+val TintIron = Color(0xFFC58A78)    // clay — the afternoon dose
+val TintEvening = Color(0xFF8FA6F0) // periwinkle — arriving home
+val TintNight = Color(0xFF9B8CE0)   // indigo/violet — wind-down
+val TintMonthly = Color(0xFF8FB89A) // sage — the monthly pulse
+val TintNeutral = Color(0xFF9AA0B4) // fallback for custom groups

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
 import com.quietdose.data.model.IntakeSource
+import com.quietdose.data.model.TriggerType
 import com.quietdose.di.ServiceLocator
 import com.quietdose.notify.Notifier
 import com.quietdose.util.DateUtils
@@ -28,10 +29,16 @@ data class GroupCard(val group: GroupEntity, val items: List<ItemRow>) {
 
 data class HomeUiState(
     val cards: List<GroupCard> = emptyList(),
+    val focusGroupId: Long? = null,
     val epochDay: Long = 0,
     val loading: Boolean = true,
 ) {
     val allDone: Boolean get() = cards.isNotEmpty() && cards.all { it.done }
+    val totalDue: Int get() = cards.sumOf { it.total }
+    val totalTaken: Int get() = cards.sumOf { it.takenCount }
+
+    val focus: GroupCard? get() = cards.firstOrNull { it.group.id == focusGroupId }
+    val rest: List<GroupCard> get() = cards.filter { it.group.id != focusGroupId }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -57,9 +64,27 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                         .map { ItemRow(it, it.id in taken) }
                     GroupCard(g, rows)
                 }.filter { it.items.isNotEmpty() }
-                HomeUiState(cards, epochDay, loading = false)
+                HomeUiState(cards, focusGroupId = pickFocus(cards), epochDay, loading = false)
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
+
+    /**
+     * Choose the group that's most relevant *right now* by time of day, falling
+     * back to the first one with anything left. A lightweight stand-in until the
+     * real trigger engine lands — but already makes the home feel present.
+     */
+    private fun pickFocus(cards: List<GroupCard>): Long? {
+        if (cards.isEmpty()) return null
+        val nowTrigger = when (java.time.LocalTime.now().hour) {
+            in 5..10 -> TriggerType.WAKE
+            in 11..16 -> TriggerType.TIME_WINDOW
+            in 17..20 -> TriggerType.ARRIVE_HOME
+            else -> TriggerType.BEFORE_SLEEP
+        }
+        return (cards.firstOrNull { it.group.trigger == nowTrigger && !it.done }
+            ?: cards.firstOrNull { !it.done }
+            ?: cards.first()).group.id
+    }
 
     /** The buttery check-off: confirm or undo a single item for today. */
     fun toggle(item: ItemEntity, currentlyTaken: Boolean) = viewModelScope.launch {
