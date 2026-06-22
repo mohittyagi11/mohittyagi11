@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.quietdose.ui.home.HomeScreen
 import com.quietdose.ui.insights.InsightsScreen
+import com.quietdose.ui.stack.StackScreen
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.AccentSoft
 import com.quietdose.ui.theme.Ambient
@@ -76,12 +77,7 @@ class MainActivity : ComponentActivity() {
                     ) { inner ->
                         when (tab) {
                             0 -> HomeScreen(modifier = Modifier.padding(inner))
-                            1 -> Placeholder(
-                                Modifier.padding(inner),
-                                Icons.Rounded.GridView,
-                                "Stack",
-                                "Your editable, playful supplement config will live here.",
-                            )
+                            1 -> StackScreen(modifier = Modifier.padding(inner))
                             else -> InsightsScreen(modifier = Modifier.padding(inner))
                         }
                     }

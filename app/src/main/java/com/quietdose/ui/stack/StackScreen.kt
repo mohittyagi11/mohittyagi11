@@ -1,0 +1,352 @@
+package com.quietdose.ui.stack
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.quietdose.data.entity.GroupEntity
+import com.quietdose.data.entity.ItemEntity
+import com.quietdose.ui.icons.ItemIcon
+import com.quietdose.ui.theme.GroupStyle
+import com.quietdose.ui.theme.Surface1
+import com.quietdose.ui.theme.Surface2
+import com.quietdose.ui.theme.TextHigh
+import com.quietdose.ui.theme.TextLow
+import com.quietdose.ui.theme.TextMid
+import com.quietdose.ui.theme.TintNeutral
+import com.quietdose.util.Format
+
+/** Which editor sheet, if any, is currently open. */
+private sealed interface Editing {
+    data object NewGroup : Editing
+    data class EditGroup(val group: GroupEntity) : Editing
+    data class NewItem(val groupId: Long, val tintArgb: Int) : Editing
+    data class EditItem(val item: ItemEntity, val tintArgb: Int) : Editing
+}
+
+@Composable
+fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel()) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    val expanded = remember { mutableStateMapOf<Long, Boolean>() }
+    var editing by remember { mutableStateOf<Editing?>(null) }
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize().padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        item { StackHeader() }
+
+        items(state.groups, key = { it.group.id }) { sg ->
+            GroupCardEditable(
+                stack = sg,
+                expanded = expanded[sg.group.id] ?: false,
+                onToggleExpand = { expanded[sg.group.id] = !(expanded[sg.group.id] ?: false) },
+                onEditGroup = { editing = Editing.EditGroup(sg.group) },
+                onMoveUp = { vm.moveGroup(sg.group.id, up = true) },
+                onMoveDown = { vm.moveGroup(sg.group.id, up = false) },
+                onAddItem = { editing = Editing.NewItem(sg.group.id, GroupStyle.tint(sg.group).toArgb()) },
+                onEditItem = { item -> editing = Editing.EditItem(item, GroupStyle.tint(sg.group).toArgb()) },
+            )
+        }
+
+        if (state.isEmpty) {
+            item { EmptyState() }
+        }
+
+        item {
+            Spacer(Modifier.height(4.dp))
+            AddGroupButton { editing = Editing.NewGroup }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+
+    when (val e = editing) {
+        is Editing.NewGroup -> GroupEditorSheet(
+            existing = null,
+            onDismiss = { editing = null },
+            onSave = { vm.addGroup(it); editing = null },
+        )
+        is Editing.EditGroup -> GroupEditorSheet(
+            existing = e.group,
+            onDismiss = { editing = null },
+            onSave = { vm.saveGroup(it); editing = null },
+            onDelete = { vm.deleteGroup(it); editing = null },
+        )
+        is Editing.NewItem -> ItemEditorSheet(
+            groupId = e.groupId,
+            existing = null,
+            groupTintArgb = e.tintArgb,
+            onDismiss = { editing = null },
+            onSave = { vm.addItem(it); editing = null },
+        )
+        is Editing.EditItem -> ItemEditorSheet(
+            groupId = e.item.groupId,
+            existing = e.item,
+            groupTintArgb = e.tintArgb,
+            onDismiss = { editing = null },
+            onSave = { vm.saveItem(it); editing = null },
+            onDelete = { vm.deleteItem(it); editing = null },
+        )
+        null -> Unit
+    }
+}
+
+@Composable
+private fun StackHeader() {
+    Column(Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 2.dp)) {
+        Text("Your stack", style = MaterialTheme.typography.titleMedium, color = TextMid)
+        Text("Customize", style = MaterialTheme.typography.displaySmall, color = TextHigh)
+        Text(
+            "Shape your routines — drag the rhythm, pick the form, set the mood.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = TextMid,
+        )
+    }
+}
+
+@Composable
+private fun GroupCardEditable(
+    stack: StackGroup,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+    onEditGroup: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onAddItem: () -> Unit,
+    onEditItem: (ItemEntity) -> Unit,
+) {
+    val group = stack.group
+    val tint = GroupStyle.tint(group)
+    val chevron by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
+
+    Surface(color = Surface1, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                GroupGlyph(group = group, tint = tint)
+                Spacer(Modifier.width(12.dp))
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .androidxClickable { onToggleExpand() },
+                ) {
+                    Text(group.name, style = MaterialTheme.typography.titleLarge, color = TextHigh)
+                    Text(subtitle(group, stack.items.size), style = MaterialTheme.typography.bodyMedium, color = TextMid)
+                }
+                Icon(
+                    Icons.Rounded.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    tint = TextLow,
+                    modifier = Modifier.size(24.dp).rotate(chevron).androidxClickable { onToggleExpand() },
+                )
+            }
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Column {
+                    Spacer(Modifier.height(12.dp))
+                    stack.items.forEach { item ->
+                        ItemRowEditable(item = item, tint = tint, onClick = { onEditItem(item) })
+                    }
+                    if (stack.items.isEmpty()) {
+                        Text(
+                            "No items yet — add the first.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextLow,
+                            modifier = Modifier.padding(vertical = 8.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        InlineAction(Icons.Rounded.Add, "Add item", tint, Modifier.weight(1f), onAddItem)
+                        Spacer(Modifier.width(8.dp))
+                        InlineAction(Icons.Rounded.Tune, "Edit group", TextMid, onClick = onEditGroup)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        ReorderButton(Icons.Rounded.KeyboardArrowUp, "Move up", onMoveUp)
+                        Spacer(Modifier.width(6.dp))
+                        ReorderButton(Icons.Rounded.KeyboardArrowDown, "Move down", onMoveDown)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun subtitle(group: GroupEntity, itemCount: Int): String {
+    val count = if (itemCount == 1) "1 item" else "$itemCount items"
+    return "${group.trigger.label()} · $count"
+}
+
+@Composable
+private fun GroupGlyph(group: GroupEntity, tint: Color) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.size(40.dp).background(tint.copy(alpha = 0.16f), CircleShape),
+    ) {
+        Icon(GroupStyle.icon(group), contentDescription = null, tint = tint, modifier = Modifier.size(21.dp))
+    }
+}
+
+@Composable
+private fun ItemRowEditable(item: ItemEntity, tint: Color, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .androidxClickable { onClick() }
+            .padding(vertical = 8.dp),
+    ) {
+        ItemIcon(type = item.type, tint = tint, modifier = Modifier.size(34.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                item.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+                color = TextHigh,
+            )
+            val dose = Format.dose(item)
+            val line = listOfNotNull(item.brand?.takeIf { it.isNotBlank() }, dose.ifBlank { null })
+                .joinToString(" · ")
+            if (line.isNotBlank()) {
+                Text(line, style = MaterialTheme.typography.bodyMedium, color = TextMid)
+            }
+        }
+        Icon(Icons.Rounded.Tune, contentDescription = "Edit", tint = TextLow, modifier = Modifier.size(18.dp))
+    }
+}
+
+@Composable
+private fun InlineAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(color.copy(alpha = 0.16f))
+            .androidxClickable { onClick() }
+            .padding(vertical = 11.dp, horizontal = 14.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, color = color)
+    }
+}
+
+@Composable
+private fun ReorderButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    desc: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(Surface2)
+            .androidxClickable { onClick() },
+    ) {
+        Icon(icon, contentDescription = desc, tint = TextMid, modifier = Modifier.size(18.dp))
+    }
+}
+
+@Composable
+private fun AddGroupButton(onClick: () -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Surface1)
+            .androidxClickable { onClick() }
+            .padding(vertical = 16.dp),
+    ) {
+        Icon(Icons.Rounded.Add, contentDescription = null, tint = TextMid, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("New group", style = MaterialTheme.typography.labelLarge, color = TextMid)
+    }
+}
+
+@Composable
+private fun EmptyState() {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(56.dp).background(TintNeutral.copy(alpha = 0.14f), CircleShape),
+        ) {
+            Icon(Icons.Rounded.Add, contentDescription = null, tint = TintNeutral, modifier = Modifier.size(26.dp))
+        }
+        Spacer(Modifier.height(14.dp))
+        Text("Build your stack", style = MaterialTheme.typography.titleLarge, color = TextHigh)
+        Text(
+            "Create your first group to start.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = TextMid,
+        )
+    }
+}
