@@ -117,6 +117,20 @@ object ModelManager {
     }
 
     /**
+     * Whether the installed model looks like a MediaPipe `.task` bundle — which is
+     * a ZIP, so it starts with the "PK" signature. A raw `.tflite` flatbuffer does
+     * not, and the LLM runtime rejects it with "Unable to open zip archive". Lets
+     * the UI warn at install time instead of after a failed test. Null if absent.
+     */
+    fun installedLooksLoadable(context: Context): Boolean? {
+        val f = modelFile(context)
+        if (!f.exists() || f.length() <= 0L) return null
+        val head = ByteArray(2)
+        val n = runCatching { f.inputStream().use { it.read(head) } }.getOrDefault(-1)
+        return n == 2 && head[0].toInt() == 'P'.code && head[1].toInt() == 'K'.code
+    }
+
+    /**
      * Download [model] from [source] to a temporary `.part` file, then install it
      * onto the active model path (extracting the `.task` first if the download is
      * an archive). [onProgress] receives 0f..1f (or -1f when size is unknown).

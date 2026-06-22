@@ -121,7 +121,7 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
             importing = false
             refreshInstalled()
             note = if (result.isSuccess) {
-                "Model installed. Tap “Test model” to confirm it runs."
+                installedNote(context)
             } else {
                 result.exceptionOrNull()?.message ?: "Import failed."
             }
@@ -146,7 +146,7 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
             downloadingId = null
             refreshInstalled()
             note = if (result.isSuccess) {
-                "Model installed. Tap “Test model” to confirm it runs."
+                installedNote(context)
             } else {
                 result.exceptionOrNull()?.message ?: "Download failed — open the page and import instead."
             }
@@ -352,11 +352,14 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                                             "Working ✓ — the model replied: “$reply”"
                                         else -> {
                                             val err = brain.lastError()
-                                            if (err != null) {
-                                                "Couldn't run this model — $err  Try a Gemma 3 1B int4 .task."
-                                            } else {
-                                                "Installed but produced no output — this .task may not be " +
-                                                    "supported by the on-device runtime. Try Gemma 3 1B int4."
+                                            when {
+                                                err == null ->
+                                                    "Installed but produced no output — this .task may not be " +
+                                                        "supported by the on-device runtime. Try Gemma 3 1B int4."
+                                                err.contains("zip", ignoreCase = true) ->
+                                                    "This file isn't a MediaPipe .task bundle — it looks like a raw " +
+                                                        ".tflite. You need a .task (a zip). Download Gemma 3 1B int4 .task."
+                                                else -> "Couldn't run this model — $err  Try a Gemma 3 1B int4 .task."
                                             }
                                         }
                                     }
@@ -689,6 +692,15 @@ private fun TokenField(
         )
     }
 }
+
+/** Post-install note: warn immediately if the file isn't a loadable .task bundle. */
+private fun installedNote(context: android.content.Context): String =
+    if (ModelManager.installedLooksLoadable(context) == false) {
+        "Installed, but this isn't a .task bundle — it looks like a raw .tflite. MediaPipe needs a " +
+            ".task (a zip). Try the Gemma 3 1B int4 .task."
+    } else {
+        "Model installed. Tap “Test model” to confirm it runs."
+    }
 
 /** Open an external URL in the browser; failures are silently ignored. */
 private fun openUrl(context: android.content.Context, url: String) {
