@@ -55,6 +55,8 @@ import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
 import androidx.compose.ui.window.Dialog
 import com.quietdose.ui.add.AddItemActivity
+import com.quietdose.ui.analysis.StoredProductGlyph
+import com.quietdose.ui.analysis.hasStoredLook
 import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.GroupStyle
@@ -295,11 +297,16 @@ private fun CatalogRow(item: ItemEntity, group: GroupEntity, onClick: () -> Unit
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.androidxClickable(onClick).padding(14.dp),
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(40.dp).clip(CircleShape).background(tint.copy(alpha = 0.14f)),
-            ) {
-                ItemIcon(type = item.type, tint = tint, modifier = Modifier.size(28.dp))
+            if (item.hasStoredLook()) {
+                // A saved product keeps the lookalike glyph it earned at analysis.
+                StoredProductGlyph(item, modifier = Modifier.size(40.dp), showBacking = true)
+            } else {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(40.dp).clip(CircleShape).background(tint.copy(alpha = 0.14f)),
+                ) {
+                    ItemIcon(type = item.type, tint = tint, modifier = Modifier.size(28.dp))
+                }
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -528,7 +535,8 @@ private fun ItemRowEditable(item: ItemEntity, tint: Color, onClick: () -> Unit) 
             .androidxClickable { onClick() }
             .padding(vertical = 8.dp),
     ) {
-        ItemIcon(type = item.type, tint = tint, modifier = Modifier.size(34.dp))
+        if (item.hasStoredLook()) StoredProductGlyph(item, modifier = Modifier.size(34.dp))
+        else ItemIcon(type = item.type, tint = tint, modifier = Modifier.size(34.dp))
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(

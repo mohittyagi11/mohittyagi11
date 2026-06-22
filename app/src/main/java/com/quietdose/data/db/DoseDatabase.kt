@@ -20,7 +20,7 @@ import com.quietdose.data.entity.ItemEntity
         ItemEntity::class,
         IntakeLogEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -39,14 +39,24 @@ abstract class DoseDatabase : RoomDatabase() {
             }
         }
 
+        /** v2 → v3: add the per-item `look` + `benefits` columns (nullable TEXT, matching
+         *  [ItemEntity.look]/[ItemEntity.benefits]) so a saved item keeps its drawn glyph and
+         *  benefit orbs. Additive only — every existing row and column is preserved. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN look TEXT")
+                db.execSQL("ALTER TABLE items ADD COLUMN benefits TEXT")
+            }
+        }
+
         fun get(context: Context): DoseDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     DoseDatabase::class.java,
                     "dose.db",
-                ).addMigrations(MIGRATION_1_2)
-                    .fallbackToDestructiveMigration() // last resort only; the migration above is the real path
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .fallbackToDestructiveMigration() // last resort only; the migrations above are the real path
                     .build().also { INSTANCE = it }
             }
     }

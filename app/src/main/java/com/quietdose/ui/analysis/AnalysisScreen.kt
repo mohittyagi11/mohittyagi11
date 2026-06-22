@@ -64,6 +64,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -84,6 +85,8 @@ import com.quietdose.brain.analysis.KindDetector
 import com.quietdose.brain.analysis.ModelCapability
 import com.quietdose.brain.analysis.ModelTier
 import com.quietdose.brain.analysis.Mood
+import com.quietdose.brain.analysis.ProductLook
+import com.quietdose.brain.analysis.ProductLookCodec
 import com.quietdose.brain.analysis.ProductSignals
 import com.quietdose.brain.analysis.ReportBlock
 import com.quietdose.brain.analysis.Severity
@@ -551,6 +554,16 @@ private fun ReportStep(
                         .joinToString(" · ")
                         .ifBlank { null }
                 }
+                // Capture the drawn look (form + sampled packaging palette) and the primary
+                // benefits so the saved item keeps its glyph + orbs in the stack — redrawn
+                // offline from these, no re-sampling needed.
+                val storedLook = ProductLookCodec.encode(
+                    ProductLook(
+                        form = inferContainerForm(item.name, item.category, item.type).name,
+                        bodyArgb = sampled?.primary?.toArgb()?.toLong(),
+                        accentArgb = sampled?.accent?.toArgb()?.toLong(),
+                    ),
+                )
                 onAdd(
                     item.copy(
                         groupId = groupId,
@@ -560,6 +573,8 @@ private fun ReportStep(
                         flags = if (ingested) flags else item.flags,
                         note = finalNote,
                         ingredients = IngredientCodec.encode(report.ingredients) ?: item.ingredients,
+                        look = storedLook,
+                        benefits = benefits.joinToString("\n").ifBlank { null },
                     ),
                 )
             }

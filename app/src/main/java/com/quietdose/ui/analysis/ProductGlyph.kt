@@ -23,7 +23,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.quietdose.brain.analysis.ItemKind
 import com.quietdose.brain.analysis.KindDetector
+import com.quietdose.brain.analysis.ProductLookCodec
 import com.quietdose.brain.enrich.ImagePalette
+import com.quietdose.data.entity.ItemEntity
 import com.quietdose.data.model.ItemType
 import com.quietdose.ui.theme.BenefitOrbit
 import com.quietdose.ui.theme.GlyphBacking
@@ -243,6 +245,43 @@ fun ProductGlyph(
         if (orbs.isNotEmpty()) drawBenefitOrbs(orbs)
         drawGlyph(form, palette, initials, measurer)
     }
+}
+
+/** Does this saved item carry a stored look? If not, callers fall back to the plain [ItemIcon]. */
+fun ItemEntity.hasStoredLook(): Boolean = !look.isNullOrBlank()
+
+/**
+ * Redraw a SAVED item's glyph from its persisted [ItemEntity.look] + [ItemEntity.benefits] —
+ * no network, no re-sampling — so the stack keeps the same lookalike + benefit orbs it had at
+ * analysis. Falls back to the deterministic category palette when no packaging colour was stored.
+ */
+@Composable
+fun StoredProductGlyph(
+    item: ItemEntity,
+    modifier: Modifier = Modifier,
+    showInitials: Boolean = false,
+    showBacking: Boolean = false,
+) {
+    val sampled = remember(item.look) {
+        ProductLookCodec.decode(item.look)?.bodyArgb?.let { body ->
+            val accent = ProductLookCodec.decode(item.look)?.accentArgb ?: body
+            ImagePalette.PaletteResult(primary = Color(body.toInt()), accent = Color(accent.toInt()))
+        }
+    }
+    val benefits = remember(item.benefits) {
+        item.benefits?.split('\n')?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+    }
+    ProductGlyph(
+        name = item.name,
+        brand = item.brand,
+        category = item.category,
+        type = item.type,
+        modifier = modifier,
+        showInitials = showInitials,
+        sampled = sampled,
+        benefits = benefits,
+        showBacking = showBacking,
+    )
 }
 
 /** Soft backing disc + crisp hairline ring — quiet separation behind the hero glyph. */

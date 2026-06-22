@@ -50,7 +50,10 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.quietdose.data.entity.ItemEntity
 import com.quietdose.data.model.ItemType
+import com.quietdose.ui.analysis.StoredProductGlyph
+import com.quietdose.ui.analysis.hasStoredLook
 import com.quietdose.ui.components.DayRing
 import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.theme.AccentSoft
@@ -431,7 +434,7 @@ private fun DoseRow(row: ItemRow, tint: Color, showChips: Boolean, onToggle: () 
             }
             .padding(vertical = 9.dp),
     ) {
-        ItemLeading(type = row.item.type, tint = tint, checked = row.taken)
+        ItemLeading(item = row.item, tint = tint, checked = row.taken)
         Spacer(Modifier.size(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -467,7 +470,7 @@ private fun Chip(text: String, tint: Color, solid: Boolean) {
 }
 
 @Composable
-private fun ItemLeading(type: ItemType, tint: Color, checked: Boolean) {
+private fun ItemLeading(item: ItemEntity, tint: Color, checked: Boolean) {
     val iconAlpha by animateFloatAsState(if (checked) 0.4f else 1f, label = "iconAlpha")
     val badge by animateFloatAsState(
         targetValue = if (checked) 1f else 0f,
@@ -475,7 +478,11 @@ private fun ItemLeading(type: ItemType, tint: Color, checked: Boolean) {
         label = "badge",
     )
     Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-        ItemIcon(type = type, tint = tint, modifier = Modifier.size(34.dp).graphicsLayer { alpha = iconAlpha })
+        if (item.hasStoredLook()) {
+            StoredProductGlyph(item, modifier = Modifier.size(34.dp).graphicsLayer { alpha = iconAlpha })
+        } else {
+            ItemIcon(type = item.type, tint = tint, modifier = Modifier.size(34.dp).graphicsLayer { alpha = iconAlpha })
+        }
         if (badge > 0f) {
             Box(
                 contentAlignment = Alignment.Center,

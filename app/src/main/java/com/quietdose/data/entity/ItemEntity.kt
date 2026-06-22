@@ -64,4 +64,13 @@ data class ItemEntity(
     /** The item's ingredients as a JSON blob (see [com.quietdose.data.model.IngredientCodec]).
      *  null/empty = not yet ingredientized; one entry = single; many = a formula. */
     val ingredients: String? = null,
+
+    /** The drawn product "look" as a JSON blob (see [com.quietdose.brain.analysis.ProductLookCodec]) —
+     *  the sampled palette + container form, so the stack can redraw the same glyph offline.
+     *  null = no look captured; fall back to the plain form icon. */
+    val look: String? = null,
+
+    /** The product's primary benefits, ""-joined (e.g. "HydrationAnti-ageing"),
+     *  so the stack glyph can show the same benefit orbs. null/empty = none. */
+    val benefits: String? = null,
 )
