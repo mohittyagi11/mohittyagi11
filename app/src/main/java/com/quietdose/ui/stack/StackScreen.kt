@@ -1,6 +1,5 @@
 package com.quietdose.ui.stack
 
-import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -55,10 +54,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
 import androidx.compose.ui.window.Dialog
-import com.quietdose.ui.analysis.AnalysisScreen
+import com.quietdose.ui.add.AddItemActivity
 import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.scan.ScanScreen
-import com.quietdose.ui.share.ShareReceiverActivity
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.GroupStyle
 import com.quietdose.ui.theme.Surface1
@@ -87,7 +85,6 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
     val expanded = remember { mutableStateMapOf<Long, Boolean>() }
     var editing by remember { mutableStateOf<Editing?>(null) }
     var scanning by remember { mutableStateOf(false) }
-    var pendingAnalysis by remember { mutableStateOf<ItemEntity?>(null) }
     var mode by remember { mutableStateOf(StackMode.Groups) }
     var query by remember { mutableStateOf("") }
     var showAddChooser by remember { mutableStateOf(false) }
@@ -120,7 +117,7 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
                     onEditGroup = { editing = Editing.EditGroup(sg.group) },
                     onMoveUp = { vm.moveGroup(sg.group.id, up = true) },
                     onMoveDown = { vm.moveGroup(sg.group.id, up = false) },
-                    onAddItem = { editing = Editing.NewItem(sg.group.id, GroupStyle.tint(sg.group).toArgb()) },
+                    onAddItem = { context.startActivity(AddItemActivity.typed(context, sg.group.id)) },
                     onEditItem = { item -> editing = Editing.EditItem(item, GroupStyle.tint(sg.group).toArgb()) },
                 )
             }
@@ -170,8 +167,7 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
             existing = null,
             groupTintArgb = e.tintArgb,
             onDismiss = { editing = null },
-            // A new item passes through contextual analysis before it's added.
-            onSave = { pendingAnalysis = it; editing = null },
+            onSave = { vm.addItem(it); editing = null },
         )
         is Editing.EditItem -> ItemEditorSheet(
             groupId = e.item.groupId,
@@ -190,7 +186,7 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
             onManual = {
                 showAddChooser = false
                 state.groups.firstOrNull()?.let { sg ->
-                    editing = Editing.NewItem(sg.group.id, GroupStyle.tint(sg.group).toArgb())
+                    context.startActivity(AddItemActivity.typed(context, sg.group.id))
                 }
             },
             onScan = { showAddChooser = false; scanning = true },
@@ -202,16 +198,8 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
         LinkInputDialog(
             onSubmit = { url ->
                 showLinkInput = false
-                // Open the dedicated full-screen Activity (not an in-content overlay that
-                // hides behind the bottom nav). Same path as sharing a link to Dose.
-                runCatching {
-                    context.startActivity(
-                        Intent(context, ShareReceiverActivity::class.java)
-                            .setAction(Intent.ACTION_SEND)
-                            .setType("text/plain")
-                            .putExtra(Intent.EXTRA_TEXT, url),
-                    )
-                }
+                // Full-screen Activity — same unified flow as sharing a link to Dose.
+                runCatching { context.startActivity(AddItemActivity.link(context, url)) }
             },
             onDismiss = { showLinkInput = false },
         )
@@ -221,14 +209,6 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
         ScanScreen(
             onClose = { scanning = false },
             onSaved = { scanning = false }, // item already persisted via the repository
-        )
-    }
-
-    pendingAnalysis?.let { item ->
-        AnalysisScreen(
-            item = item,
-            onAdd = { configured -> vm.addItem(configured); pendingAnalysis = null },
-            onDismiss = { pendingAnalysis = null },
         )
     }
 }

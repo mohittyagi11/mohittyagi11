@@ -51,9 +51,10 @@
             </intent-filter>
         </activity>
 
-        <!-- Share a product link into Dose (appears in the share sheet for links). -->
+        <!-- The unified add-item flow (typed / link / scan). Also the share target:
+             appears in the share sheet for links ("Add to Dose"). -->
         <activity
-            android:name=".ui.share.ShareReceiverActivity"
+            android:name=".ui.add.AddItemActivity"
             android:exported="true"
             android:label="Add to Dose"
             android:launchMode="singleTask"
