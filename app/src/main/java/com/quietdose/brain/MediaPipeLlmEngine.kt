@@ -31,7 +31,10 @@ import java.io.File
 class MediaPipeLlmEngine(
     context: Context,
     private val modelName: String = DEFAULT_MODEL_NAME,
-    private val maxTokens: Int = 256,
+    // MediaPipe's budget covers prompt + response. We now feed the model real source
+    // material (product text + reviews), so this must be large enough for that input
+    // plus a few sentences out — 256 would truncate/fail the richer prompts.
+    private val maxTokens: Int = 2048,
 ) : LlmEngine {
 
     private val appContext = context.applicationContext

@@ -139,6 +139,11 @@ object StackAnalyzer {
             emit("Heard the room", "Picked up ${webResults.size} voice${if (webResults.size > 1) "s" else ""} from around the web.", Mood.CURIOUS, 0.22f)
         }
 
+        // The actual raw material the model reasons over — the product's own text
+        // (label/description or OCR) plus what the web says. This is what was missing:
+        // the SLM was fed pre-digested bullets, not the real source.
+        val sourceMaterial = buildSourceMaterial(product?.ingredientsText, webResults)
+
         // Brand reputation — the model's own hedged read, clearly labelled (opt-in).
         val brandTake: String? = if (engineUp && !product?.brand.isNullOrBlank()) {
             emit("Sizing up the brand", "Forming an honest impression of ${product!!.brand}…", Mood.SKEPTICAL, 0.28f)
@@ -173,7 +178,7 @@ object StackAnalyzer {
             emit(block.aspect.title, chapterCommentary(block), moodFor(block), 0.35f + 0.5f * (i.toFloat() / total))
             if (engineUp && tier == ModelTier.CAPABLE && block.state != AspectState.NOT_ASSESSED) {
                 val enriched = runCatching {
-                    BrainProvider.engine(app).complete(aspectPrompt(name, matched, block, goal, concern)).trim()
+                    BrainProvider.engine(app).complete(aspectPrompt(name, matched, block, goal, concern, sourceMaterial)).trim()
                 }.getOrNull()?.let { sanitize(it) }
                 if (!enriched.isNullOrBlank()) { byModel = true; block.copy(summary = enriched) } else block
             } else block
@@ -183,7 +188,7 @@ object StackAnalyzer {
         if (engineUp) {
             val enriched = runCatching {
                 BrainProvider.engine(app).complete(
-                    verdictPrompt(name, matched, goal, source, concern, verdict, aspectBlocks, tier),
+                    verdictPrompt(name, matched, goal, source, concern, verdict, aspectBlocks, sourceMaterial, tier),
                 ).trim()
             }.getOrNull()?.let { sanitize(it) }
             if (!enriched.isNullOrBlank()) { rationale = enriched; byModel = true }
@@ -719,16 +724,42 @@ object StackAnalyzer {
         appendLine("Reply with only the sentence.")
     }
 
-    private fun aspectPrompt(name: String, matched: Ingredient?, block: ReportBlock.Aspect, goal: String?, concern: String?): String = buildString {
-        appendLine("You are a calm, precise supplement advisor. Write ONE short sentence (max 28 words) summarizing this single chapter for the user.")
-        appendLine("Use ONLY the grounded points; add no facts, doses, or claims. Conversational, no labels, no quotes.")
+    /** Combines the product's own text (label/description or OCR) and web reviews into
+     *  the raw material the model reasons over — capped to stay prompt-friendly. */
+    private fun buildSourceMaterial(productText: String?, web: List<WebSearch.WebResult>): String = buildString {
+        productText?.takeIf { it.isNotBlank() }?.let {
+            appendLine("PRODUCT TEXT (its own label/description — marketing, treat as claims):")
+            appendLine(it.take(2500))
+            appendLine()
+        }
+        if (web.isNotEmpty()) {
+            appendLine("FROM THE WEB (independent reviews / sources):")
+            web.take(5).forEach { r -> appendLine("- ${r.domain}: ${(r.snippet.ifBlank { r.title }).take(220)}") }
+        }
+    }.trim()
+
+    private fun aspectPrompt(
+        name: String,
+        matched: Ingredient?,
+        block: ReportBlock.Aspect,
+        goal: String?,
+        concern: String?,
+        sourceMaterial: String,
+    ): String = buildString {
+        appendLine("You are a calm, precise, slightly skeptical advisor. Write ONE short sentence (max 32 words) for this chapter.")
+        appendLine("Reason from BOTH the grounded points AND the source material. You may summarize what the product or reviewers say, but label marketing as a claim (\"claims to…\"), separate verified from what to check, and NEVER invent doses, certifications, prices or numbers. No medical claims. Conversational, no labels, no quotes.")
         appendLine()
         appendLine("Item: $name${matched?.let { " (${it.displayName})" } ?: ""}")
         appendLine("Chapter: ${block.aspect.title} — ${block.aspect.question}")
         if (!goal.isNullOrBlank()) appendLine("Their goal: $goal")
         if (!concern.isNullOrBlank()) appendLine("Their worry: $concern")
-        appendLine("Grounded points:")
+        appendLine("Grounded points (verified):")
         block.lines.forEach { appendLine("- ${it.text}") }
+        if (sourceMaterial.isNotBlank()) {
+            appendLine()
+            appendLine("Source material:")
+            appendLine(sourceMaterial.take(1800))
+        }
         appendLine()
         appendLine("Reply with only the sentence.")
     }
@@ -741,24 +772,37 @@ object StackAnalyzer {
         concern: String?,
         verdict: String,
         blocks: List<ReportBlock.Aspect>,
+        sourceMaterial: String,
         tier: ModelTier,
     ): String = buildString {
-        appendLine("You are a calm, precise, slightly skeptical supplement advisor.")
-        appendLine("Write the big-picture synthesis (${if (tier == ModelTier.CAPABLE) "2-3 sentences" else "1-2 sentences"}) from the chapters below — conversational, no labels.")
-        appendLine("Reason ONLY within these chapters; invent no facts, doses, or interactions. No medical claims.")
-        appendLine("Lead with their goal and the source's credibility; surface the most important caution plainly.")
+        appendLine("You are a calm, sharp, skeptical advisor confirming whether this product lives up to its claims —")
+        appendLine("the way a careful person does: first a gut read, then asking around, then checking the evidence.")
         appendLine()
         appendLine("Item: $name${matched?.let { " (${it.displayName})" } ?: ""}")
         if (!goal.isNullOrBlank()) appendLine("Their goal: $goal")
-        if (source != null) appendLine("Source: ${source.label} (${if (source.skeptical) "weak — verify" else "credible"})")
+        if (source != null) appendLine("Source they heard it from: ${source.label} (${if (source.skeptical) "weak — verify" else "credible"})")
         if (!concern.isNullOrBlank()) appendLine("Their worry: $concern")
         appendLine("Working verdict: $verdict")
         appendLine()
-        appendLine("CHAPTERS (the only dimensions you may reason over):")
+        if (sourceMaterial.isNotBlank()) {
+            appendLine("SOURCE MATERIAL (the product's own words + what the web says — treat marketing as CLAIMS, not facts):")
+            appendLine(sourceMaterial.take(2600))
+            appendLine()
+        }
+        appendLine("GROUNDED CHECKS (verified — from the curated knowledge base and their stack):")
         blocks.forEach { b ->
             val body = b.summary?.takeIf { it.isNotBlank() } ?: b.lines.joinToString("; ") { it.text }
             appendLine("- ${b.aspect.title} [${b.state.name.lowercase()}${b.score?.let { ", $it/100" } ?: ""}]: $body")
         }
+        appendLine()
+        appendLine("Reason in three quick passes, then synthesize:")
+        appendLine("1) Intuitive — does the core claim even make sense on its face?")
+        appendLine("2) Enquiry — do the source's credibility and the real reviews support or undercut it?")
+        appendLine("3) Empirical — what does hard evidence (ingredients, dose, safety, research) actually say?")
+        appendLine()
+        appendLine("Write ${if (tier == ModelTier.CAPABLE) "2-4 sentences" else "1-2 sentences"}: the synthesized verdict — note where intuition, enquiry")
+        appendLine("and evidence AGREE and where they CONFLICT, and separate what's verified from what to check yourself.")
+        appendLine("Label marketing as a claim. Do NOT fabricate doses, certifications, prices or numbers. No medical claims. Conversational, no headings.")
         appendLine()
         appendLine("Reply with only the synthesis text.")
     }

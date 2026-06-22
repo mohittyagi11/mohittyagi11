@@ -74,9 +74,12 @@ object ProductEnricher {
 
         val cleanedTitle = cleanTitle(title)
         val description = jsonld?.optString("description")?.ifBlank { null }
+            ?: meta(html, "og:description")
+            ?: meta(html, "description")
         val combined = listOfNotNull(cleanedTitle, description?.take(300)).joinToString(". ")
-        // Text the analyzer can ingredientize from — title + description carry the actives.
-        val ingredientsText = listOfNotNull(cleanedTitle, description?.take(1200)).joinToString(". ").ifBlank { null }
+        // The real source text the analyzer + model reason over — keep a generous chunk
+        // (not a 1200-char sliver), since this is what was starving the SLM.
+        val ingredientsText = listOfNotNull(cleanedTitle, description?.take(4000)).joinToString(". ").ifBlank { null }
 
         // Structured, validated extraction is the spine; the model only refines the name.
         var name = cleanedTitle
