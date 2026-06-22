@@ -60,6 +60,14 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     /** Whether an on-device brain model file is present on disk. */
     val modelLoaded: StateFlow<Boolean> = _modelLoaded.asStateFlow()
 
+    private val _healthConnectGranted = MutableStateFlow(false)
+    /**
+     * Whether Health Connect sleep-read is granted. Unlike normal permissions
+     * this can only be read asynchronously (via the HC permission controller), so
+     * it lives in its own flow, refreshed off the main thread on every resume.
+     */
+    val healthConnectGranted: StateFlow<Boolean> = _healthConnectGranted.asStateFlow()
+
     private val _busy = MutableStateFlow(false)
     /** True while a long action (model import/remove) is running. */
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
@@ -70,6 +78,11 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     private fun modelFile(): File =
         File(getApplication<Application>().filesDir, MediaPipeLlmEngine.DEFAULT_MODEL_NAME)
 
+    init {
+        // Health Connect grant is async; seed it once at construction.
+        refreshHealthConnect()
+    }
+
     // ---- Lifecycle hooks -------------------------------------------------
 
     /** Re-read permission status, source toggles and model presence (call on resume). */
@@ -77,6 +90,13 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         _permissions.value = TriggerPermissions.status(getApplication())
         _sources.value = currentSources()
         _modelLoaded.value = modelFile().exists()
+        refreshHealthConnect()
+    }
+
+    private fun refreshHealthConnect() = viewModelScope.launch {
+        _healthConnectGranted.value = runCatching {
+            TriggerPermissions.hasHealthConnectSleep(getApplication())
+        }.getOrDefault(false)
     }
 
     /** Re-arm alarms/geofence/sensors after a grant or home change. Never throws. */

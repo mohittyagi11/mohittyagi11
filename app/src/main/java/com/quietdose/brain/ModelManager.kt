@@ -6,10 +6,14 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import java.io.BufferedInputStream
 import java.io.File
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Base64
+import java.util.zip.GZIPInputStream
+import java.util.zip.ZipInputStream
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -18,10 +22,16 @@ import kotlin.coroutines.coroutineContext
  * network — this fetches a model **file**, it is not a cloud LLM call; all
  * inference still runs on-device via [MediaPipeLlmEngine].
  *
+ * Two gated sources are supported, chosen per download:
+ *  - **Hugging Face** — bearer token sent only to huggingface.co.
+ *  - **Kaggle** — HTTP Basic (username + key) sent only to kaggle.com; the
+ *    response is a `.tar.gz` (or `.zip`) archive, so we extract the `.task`
+ *    inside automatically.
+ *
  * Every operation is suspend / off the main thread, cooperatively cancellable,
  * cleans up partial files on failure, and returns a [Result] rather than
- * throwing. After any change to the installed file we call
- * [BrainProvider.reset] so the next `get()` re-detects the model.
+ * throwing. After any change to the installed file we call [BrainProvider.reset]
+ * so the next `get()` re-detects the model.
  */
 object ModelManager {
 
@@ -31,6 +41,9 @@ object ModelManager {
     private const val READ_TIMEOUT_MS = 60_000
     private const val BUFFER = 64 * 1024
 
+    /** Which gated host a download targets. */
+    enum class Source { HUGGING_FACE, KAGGLE }
+
     /** The active model file, e.g. filesDir/brain.task. */
     private fun modelFile(context: Context): File =
         File(context.applicationContext.filesDir, MediaPipeLlmEngine.DEFAULT_MODEL_NAME)
@@ -39,12 +52,17 @@ object ModelManager {
         File(context.applicationContext.filesDir, MediaPipeLlmEngine.DEFAULT_MODEL_NAME + PART_SUFFIX)
 
     /**
-     * Open [urlStr] following redirects manually, attaching the Hugging Face
-     * bearer [token] ONLY on requests to huggingface.co. HF's `resolve` endpoint
-     * 302-redirects to a signed CDN URL that needs no auth (and must not receive
-     * the token). Returns the connection at the first non-redirect response.
+     * Open [urlStr] following redirects manually, attaching the right credential
+     * **only on the gated host**: a Hugging Face bearer token on huggingface.co,
+     * or Kaggle HTTP Basic on kaggle.com. Both hosts 302-redirect to a signed CDN
+     * URL that needs no auth (and must not receive the credential). Returns the
+     * connection at the first non-redirect response.
      */
-    private fun openFollowingRedirects(urlStr: String, token: String?): HttpURLConnection {
+    private fun openFollowingRedirects(
+        urlStr: String,
+        hfToken: String?,
+        kaggle: ModelAuth.KaggleCreds?,
+    ): HttpURLConnection {
         var current = urlStr
         var hops = 0
         while (true) {
@@ -54,8 +72,14 @@ object ModelManager {
                 instanceFollowRedirects = false
                 requestMethod = "GET"
                 setRequestProperty("Accept", "application/octet-stream")
-                if (!token.isNullOrBlank() && (url.host ?: "").endsWith("huggingface.co")) {
-                    setRequestProperty("Authorization", "Bearer $token")
+                val host = url.host ?: ""
+                if (!hfToken.isNullOrBlank() && host.endsWith("huggingface.co")) {
+                    setRequestProperty("Authorization", "Bearer $hfToken")
+                }
+                if (kaggle != null && kaggle.isComplete && host.endsWith("kaggle.com")) {
+                    val raw = "${kaggle.username}:${kaggle.key}"
+                    val encoded = Base64.getEncoder().encodeToString(raw.toByteArray(Charsets.UTF_8))
+                    setRequestProperty("Authorization", "Basic $encoded")
                 }
             }
             c.connect()
@@ -86,24 +110,34 @@ object ModelManager {
     }
 
     /**
-     * Download [model] (which must have a non-null [OnDeviceModel.directUrl]) to a
-     * temporary `.part` file, then atomically rename it onto the active model
-     * path. [onProgress] receives 0f..1f (or -1f when total size is unknown).
+     * Download [model] from [source] to a temporary `.part` file, then install it
+     * onto the active model path (extracting the `.task` first if the download is
+     * an archive). [onProgress] receives 0f..1f (or -1f when size is unknown).
      *
      * Streams on [Dispatchers.IO]; cancellable between chunks. On any failure or
-     * cancellation the `.part` file is deleted and the previously installed model
-     * (if any) is left untouched.
+     * cancellation the partial files are deleted and the previously installed
+     * model (if any) is left untouched.
      */
     suspend fun download(
         context: Context,
         model: OnDeviceModel,
-        token: String?,
+        source: Source,
+        hfToken: String?,
+        kaggle: ModelAuth.KaggleCreds?,
         onProgress: (Float) -> Unit,
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        val url = model.directUrl
-            ?: return@withContext Result.failure(
-                IllegalArgumentException("No direct download for ${model.displayName}; use the source page."),
+        val url = when (source) {
+            Source.HUGGING_FACE -> model.directUrl
+            Source.KAGGLE -> model.kaggleUrl
+        } ?: return@withContext Result.failure(
+            IllegalArgumentException("No ${source.label} download for ${model.displayName}; use its page."),
+        )
+
+        if (source == Source.KAGGLE && (kaggle == null || !kaggle.isComplete)) {
+            return@withContext Result.failure(
+                IllegalStateException("Add your Kaggle username and API key first, then Download."),
             )
+        }
 
         val part = partFile(context)
         val target = modelFile(context)
@@ -111,33 +145,22 @@ object ModelManager {
 
         try {
             part.delete()
-
-            // Follow redirects ourselves so the bearer token is sent ONLY to
-            // huggingface.co — the redirect target (a signed CDN URL) needs no
-            // auth and must not receive the token.
-            connection = openFollowingRedirects(url, token)
+            connection = openFollowingRedirects(url, hfToken, kaggle)
 
             val code = connection.responseCode
             if (code !in 200..299) {
-                return@withContext Result.failure(
-                    IllegalStateException(
-                        "Download failed (HTTP $code). If the model is gated, accept its " +
-                            "licence on the page and paste a Hugging Face token, then retry — " +
-                            "or import the file.",
-                    ),
-                )
+                return@withContext Result.failure(IllegalStateException(httpHint(code, source)))
             }
 
             val total = connection.contentLengthLong // -1 if unknown
             connection.inputStream.use { input ->
                 part.outputStream().use { output ->
                     val buf = ByteArray(BUFFER)
-                    var read: Int
                     var downloaded = 0L
                     onProgress(if (total > 0) 0f else -1f)
                     while (true) {
                         coroutineContext.ensureActive() // cooperative cancellation
-                        read = input.read(buf)
+                        val read = input.read(buf)
                         if (read < 0) break
                         output.write(buf, 0, read)
                         downloaded += read
@@ -154,17 +177,17 @@ object ModelManager {
                 return@withContext Result.failure(IllegalStateException("Downloaded an empty file."))
             }
 
-            // Atomic-ish install: replace the active model with the completed part.
+            // Kaggle (and some HF) downloads are archives — pull the .task out.
+            // Raw .task downloads pass straight through.
             target.delete()
-            val renamed = part.renameTo(target)
-            if (!renamed) {
-                // Fallback: copy then delete the part.
-                part.copyTo(target, overwrite = true)
-                part.delete()
-            }
+            materialize(part, target)
+            part.delete()
+
             if (!target.exists() || target.length() <= 0L) {
                 target.delete()
-                return@withContext Result.failure(IllegalStateException("Couldn't install the model file."))
+                return@withContext Result.failure(
+                    IllegalStateException("Downloaded an archive but found no .task model inside."),
+                )
             }
 
             onProgress(1f)
@@ -173,12 +196,161 @@ object ModelManager {
         } catch (t: Throwable) {
             runCatching { part.delete() }
             Log.w(TAG, "Download failed for ${model.id}", t)
-            // Propagate cancellation as a failure with the cause; caller can ignore.
             Result.failure(t)
         } finally {
             runCatching { connection?.disconnect() }
         }
     }
+
+    /**
+     * Turn a downloaded [part] into the installed model at [target]: if [part] is
+     * a gzip-tar or zip archive, extract the first model entry; otherwise (a raw
+     * `.task`) just move it into place.
+     */
+    private suspend fun materialize(part: File, target: File) {
+        when (archiveKind(part)) {
+            ArchiveKind.GZIP_TAR ->
+                GZIPInputStream(part.inputStream().buffered()).use { gz -> extractTar(gz, target) }
+            ArchiveKind.ZIP ->
+                ZipInputStream(part.inputStream().buffered()).use { zip -> extractZip(zip, target) }
+            ArchiveKind.RAW -> {
+                if (!part.renameTo(target)) {
+                    part.copyTo(target, overwrite = true)
+                }
+            }
+        }
+    }
+
+    private enum class ArchiveKind { RAW, GZIP_TAR, ZIP }
+
+    /** Sniff the first bytes to tell a raw model from a gzip/zip archive. */
+    private fun archiveKind(file: File): ArchiveKind {
+        val head = ByteArray(4)
+        val n = file.inputStream().use { it.read(head) }
+        if (n < 2) return ArchiveKind.RAW
+        val b0 = head[0].toInt() and 0xFF
+        val b1 = head[1].toInt() and 0xFF
+        return when {
+            b0 == 0x1F && b1 == 0x8B -> ArchiveKind.GZIP_TAR        // gzip magic
+            b0 == 0x50 && b1 == 0x4B -> ArchiveKind.ZIP             // "PK"
+            else -> ArchiveKind.RAW
+        }
+    }
+
+    /** True for files that look like a loadable model bundle. */
+    private fun isModelEntry(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.endsWith(".task") || lower.endsWith(".litertlm") || lower.endsWith(".bin")
+    }
+
+    /** Stream the largest model entry out of a ZIP into [target]. */
+    private suspend fun extractZip(zip: ZipInputStream, target: File) {
+        var entry = zip.nextEntry
+        while (entry != null) {
+            if (!entry.isDirectory && isModelEntry(entry.name)) {
+                target.outputStream().use { out -> copyStream(zip, out) }
+                return
+            }
+            zip.closeEntry()
+            entry = zip.nextEntry
+        }
+    }
+
+    /**
+     * Minimal USTAR reader: walk 512-byte headers, and when we reach a model
+     * entry, stream exactly its declared size into [target]. Enough for the
+     * single-file model archives Kaggle serves; not a general-purpose tar tool.
+     */
+    private suspend fun extractTar(input: InputStream, target: File) {
+        val header = ByteArray(512)
+        val stream = BufferedInputStream(input)
+        while (true) {
+            coroutineContext.ensureActive()
+            if (!readFully(stream, header)) return
+            if (header.all { it.toInt() == 0 }) return // end-of-archive padding
+            val name = String(header, 0, 100, Charsets.UTF_8).trimEnd('\u0000', ' ')
+            val size = parseOctal(header, 124, 12)
+            if (name.isNotEmpty() && isModelEntry(name)) {
+                target.outputStream().use { out -> copyExact(stream, out, size) }
+                return
+            }
+            // Skip this entry's data, rounded up to the 512-byte block boundary.
+            skipExact(stream, roundUp512(size))
+        }
+    }
+
+    // ---- small stream helpers -------------------------------------------
+
+    private suspend fun copyStream(input: InputStream, output: java.io.OutputStream) {
+        val buf = ByteArray(BUFFER)
+        while (true) {
+            coroutineContext.ensureActive()
+            val read = input.read(buf)
+            if (read < 0) break
+            output.write(buf, 0, read)
+        }
+        output.flush()
+    }
+
+    private suspend fun copyExact(input: InputStream, output: java.io.OutputStream, size: Long) {
+        val buf = ByteArray(BUFFER)
+        var remaining = size
+        while (remaining > 0) {
+            coroutineContext.ensureActive()
+            val want = minOf(remaining, buf.size.toLong()).toInt()
+            val read = input.read(buf, 0, want)
+            if (read < 0) break
+            output.write(buf, 0, read)
+            remaining -= read
+        }
+        output.flush()
+    }
+
+    private fun readFully(input: InputStream, buf: ByteArray): Boolean {
+        var off = 0
+        while (off < buf.size) {
+            val read = input.read(buf, off, buf.size - off)
+            if (read < 0) return off == buf.size
+            off += read
+        }
+        return true
+    }
+
+    private fun skipExact(input: InputStream, count: Long) {
+        var remaining = count
+        val scratch = ByteArray(BUFFER)
+        while (remaining > 0) {
+            val skipped = input.skip(remaining)
+            if (skipped > 0) {
+                remaining -= skipped
+            } else {
+                val read = input.read(scratch, 0, minOf(remaining, scratch.size.toLong()).toInt())
+                if (read < 0) return
+                remaining -= read
+            }
+        }
+    }
+
+    private fun parseOctal(buf: ByteArray, offset: Int, len: Int): Long {
+        val s = String(buf, offset, len, Charsets.US_ASCII).trim('\u0000', ' ')
+        return s.toLongOrNull(8) ?: 0L
+    }
+
+    private fun roundUp512(size: Long): Long = ((size + 511) / 512) * 512
+
+    private fun httpHint(code: Int, source: Source): String = when (code) {
+        401, 403 -> "Access denied (HTTP $code). Open the model's ${source.label} page, accept " +
+            "the licence once, and check your ${source.credentialName} — then retry, or import the file."
+        404 -> "Not found (HTTP $code). The ${source.label} file may have been renamed or revisioned — " +
+            "open the page and import the .task instead."
+        else -> "Download failed (HTTP $code). Try the other source, or import the file."
+    }
+
+    private val Source.label: String
+        get() = if (this == Source.HUGGING_FACE) "Hugging Face" else "Kaggle"
+
+    private val Source.credentialName: String
+        get() = if (this == Source.HUGGING_FACE) "token" else "username + key"
 
     /**
      * Import a `.task` model the user picked via the document picker. Streams the
@@ -211,11 +383,10 @@ object ModelManager {
                 return@withContext Result.failure(IllegalStateException("The selected file was empty."))
             }
 
+            // Allow importing an archive too (extract the .task), not just a raw file.
             target.delete()
-            if (!part.renameTo(target)) {
-                part.copyTo(target, overwrite = true)
-                part.delete()
-            }
+            materialize(part, target)
+            part.delete()
             if (!target.exists() || target.length() <= 0L) {
                 target.delete()
                 return@withContext Result.failure(IllegalStateException("Couldn't install the imported file."))

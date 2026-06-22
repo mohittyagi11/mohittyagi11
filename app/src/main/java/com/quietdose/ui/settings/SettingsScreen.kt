@@ -58,6 +58,7 @@ fun SettingsScreen(
 ) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val permissions by vm.permissions.collectAsStateWithLifecycle()
+    val healthConnectGranted by vm.healthConnectGranted.collectAsStateWithLifecycle()
     val sources by vm.sources.collectAsStateWithLifecycle()
     val modelLoaded by vm.modelLoaded.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
@@ -78,7 +79,7 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item { TopRow(onBack = onBack) }
-        item { PermissionsSection(vm = vm, status = permissions) }
+        item { PermissionsSection(vm = vm, status = permissions, healthConnectGranted = healthConnectGranted) }
         item { HomeWakeSection(vm = vm, settings = settings) }
         item { DataSourcesSection(vm = vm, sources = sources) }
         item { ModelPickerSection() }
@@ -120,7 +121,11 @@ private fun TopRow(onBack: () -> Unit) {
 /* ----------------------------- Permissions ----------------------------- */
 
 @Composable
-private fun PermissionsSection(vm: SettingsViewModel, status: TriggerPermissions.Status) {
+private fun PermissionsSection(
+    vm: SettingsViewModel,
+    status: TriggerPermissions.Status,
+    healthConnectGranted: Boolean,
+) {
     val context = LocalContext.current
 
     val notificationsLauncher = rememberLauncherForActivityResult(
@@ -211,9 +216,13 @@ private fun PermissionsSection(vm: SettingsViewModel, status: TriggerPermissions
         )
         if (status.healthConnectAvailable) {
             StatusRow(
-                granted = false,
+                granted = healthConnectGranted,
                 title = "Health Connect — sleep",
-                detail = "Reads last night's sleep to time your morning dose.",
+                detail = if (healthConnectGranted) {
+                    "Connected — reading last night's sleep to time your morning dose."
+                } else {
+                    "Reads last night's sleep to time your morning dose."
+                },
                 actionLabel = "Connect",
                 onAction = {
                     healthConnectLauncher?.let {

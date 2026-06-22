@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.quietdose.brain.DeviceCapability
 import com.quietdose.brain.LlmBrain
@@ -56,6 +58,7 @@ import com.quietdose.ui.theme.TextHigh
 import com.quietdose.ui.theme.TextLow
 import com.quietdose.ui.theme.TextMid
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 
 /**
@@ -83,9 +86,16 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
     var progress by remember { mutableStateOf(0f) }
     var heavierExpanded by remember { mutableStateOf(false) }
 
-    // Optional Hugging Face token for gated model downloads. Loaded once.
+    // Optional Hugging Face token + Kaggle credentials for gated downloads. Loaded once.
     var hfToken by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) { hfToken = ModelAuth.tokenFlow(context).first().orEmpty() }
+    var kaggleUser by remember { mutableStateOf("") }
+    var kaggleKey by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        hfToken = ModelAuth.tokenFlow(context).first().orEmpty()
+        val creds = ModelAuth.kaggleFlow(context).first()
+        kaggleUser = creds.username
+        kaggleKey = creds.key
+    }
 
     val totalRamMb = remember { DeviceCapability.totalRamMb(context) }
     val recommended = remember { DeviceCapability.recommended(context) }
@@ -109,35 +119,41 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
         }
     }
 
-    fun openPage(model: OnDeviceModel) {
-        runCatching {
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(model.sourcePageUrl))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-        }.onFailure { note = "Couldn't open the model page." }
-    }
-
-    fun startDownload(model: OnDeviceModel) {
+    fun startDownload(model: OnDeviceModel, source: ModelManager.Source) {
         if (busy) return
         busy = true
         downloadingId = model.id
         progress = 0f
-        note = "Downloading ${model.displayName}…"
+        val sourceLabel = if (source == ModelManager.Source.KAGGLE) "Kaggle" else "Hugging Face"
+        note = "Downloading ${model.displayName} from $sourceLabel…"
         val token = hfToken.trim().ifEmpty { null }
+        val creds = ModelAuth.KaggleCreds(kaggleUser.trim(), kaggleKey.trim())
         scope.launch {
-            // Persist the token so it's remembered for next time.
+            // Persist credentials so they're remembered for next time.
             runCatching { ModelAuth.setToken(context, token) }
-            val result = ModelManager.download(context, model, token) { p -> progress = p }
+            runCatching { ModelAuth.setKaggle(context, creds.username, creds.key) }
+            val result = ModelManager.download(context, model, source, token, creds) { p -> progress = p }
             busy = false
             downloadingId = null
             refreshInstalled()
             note = if (result.isSuccess) {
-                "Model installed."
+                "Model installed. Tap “Test model” to confirm it runs."
             } else {
-                result.exceptionOrNull()?.message ?: "Download failed — try \"Get model\" instead."
+                result.exceptionOrNull()?.message ?: "Download failed — open the page and import instead."
             }
         }
+    }
+
+    /** Save the HF token, then immediately download the best-fit downloadable model. */
+    fun saveTokenAndDownload() {
+        if (busy) return
+        val target = recommended.firstOrNull { it.directUrl != null }
+        scope.launch { runCatching { ModelAuth.setToken(context, hfToken.trim().ifEmpty { null }) } }
+        if (target == null) {
+            note = "Token saved. No Hugging Face direct download fits this device — use Kaggle or import."
+            return
+        }
+        startDownload(target, ModelManager.Source.HUGGING_FACE)
     }
 
     Surface(color = Surface1, shape = RoundedCornerShape(20.dp), modifier = modifier.fillMaxWidth()) {
@@ -161,9 +177,9 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
             HairLine()
             Spacer(Modifier.height(14.dp))
 
-            // Gated-model access: a Hugging Face token lets the in-app Download
-            // fetch license-gated files directly (accept the licence once on the
-            // page, then it just works — same as the curl command's auth header).
+            // Gated-model access. Both sources need a one-time licence acceptance on
+            // the model's page; after that, credentials let the in-app Download fetch
+            // the file. Credentials stay on this device.
             Text(
                 "Gated downloads",
                 style = MaterialTheme.typography.titleMedium,
@@ -172,32 +188,53 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "Most models need a one-time licence acceptance on their page. Paste a Hugging Face token here and in-app Download works; the token stays on this device.",
+                "Accept the licence on the model's page once, then download from either source. Credentials stay on this device.",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextMid,
             )
-            Spacer(Modifier.height(8.dp))
-            TokenField(value = hfToken, onValueChange = { hfToken = it })
+
+            // --- Hugging Face ---
+            Spacer(Modifier.height(12.dp))
+            Text("Hugging Face token", style = MaterialTheme.typography.labelLarge, color = TextMid)
+            Spacer(Modifier.height(6.dp))
+            TokenField(value = hfToken, onValueChange = { hfToken = it }, placeholder = "hf_… (token)")
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 GhostButton(
                     label = "Create token",
-                    onClick = {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse("https://huggingface.co/settings/tokens"))
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                        }
-                    },
+                    onClick = { openUrl(context, "https://huggingface.co/settings/tokens") },
+                )
+                PillButton(
+                    label = "Save & download",
+                    enabled = !busy && hfToken.isNotBlank(),
+                    onClick = { saveTokenAndDownload() },
+                )
+            }
+
+            // --- Kaggle ---
+            Spacer(Modifier.height(14.dp))
+            Text("Kaggle username + key", style = MaterialTheme.typography.labelLarge, color = TextMid)
+            Spacer(Modifier.height(6.dp))
+            TokenField(value = kaggleUser, onValueChange = { kaggleUser = it }, placeholder = "Kaggle username", mask = false)
+            Spacer(Modifier.height(6.dp))
+            TokenField(value = kaggleKey, onValueChange = { kaggleKey = it }, placeholder = "Kaggle API key")
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GhostButton(
+                    label = "Create key",
+                    onClick = { openUrl(context, "https://www.kaggle.com/settings/account") },
                 )
                 GhostButton(
-                    label = if (hfToken.isBlank()) "Save" else "Save token",
+                    label = "Save",
                     enabled = !busy,
                     onClick = {
                         scope.launch {
-                            runCatching { ModelAuth.setToken(context, hfToken.trim().ifEmpty { null }) }
-                            note = if (hfToken.isBlank()) "Token cleared." else "Token saved."
+                            runCatching { ModelAuth.setKaggle(context, kaggleUser.trim(), kaggleKey.trim()) }
+                            note = if (kaggleUser.isBlank() && kaggleKey.isBlank()) {
+                                "Kaggle credentials cleared."
+                            } else {
+                                "Kaggle credentials saved. Tap “Kaggle” on a model to download."
+                            }
                         }
                     },
                 )
@@ -228,8 +265,10 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                         enabled = !busy,
                         downloading = downloadingId == model.id,
                         progress = progress,
-                        onDownload = { startDownload(model) },
-                        onGetPage = { openPage(model) },
+                        onDownloadHf = { startDownload(model, ModelManager.Source.HUGGING_FACE) },
+                        onDownloadKaggle = { startDownload(model, ModelManager.Source.KAGGLE) },
+                        onOpenHf = { openUrl(context, model.sourcePageUrl) },
+                        onOpenKaggle = { model.kagglePageUrl?.let { openUrl(context, it) } },
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -258,22 +297,31 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                     color = Accent,
                     onClick = {
                         busy = true
-                        note = "Testing the model…"
+                        note = "Testing the model… the first load can take a minute."
                         scope.launch {
-                            val brain = ServiceLocator.brain(context)
-                            note = if (brain is LlmBrain && brain.isModelReady()) {
-                                val reply = runCatching { brain.probe("Reply with one short word.") }
-                                    .getOrDefault("")
-                                if (reply.isBlank()) {
-                                    "Model is installed but produced no output — this .task may not be " +
-                                        "supported by the on-device runtime. Try Gemma 3 1B (int4)."
+                            try {
+                                val brain = ServiceLocator.brain(context)
+                                if (brain is LlmBrain && brain.isModelReady()) {
+                                    // Hard cap so a too-large or unsupported model can never
+                                    // leave the screen stuck on "Testing…".
+                                    val reply = withTimeoutOrNull(180_000L) {
+                                        runCatching { brain.probe("Reply with one short word.") }.getOrDefault("")
+                                    }
+                                    note = when {
+                                        reply == null ->
+                                            "Timed out after 3 min — this model is likely too large for this " +
+                                                "device, or unsupported. Try Gemma 3 1B (int4)."
+                                        reply.isBlank() ->
+                                            "Installed but produced no output — this .task may not be supported " +
+                                                "by the on-device runtime. Try Gemma 3 1B (int4)."
+                                        else -> "Working ✓ — the model replied: “$reply”"
+                                    }
                                 } else {
-                                    "Working ✓ — the model replied: “$reply”"
+                                    note = "No loadable model — running on the built-in heuristic."
                                 }
-                            } else {
-                                "No loadable model — running on the built-in heuristic."
+                            } finally {
+                                busy = false
                             }
-                            busy = false
                         }
                     },
                 )
@@ -314,7 +362,7 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                             TooLargeCard(
                                 model = entry.model,
                                 reason = entry.reason,
-                                onGetPage = { openPage(entry.model) },
+                                onGetPage = { openUrl(context, entry.model.sourcePageUrl) },
                             )
                             Spacer(Modifier.height(8.dp))
                         }
@@ -380,8 +428,10 @@ private fun ModelCard(
     enabled: Boolean,
     downloading: Boolean,
     progress: Float,
-    onDownload: () -> Unit,
-    onGetPage: () -> Unit,
+    onDownloadHf: () -> Unit,
+    onDownloadKaggle: () -> Unit,
+    onOpenHf: () -> Unit,
+    onOpenKaggle: () -> Unit,
 ) {
     Surface(color = Surface2, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
@@ -428,16 +478,56 @@ private fun ModelCard(
                     Text("Downloading…", style = MaterialTheme.typography.bodySmall, color = TextMid)
                 }
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (model.directUrl != null) {
-                        PillButton(label = "Download", enabled = enabled, onClick = onDownload)
-                        GhostButton(label = "Open page", enabled = enabled, onClick = onGetPage)
-                    } else {
-                        // No safe direct link — must obtain from the page, then import.
-                        PillButton(label = "Get model", enabled = enabled, onClick = onGetPage)
-                    }
+                // Two sources: download directly when a credentialed link exists,
+                // otherwise open the (clean) page to grab it and import.
+                SourceRow(
+                    name = "Hugging Face",
+                    canDownload = model.directUrl != null,
+                    hasPage = true,
+                    enabled = enabled,
+                    onDownload = onDownloadHf,
+                    onOpen = onOpenHf,
+                )
+                if (model.kaggleUrl != null || model.kagglePageUrl != null) {
+                    Spacer(Modifier.height(8.dp))
+                    SourceRow(
+                        name = "Kaggle",
+                        canDownload = model.kaggleUrl != null,
+                        hasPage = model.kagglePageUrl != null,
+                        enabled = enabled,
+                        onDownload = onDownloadKaggle,
+                        onOpen = onOpenKaggle,
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SourceRow(
+    name: String,
+    canDownload: Boolean,
+    hasPage: Boolean,
+    enabled: Boolean,
+    onDownload: () -> Unit,
+    onOpen: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextMid,
+            modifier = Modifier.width(104.dp),
+        )
+        if (canDownload) {
+            PillButton(label = "Download", enabled = enabled, onClick = onDownload)
+            if (hasPage) GhostButton(label = "Page", enabled = enabled, onClick = onOpen)
+        } else if (hasPage) {
+            PillButton(label = "Open page", enabled = enabled, onClick = onOpen)
         }
     }
 }
@@ -521,7 +611,12 @@ private fun GhostButton(
 }
 
 @Composable
-private fun TokenField(value: String, onValueChange: (String) -> Unit) {
+private fun TokenField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    mask: Boolean = true,
+) {
     Box(
         Modifier
             .fillMaxWidth()
@@ -535,18 +630,27 @@ private fun TokenField(value: String, onValueChange: (String) -> Unit) {
             singleLine = true,
             textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextHigh),
             cursorBrush = SolidColor(Accent),
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (mask) PasswordVisualTransformation() else VisualTransformation.None,
             modifier = Modifier.fillMaxWidth(),
             decorationBox = { inner ->
                 if (value.isEmpty()) {
                     Text(
-                        "hf_… (Hugging Face token)",
+                        placeholder,
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextLow,
                     )
                 }
                 inner()
             },
+        )
+    }
+}
+
+/** Open an external URL in the browser; failures are silently ignored. */
+private fun openUrl(context: android.content.Context, url: String) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }
 }
