@@ -3,6 +3,7 @@ package com.quietdose.brain.enrich
 import android.content.Context
 import android.util.Log
 import com.quietdose.brain.BrainProvider
+import com.quietdose.brain.analysis.IngredientCatalog
 import com.quietdose.brain.analysis.ModelCapability
 import com.quietdose.brain.analysis.ProductSignals
 import com.quietdose.brain.skills.DraftItem
@@ -99,6 +100,13 @@ object ProductEnricher {
 
         if (name.isNullOrBlank()) {
             return@withContext EnrichResult(null, url, title, "Couldn't read a product name. Fill it in manually.")
+        }
+
+        // If the page didn't give a clear unit, infer it from the known ingredient
+        // (e.g. Selenium → mcg) rather than leaving a meaningless "units". Honest:
+        // the unit follows from the ingredient's identity; we don't fabricate the amount.
+        if (doseUnit == DoseUnit.UNIT) {
+            IngredientCatalog.match(name!!)?.let { doseUnit = it.doseUnit }
         }
 
         EnrichResult(
