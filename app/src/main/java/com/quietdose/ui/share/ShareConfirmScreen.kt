@@ -55,6 +55,7 @@ import com.quietdose.ui.stack.androidxClickable
 import com.quietdose.ui.stack.label
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.GroupStyle
+import com.quietdose.ui.theme.Ink
 import com.quietdose.ui.theme.Surface1
 import com.quietdose.ui.theme.Surface2
 import com.quietdose.ui.theme.TextHigh
@@ -94,7 +95,7 @@ fun ShareConfirmScreen(url: String?, onClose: () -> Unit, onSaved: () -> Unit) {
         else SharePhase.Empty(result.note ?: "Couldn't read that link.")
     }
 
-    Box(Modifier.fillMaxSize().statusBarsPadding()) {
+    Box(Modifier.fillMaxSize().background(Ink).statusBarsPadding()) {
         when (val p = phase) {
             SharePhase.Reading -> Center {
                 CircularProgressIndicator(color = Accent, strokeWidth = 2.dp, modifier = Modifier.size(34.dp))

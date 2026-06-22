@@ -27,6 +27,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
@@ -51,9 +52,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
+import androidx.compose.ui.window.Dialog
 import com.quietdose.ui.analysis.AnalysisScreen
 import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.scan.ScanScreen
+import com.quietdose.ui.share.ShareConfirmScreen
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.GroupStyle
 import com.quietdose.ui.theme.Surface1
@@ -84,6 +87,9 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
     var pendingAnalysis by remember { mutableStateOf<ItemEntity?>(null) }
     var mode by remember { mutableStateOf(StackMode.Groups) }
     var query by remember { mutableStateOf("") }
+    var showAddChooser by remember { mutableStateOf(false) }
+    var showLinkInput by remember { mutableStateOf(false) }
+    var sharedUrl by remember { mutableStateOf<String?>(null) }
 
     // Flat catalogue, computed in composable scope (not inside the LazyColumn lambda).
     val catalogRows = remember(state.groups) {
@@ -128,6 +134,7 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
             }
         } else {
             // Flat catalogue: every tracked item, across groups, searchable.
+            item { AddItemBar(onClick = { showAddChooser = true }) }
             item { CatalogSearch(query = query, onQuery = { query = it }, count = catalogFiltered.size) }
             if (catalogFiltered.isEmpty()) {
                 item { CatalogEmpty(hasItems = catalogRows.isNotEmpty()) }
@@ -173,6 +180,30 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
             onDelete = { vm.deleteItem(it); editing = null },
         )
         null -> Unit
+    }
+
+    if (showAddChooser) {
+        AddChooserDialog(
+            hasGroups = state.groups.isNotEmpty(),
+            onManual = {
+                showAddChooser = false
+                state.groups.firstOrNull()?.let { sg ->
+                    editing = Editing.NewItem(sg.group.id, GroupStyle.tint(sg.group).toArgb())
+                }
+            },
+            onScan = { showAddChooser = false; scanning = true },
+            onLink = { showAddChooser = false; showLinkInput = true },
+            onDismiss = { showAddChooser = false },
+        )
+    }
+    if (showLinkInput) {
+        LinkInputDialog(
+            onSubmit = { url -> showLinkInput = false; sharedUrl = url },
+            onDismiss = { showLinkInput = false },
+        )
+    }
+    sharedUrl?.let { url ->
+        ShareConfirmScreen(url = url, onClose = { sharedUrl = null }, onSaved = { sharedUrl = null })
     }
 
     if (scanning) {
@@ -310,11 +341,107 @@ private fun catalogDose(item: ItemEntity): String {
 @Composable
 private fun CatalogEmpty(hasItems: Boolean) {
     Text(
-        if (hasItems) "No items match." else "No items yet — add one in Groups, scan a label, or share a link.",
+        if (hasItems) "No items match." else "No items yet — tap Add item to type one in, scan a label, or paste a link.",
         style = MaterialTheme.typography.bodyLarge,
         color = TextLow,
         modifier = Modifier.padding(vertical = 20.dp),
     )
+}
+
+@Composable
+private fun AddItemBar(onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Accent.copy(alpha = 0.16f))
+            .androidxClickable(onClick)
+            .padding(vertical = 13.dp),
+    ) {
+        Icon(Icons.Rounded.Add, contentDescription = null, tint = Accent, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Add item", style = MaterialTheme.typography.titleMedium, color = Accent)
+    }
+}
+
+@Composable
+private fun AddChooserDialog(
+    hasGroups: Boolean,
+    onManual: () -> Unit,
+    onScan: () -> Unit,
+    onLink: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(color = Surface1, shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                Text("Add an item", style = MaterialTheme.typography.titleLarge, color = TextHigh)
+                Text(
+                    "Every route runs the same on-device analysis before it's added.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextMid,
+                )
+                Spacer(Modifier.height(16.dp))
+                ChooserRow(Icons.Rounded.Add, "Type it in", if (hasGroups) "Enter the name and details" else "Create a group first", enabled = hasGroups, onClick = onManual)
+                Spacer(Modifier.height(8.dp))
+                ChooserRow(Icons.Rounded.PhotoCamera, "Scan a label", "Photograph front + back", enabled = true, onClick = onScan)
+                Spacer(Modifier.height(8.dp))
+                ChooserRow(Icons.Rounded.Link, "From a link", "Paste an Amazon/Flipkart URL", enabled = true, onClick = onLink)
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButtonGhost("Cancel", color = TextLow, onClick = onDismiss)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChooserRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, enabled: Boolean, onClick: () -> Unit) {
+    val tint = if (enabled) Accent else TextLow
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Surface2)
+            .androidxClickable { if (enabled) onClick() }
+            .padding(14.dp),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(36.dp).clip(CircleShape).background(tint.copy(alpha = 0.16f)),
+        ) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = if (enabled) TextHigh else TextLow)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextMid)
+        }
+    }
+}
+
+@Composable
+private fun LinkInputDialog(onSubmit: (String) -> Unit, onDismiss: () -> Unit) {
+    var url by remember { mutableStateOf("") }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(color = Surface1, shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                Text("Paste a product link", style = MaterialTheme.typography.titleLarge, color = TextHigh)
+                Spacer(Modifier.height(12.dp))
+                StackTextField(value = url, onValueChange = { url = it }, placeholder = "https://…")
+                Spacer(Modifier.height(16.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButtonGhost("Cancel", color = TextLow, onClick = onDismiss)
+                    Spacer(Modifier.width(8.dp))
+                    FilledButton(label = "Read link", accent = Accent, enabled = url.isNotBlank()) { onSubmit(url.trim()) }
+                }
+            }
+        }
+    }
 }
 
 @Composable
