@@ -13,7 +13,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
 import java.util.zip.GZIPInputStream
-import java.util.zip.ZipInputStream
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -203,21 +202,27 @@ object ModelManager {
     }
 
     /**
-     * Turn a downloaded [part] into the installed model at [target]: if [part] is
-     * a gzip-tar or zip archive, extract the first model entry; otherwise (a raw
-     * `.task`) just move it into place.
+     * Turn a downloaded/imported [part] into the installed model at [target].
+     *
+     * Important: a MediaPipe `.task` model is **itself a zip bundle**, so we must
+     * never unpack a zip — that would corrupt the model (or, scanning a multi-GB
+     * zip for a non-existent inner file, appear to hang). We only unpack the
+     * **gzip-tar** wrapper that Kaggle serves; everything else (a raw `.task`,
+     * which sniffs as a zip, or any other file) is installed whole.
      */
     private suspend fun materialize(part: File, target: File) {
         when (archiveKind(part)) {
             ArchiveKind.GZIP_TAR ->
                 GZIPInputStream(part.inputStream().buffered()).use { gz -> extractTar(gz, target) }
-            ArchiveKind.ZIP ->
-                ZipInputStream(part.inputStream().buffered()).use { zip -> extractZip(zip, target) }
-            ArchiveKind.RAW -> {
-                if (!part.renameTo(target)) {
-                    part.copyTo(target, overwrite = true)
-                }
-            }
+            // A .task bundle is a zip — install it as-is, do not unpack it.
+            ArchiveKind.ZIP, ArchiveKind.RAW -> installAsIs(part, target)
+        }
+    }
+
+    /** Move [part] onto [target] without touching its contents. */
+    private fun installAsIs(part: File, target: File) {
+        if (!part.renameTo(target)) {
+            part.copyTo(target, overwrite = true)
         }
     }
 
@@ -237,23 +242,10 @@ object ModelManager {
         }
     }
 
-    /** True for files that look like a loadable model bundle. */
+    /** True for a tar entry that is a loadable model bundle. */
     private fun isModelEntry(name: String): Boolean {
         val lower = name.lowercase()
-        return lower.endsWith(".task") || lower.endsWith(".litertlm") || lower.endsWith(".bin")
-    }
-
-    /** Stream the largest model entry out of a ZIP into [target]. */
-    private suspend fun extractZip(zip: ZipInputStream, target: File) {
-        var entry = zip.nextEntry
-        while (entry != null) {
-            if (!entry.isDirectory && isModelEntry(entry.name)) {
-                target.outputStream().use { out -> copyStream(zip, out) }
-                return
-            }
-            zip.closeEntry()
-            entry = zip.nextEntry
-        }
+        return lower.endsWith(".task") || lower.endsWith(".litertlm")
     }
 
     /**
@@ -280,17 +272,6 @@ object ModelManager {
     }
 
     // ---- small stream helpers -------------------------------------------
-
-    private suspend fun copyStream(input: InputStream, output: java.io.OutputStream) {
-        val buf = ByteArray(BUFFER)
-        while (true) {
-            coroutineContext.ensureActive()
-            val read = input.read(buf)
-            if (read < 0) break
-            output.write(buf, 0, read)
-        }
-        output.flush()
-    }
 
     private suspend fun copyExact(input: InputStream, output: java.io.OutputStream, size: Long) {
         val buf = ByteArray(BUFFER)
