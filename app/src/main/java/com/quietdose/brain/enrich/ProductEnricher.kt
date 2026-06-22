@@ -250,7 +250,12 @@ object ProductEnricher {
         }
     }
 
-    /** Price from JSON-LD offers, then OpenGraph/meta, then a currency-symbol scan. */
+    /**
+     * Price from STRUCTURED data only — JSON-LD offers, then OpenGraph/meta. We do
+     * NOT scan the page for the first "₹number": on retailers like Amazon that grabs
+     * noise (a ₹100 cashback / EMI figure), and a wrong price is worse than none. If
+     * there's no structured price, return nothing and let the UI say "check the store".
+     */
     private fun extractPrice(product: JSONObject?, html: String): Triple<String?, Double?, String?> {
         // 1) JSON-LD offers.price / priceCurrency
         val offers = product?.opt("offers")
@@ -272,12 +277,6 @@ object ProductEnricher {
         if (metaPrice != null) {
             val amt = metaPrice.replace(Regex("[^0-9.]"), "").toDoubleOrNull()
             return Triple(formatPrice(amt, metaCurrency) ?: metaPrice, amt, metaCurrency)
-        }
-        // 3) a visible price with a currency symbol (₹, $, £, €) — best-effort, hedged.
-        Regex("([₹$£€])\\s?([0-9][0-9.,]{1,9})").find(html)?.let {
-            val sym = it.groupValues[1]
-            val amt = it.groupValues[2].replace(",", "").toDoubleOrNull()
-            return Triple("$sym${it.groupValues[2]}", amt, currencyForSymbol(sym))
         }
         return Triple(null, null, null)
     }

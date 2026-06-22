@@ -96,14 +96,11 @@ class MediaPipeLlmEngine(
             return null
         }
         if (loadFailed) return null
-        // Guard the multi-GB native allocation: if the device doesn't have enough
-        // free memory, DON'T attempt the load — a native OOM here is uncatchable and
-        // takes the whole process down (the scan "reading labels" crash and the
-        // analysis "back to Amazon" crash). Degrade to the deterministic brain instead.
-        if (!hasMemoryFor(modelFile.length())) {
-            loadFailed = true
-            errorMessage = "Not enough free memory to run the model right now."
-            Log.w(TAG, "Skipping model load: insufficient free memory for ${modelFile.length()} bytes")
+        // Guard a native OOM (uncatchable) only when memory is genuinely low. Do NOT
+        // latch loadFailed here — it's transient, so we retry once memory recovers.
+        if (!hasMemoryFor()) {
+            errorMessage = "Low memory — skipping the model for now."
+            Log.w(TAG, "Skipping model load: low memory")
             return null
         }
         return synchronized(this) {
@@ -126,26 +123,24 @@ class MediaPipeLlmEngine(
     }
 
     /**
-     * Is there plausibly enough free memory to load a model of [modelBytes]? A
-     * `.task` int4 model needs roughly its on-disk size resident, plus working
-     * room. We require free memory above that with headroom and refuse on a
-     * low-memory system. Heuristic, but it turns a fatal native OOM into a calm
-     * fallback. Never throws.
+     * Enough free memory to *attempt* a load? A `.task` int4 model is memory-mapped
+     * (weights page in on demand), so it does NOT need its whole multi-GB file
+     * resident — only working headroom. So we bail only when the system reports low
+     * memory or free memory is below a small floor. This still avoids the worst-case
+     * native OOM without permanently disabling the model. Never throws.
      */
-    private fun hasMemoryFor(modelBytes: Long): Boolean = runCatching {
-        if (modelBytes <= 0L) return@runCatching true
+    private fun hasMemoryFor(): Boolean = runCatching {
         val am = appContext.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
             ?: return@runCatching true
         val mi = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
-        if (mi.lowMemory) return@runCatching false
-        // Need the model resident plus ~25% working headroom, and stay clear of the
-        // system's low-memory threshold.
-        val needed = (modelBytes * 1.25).toLong() + mi.threshold
-        mi.availMem > needed
+        !mi.lowMemory && mi.availMem > MIN_FREE_BYTES
     }.getOrDefault(true)
 
     companion object {
         private const val TAG = "MediaPipeLlmEngine"
+
+        /** Working-memory floor to attempt a (memory-mapped) model load. */
+        private const val MIN_FREE_BYTES = 600L * 1024 * 1024
 
         /** Drop a Gemma `.task` model at filesDir/<this> to enable the model. */
         const val DEFAULT_MODEL_NAME = "brain.task"
