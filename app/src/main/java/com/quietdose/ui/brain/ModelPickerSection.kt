@@ -693,13 +693,12 @@ private fun TokenField(
     }
 }
 
-/** Post-install note: warn immediately if the file isn't a loadable .task bundle. */
+/** Post-install note, tailored to the detected format (.task vs .litertlm). */
 private fun installedNote(context: android.content.Context): String =
-    if (ModelManager.installedLooksLoadable(context) == false) {
-        "Installed, but this isn't a .task bundle — it looks like a raw .tflite. MediaPipe needs a " +
-            ".task (a zip). Try the Gemma 3 1B int4 .task."
-    } else {
-        "Model installed. Tap “Test model” to confirm it runs."
+    when (ModelManager.installedLooksLoadable(context)) {
+        true -> "Installed a .task bundle (MediaPipe). Tap “Test model” to confirm it runs."
+        false -> "Installed a LiteRT-LM model. Tap “Test model” to confirm it runs — a raw .tflite won't load, but a .litertlm will."
+        null -> "Model installed. Tap “Test model” to confirm it runs."
     }
 
 /** Open an external URL in the browser; failures are silently ignored. */
