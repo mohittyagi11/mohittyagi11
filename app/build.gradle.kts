@@ -66,8 +66,6 @@ dependencies {
 
     // On-device brain (LLM path is dormant until a model file is present)
     implementation(libs.mediapipe.tasks.genai)
-    // Second runtime: LiteRT-LM loads the newer .litertlm models (Gemma 3n, etc.)
-    implementation(libs.litertlm.android)
 
     // On-device label scanning (camera scan → add item): ML Kit text + barcode
     implementation(libs.mlkit.text.recognition)

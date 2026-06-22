@@ -1,7 +1,6 @@
 package com.quietdose.brain
 
 import android.content.Context
-import java.io.File
 
 /**
  * Thread-safe singleton entry point for the brain. Returns an [LlmBrain] when an
@@ -24,14 +23,12 @@ object BrainProvider {
 
     /**
      * The single on-device engine, shared by the [Brain] and the [Agent] so the
-     * model is loaded once and reused for every skill. The implementation is
-     * chosen by the installed model's format: a `.task` (a zip, "PK") runs on
-     * MediaPipe; anything else is treated as a `.litertlm` and runs on LiteRT-LM.
-     * Always returns an engine; [LlmEngine.isReady] is false until a model loads.
+     * model is loaded once and reused for every skill. Always returns an engine;
+     * [LlmEngine.isReady] is false until a loadable `.task` model is present.
      */
     fun engine(context: Context): LlmEngine =
         engineRef ?: synchronized(this) {
-            engineRef ?: chooseEngine(context.applicationContext).also { engineRef = it }
+            engineRef ?: MediaPipeLlmEngine(context.applicationContext).also { engineRef = it }
         }
 
     private fun build(appContext: Context): Brain =
@@ -40,18 +37,6 @@ object BrainProvider {
         } else {
             HeuristicBrain()
         }
-
-    private fun chooseEngine(appContext: Context): LlmEngine =
-        if (isTaskBundle(appContext)) MediaPipeLlmEngine(appContext) else LiteRtLmEngine(appContext)
-
-    /** A MediaPipe `.task` is a zip → starts with "PK". Default to true when absent. */
-    private fun isTaskBundle(appContext: Context): Boolean {
-        val f = File(appContext.filesDir, MediaPipeLlmEngine.DEFAULT_MODEL_NAME)
-        if (!f.exists() || f.length() <= 0L) return true
-        val head = ByteArray(2)
-        val n = runCatching { f.inputStream().use { it.read(head) } }.getOrDefault(-1)
-        return n < 2 || (head[0].toInt() == 'P'.code && head[1].toInt() == 'K'.code)
-    }
 
     /**
      * Drop the cached brain + engine so the next access re-checks for a model
