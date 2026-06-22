@@ -443,7 +443,29 @@ private fun BlockView(block: ReportBlock) {
         is ReportBlock.Facts -> FactsBlock(block)
         is ReportBlock.Meter -> MeterBlock(block)
         is ReportBlock.Aspect -> AspectBlock(block)
+        is ReportBlock.Chapter -> ChapterBlock(block)
         is ReportBlock.Reasoning -> ReasoningBlock(block)
+    }
+}
+
+@Composable
+private fun ChapterBlock(b: ReportBlock.Chapter) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface1).padding(16.dp)) {
+        Text(b.title.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextLow)
+        b.summary?.takeIf { it.isNotBlank() }?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, style = MaterialTheme.typography.bodyLarge, color = TextHigh)
+        }
+        if (b.lines.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            b.lines.forEach { line ->
+                Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 3.dp)) {
+                    Box(Modifier.padding(top = 6.dp).size(7.dp).clip(CircleShape).background(severityColor(line.severity)))
+                    Spacer(Modifier.width(10.dp))
+                    Text(line.text, style = MaterialTheme.typography.bodyMedium, color = TextMid)
+                }
+            }
+        }
     }
 }
 

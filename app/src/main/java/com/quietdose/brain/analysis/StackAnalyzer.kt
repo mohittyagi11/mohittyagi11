@@ -44,6 +44,15 @@ object StackAnalyzer {
         val app = context.applicationContext
         val tier = ModelCapability.tier(app)
         val engineUp = tier.isModel && ModelCapability.engineReady(app)
+
+        // Pick the lens. Anything that isn't a supplement (a toner, a device…) must NOT
+        // be judged with dose/upper-limit/bioavailability — it gets the category-aware,
+        // SLM-profiled path with the right fields (how & when to use, not a "dose").
+        val kind = KindDetector.detect(name, product?.ingredientsText)
+        if (kind != ItemKind.SUPPLEMENT) {
+            return analyzeProfile(app, engineUp, tier, kind, name, currentDoseAmount, currentDoseUnit, groups, source, goal, concern, product, onProgress)
+        }
+
         val matched = IngredientCatalog.match(name)
         val grounded = mutableListOf<String>()
         val sections = mutableListOf<AnalysisSection>()
@@ -722,6 +731,141 @@ object StackAnalyzer {
         appendLine("Product: $name")
         appendLine()
         appendLine("Reply with only the sentence.")
+    }
+
+    /**
+     * Category-aware analysis for anything that isn't a supplement — a toner, a
+     * device, a hair serum. No catalog to lean on, so the SLM fills a [CategoryProfile]
+     * over the real source material, and we present plain, few chapters with the RIGHT
+     * fields (how & when to use — not "dose / bioavailability / upper limit").
+     */
+    private suspend fun analyzeProfile(
+        app: Context,
+        engineUp: Boolean,
+        tier: ModelTier,
+        kind: ItemKind,
+        name: String,
+        enteredDose: Double,
+        enteredUnit: DoseUnit,
+        groups: List<GroupEntity>,
+        source: SourceKind?,
+        goal: String?,
+        concern: String?,
+        product: ProductSignals?,
+        onProgress: ((AnalysisProgress) -> Unit)?,
+    ): AnalysisReport {
+        fun emit(label: String, commentary: String, mood: Mood, fraction: Float) =
+            onProgress?.invoke(AnalysisProgress(label, commentary, mood, fraction))
+
+        emit("Settling in", "Taking a first look at ${name.ifBlank { "this" }}…", Mood.CALM, 0.06f)
+        emit("Listening to the web", "Seeing what people actually say about it…", Mood.CURIOUS, 0.2f)
+        val webResults = runCatching { researchWeb(name, product?.brand) }.getOrDefault(emptyList())
+        val sourceMaterial = buildSourceMaterial(product?.ingredientsText, webResults)
+
+        emit("Working out what it is", "Reading it as ${kind.label.lowercase()}, not a pill…", Mood.CALM, 0.45f)
+        val profile = (if (engineUp) runCatching { ProfileSkill.fill(BrainProvider.engine(app), name, sourceMaterial, kind) }.getOrNull() else null)
+            ?: ProfileSkill.fallback(name, kind)
+        var byModel = engineUp && profile.confidence >= 30
+
+        emit("The big picture", "Weighing it up the way you would…", Mood.REFLECTIVE, 0.85f)
+        var rationale = profile.whatItIs.ifBlank { "A ${kind.label.lowercase()} you're tracking." }
+        if (engineUp) {
+            val syn = runCatching {
+                BrainProvider.engine(app).complete(profileVerdictPrompt(name, profile, source, goal, concern, webResults, tier)).trim()
+            }.getOrNull()?.let { sanitize(it) }
+            if (!syn.isNullOrBlank()) { rationale = syn; byModel = true }
+        }
+
+        val grounded = mutableListOf<String>()
+        webResults.take(4).forEach { grounded += "Web/${it.domain}: ${it.title}" }
+        profile.goodFor.take(4).forEach { grounded += "Good for: $it" }
+
+        val verdictLabel = when {
+            profile.watchOuts.isNotEmpty() && source?.skeptical == true -> "Worth a look — verify first"
+            profile.watchOuts.isNotEmpty() -> "Worth trying — mind the details"
+            else -> "Worth tracking"
+        }
+
+        val usageText = profile.usage.ifBlank {
+            if (kind.isIngested) "Take as directed on the label." else "Use as directed — note whether it's an AM or PM step."
+        }
+
+        val blocks = buildList<ReportBlock> {
+            add(ReportBlock.Verdict(verdictLabel, rationale, profile.confidence, listOf(profile.kind.label, profile.categoryLabel).filter { it.isNotBlank() }.distinct(), byModel))
+            buildProfileFacts(profile, product)?.let { add(it) }
+            if (profile.goodFor.isNotEmpty()) {
+                add(ReportBlock.Chapter("Good for", null, profile.goodFor.map { AnalysisLine(it, Severity.GOOD) }, AspectState.GOOD))
+            }
+            add(ReportBlock.Chapter("How & when to use", usageText, emptyList(), AspectState.MIXED))
+            if (profile.watchOuts.isNotEmpty()) {
+                add(ReportBlock.Chapter("Watch-outs", null, profile.watchOuts.map { AnalysisLine(it, Severity.CAUTION) }, AspectState.CAUTION))
+            }
+            if (webResults.isNotEmpty()) {
+                val lines = webResults.take(5).map { AnalysisLine("${it.domain}: ${(it.snippet.ifBlank { it.title }).take(160)}") } +
+                    AnalysisLine("From the open web — weigh the source, treat as leads.", Severity.CAUTION)
+                add(ReportBlock.Chapter("What people say", null, lines, AspectState.MIXED))
+            }
+            if (profile.verify.isNotEmpty()) {
+                add(ReportBlock.Chapter("Check yourself", null, profile.verify.map { AnalysisLine(it) }, AspectState.MIXED))
+            }
+            if (grounded.isNotEmpty()) add(ReportBlock.Reasoning(grounded.distinct().take(8), byModel))
+        }
+
+        val (recGroupId, groupReason) = pickGroup(groups, null)
+        val recommendation = Recommendation(recGroupId, groupReason, enteredDose, enteredUnit, null, null, 0, emptyList())
+
+        return AnalysisReport(
+            title = name,
+            matchedIngredientKey = null,
+            recommendation = recommendation,
+            sections = emptyList(),
+            synthesis = Synthesis(verdictLabel, rationale, null, emptyList(), profile.watchOuts),
+            safety = emptyList(),
+            safetyReviewedClear = emptyList(),
+            blocks = blocks,
+            ingredients = emptyList(),
+            grounded = grounded.distinct(),
+            byModel = byModel,
+        )
+    }
+
+    private fun buildProfileFacts(profile: CategoryProfile, product: ProductSignals?): ReportBlock.Facts? {
+        val rows = buildList {
+            add("Type" to profile.categoryLabel.ifBlank { profile.kind.label })
+            product?.brand?.let { add("Brand" to it) }
+            product?.priceText?.let { add("Price" to it) }
+            product?.ratingValue?.let { r -> add("Rating" to "$r/5${product.ratingCount?.let { " ($it)" } ?: ""}") }
+        }
+        return if (rows.isEmpty()) null else ReportBlock.Facts("Product", rows)
+    }
+
+    private fun profileVerdictPrompt(
+        name: String,
+        profile: CategoryProfile,
+        source: SourceKind?,
+        goal: String?,
+        concern: String?,
+        web: List<WebSearch.WebResult>,
+        tier: ModelTier,
+    ): String = buildString {
+        appendLine("You are a calm, honest, slightly skeptical advisor. In ${if (tier == ModelTier.CAPABLE) "2-3" else "1-2"} plain sentences,")
+        appendLine("tell the user whether this ${profile.kind.label.lowercase()} is worth using and how to fit it in — using ONLY the profile and reviews below.")
+        appendLine("Separate what's verified from what to check. Label marketing as a claim. No medical claims, no invented numbers. Conversational, no headings.")
+        appendLine()
+        appendLine("Item: $name (${profile.categoryLabel})")
+        appendLine("What it is: ${profile.whatItIs}")
+        if (profile.goodFor.isNotEmpty()) appendLine("Good for: ${profile.goodFor.joinToString(", ")}")
+        if (profile.usage.isNotBlank()) appendLine("Usage: ${profile.usage}")
+        if (profile.watchOuts.isNotEmpty()) appendLine("Watch-outs: ${profile.watchOuts.joinToString("; ")}")
+        if (!goal.isNullOrBlank()) appendLine("Their goal: $goal")
+        if (!concern.isNullOrBlank()) appendLine("Their worry: $concern")
+        if (source != null) appendLine("Heard from: ${source.label} (${if (source.skeptical) "weak — verify" else "credible"})")
+        if (web.isNotEmpty()) {
+            appendLine("Reviews:")
+            web.take(4).forEach { appendLine("- ${it.domain}: ${(it.snippet.ifBlank { it.title }).take(180)}") }
+        }
+        appendLine()
+        appendLine("Reply with only the synthesis.")
     }
 
     /** Combines the product's own text (label/description or OCR) and web reviews into

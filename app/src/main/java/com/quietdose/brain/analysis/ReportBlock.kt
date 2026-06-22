@@ -28,6 +28,15 @@ sealed interface ReportBlock {
         val state: AspectState,
     ) : ReportBlock
 
+    /** A free-titled chapter (for category-aware, non-supplement analyses where the
+     *  fixed [AnalysisAspect] titles don't fit — e.g. "How & when to use"). */
+    data class Chapter(
+        val title: String,
+        val summary: String?,
+        val lines: List<AnalysisLine>,
+        val state: AspectState,
+    ) : ReportBlock
+
     /** A labelled scale — dose against its typical band/ceiling, or price-per-day. */
     data class Meter(
         val label: String,
