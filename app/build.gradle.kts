@@ -67,6 +67,10 @@ dependencies {
     // On-device brain (LLM path is dormant until a model file is present)
     implementation(libs.mediapipe.tasks.genai)
 
+    // On-device label scanning (camera scan → add item): ML Kit text + barcode
+    implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.barcode.scanning)
+
     // Day-data sources: Health Connect (sleep/steps) read
     implementation(libs.androidx.health.connect)
 

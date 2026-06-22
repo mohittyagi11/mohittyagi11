@@ -63,6 +63,17 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- Camera-scan captures: the system camera writes the photo here. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Logs a "Taken" tap straight from the notification, no UI. -->
         <receiver
             android:name=".receiver.TakenActionReceiver"

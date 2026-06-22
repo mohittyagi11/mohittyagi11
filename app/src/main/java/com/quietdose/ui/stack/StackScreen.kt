@@ -27,6 +27,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +52,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
 import com.quietdose.ui.icons.ItemIcon
+import com.quietdose.ui.scan.ScanScreen
+import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.GroupStyle
 import com.quietdose.ui.theme.Surface1
 import com.quietdose.ui.theme.Surface2
@@ -73,12 +76,13 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
     val state by vm.state.collectAsStateWithLifecycle()
     val expanded = remember { mutableStateMapOf<Long, Boolean>() }
     var editing by remember { mutableStateOf<Editing?>(null) }
+    var scanning by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item { StackHeader() }
+        item { StackHeader(onScan = { scanning = true }) }
 
         items(state.groups, key = { it.group.id }) { sg ->
             GroupCardEditable(
@@ -133,18 +137,47 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
         )
         null -> Unit
     }
+
+    if (scanning) {
+        ScanScreen(
+            onClose = { scanning = false },
+            onSaved = { scanning = false }, // item already persisted via the repository
+        )
+    }
 }
 
 @Composable
-private fun StackHeader() {
-    Column(Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 2.dp)) {
-        Text("Your stack", style = MaterialTheme.typography.titleMedium, color = TextMid)
-        Text("Customize", style = MaterialTheme.typography.displaySmall, color = TextHigh)
-        Text(
-            "Shape your routines — drag the rhythm, pick the form, set the mood.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = TextMid,
-        )
+private fun StackHeader(onScan: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 2.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Your stack", style = MaterialTheme.typography.titleMedium, color = TextMid)
+            Text("Customize", style = MaterialTheme.typography.displaySmall, color = TextHigh)
+            Text(
+                "Shape your routines — drag the rhythm, pick the form, set the mood.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = TextMid,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .padding(top = 20.dp)
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(Accent.copy(alpha = 0.12f))
+                .androidxClickable(onScan),
+        ) {
+            Icon(
+                Icons.Rounded.PhotoCamera,
+                contentDescription = "Scan a label",
+                tint = Accent,
+                modifier = Modifier.size(22.dp),
+            )
+        }
     }
 }
 

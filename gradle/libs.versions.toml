@@ -14,6 +14,8 @@ playServicesLocation = "21.3.0"
 healthConnect = "1.1.0-rc02"
 datastore = "1.1.1"
 mediapipeTasksGenai = "0.10.27"
+mlkitTextRecognition = "16.0.1"
+mlkitBarcodeScanning = "17.3.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -39,6 +41,8 @@ play-services-location = { group = "com.google.android.gms", name = "play-servic
 androidx-health-connect = { group = "androidx.health.connect", name = "connect-client", version.ref = "healthConnect" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 mediapipe-tasks-genai = { group = "com.google.mediapipe", name = "tasks-genai", version.ref = "mediapipeTasksGenai" }
+mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitTextRecognition" }
+mlkit-barcode-scanning = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcodeScanning" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
