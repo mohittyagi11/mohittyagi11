@@ -83,6 +83,17 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
     var mode by remember { mutableStateOf(StackMode.Groups) }
     var query by remember { mutableStateOf("") }
 
+    // Flat catalogue, computed in composable scope (not inside the LazyColumn lambda).
+    val catalogRows = remember(state.groups) {
+        state.groups.flatMap { sg -> sg.items.map { it to sg.group } }
+    }
+    val catalogFiltered = catalogRows.filter { (item, _) ->
+        query.isBlank() ||
+            item.name.contains(query, ignoreCase = true) ||
+            (item.brand?.contains(query, ignoreCase = true) == true) ||
+            (item.category?.contains(query, ignoreCase = true) == true)
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -115,20 +126,11 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
             }
         } else {
             // Flat catalogue: every tracked item, across groups, searchable.
-            val rows = remember(state.groups) {
-                state.groups.flatMap { sg -> sg.items.map { it to sg.group } }
-            }
-            val filtered = rows.filter { (item, _) ->
-                query.isBlank() ||
-                    item.name.contains(query, ignoreCase = true) ||
-                    (item.brand?.contains(query, ignoreCase = true) == true) ||
-                    (item.category?.contains(query, ignoreCase = true) == true)
-            }
-            item { CatalogSearch(query = query, onQuery = { query = it }, count = filtered.size) }
-            if (filtered.isEmpty()) {
-                item { CatalogEmpty(hasItems = rows.isNotEmpty()) }
+            item { CatalogSearch(query = query, onQuery = { query = it }, count = catalogFiltered.size) }
+            if (catalogFiltered.isEmpty()) {
+                item { CatalogEmpty(hasItems = catalogRows.isNotEmpty()) }
             } else {
-                items(filtered, key = { it.first.id }) { (item, group) ->
+                items(catalogFiltered, key = { it.first.id }) { (item, group) ->
                     CatalogRow(
                         item = item,
                         group = group,
