@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
+import com.quietdose.ui.analysis.AnalysisScreen
 import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.scan.ScanScreen
 import com.quietdose.ui.theme.Accent
@@ -80,6 +81,7 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
     val expanded = remember { mutableStateMapOf<Long, Boolean>() }
     var editing by remember { mutableStateOf<Editing?>(null) }
     var scanning by remember { mutableStateOf(false) }
+    var pendingAnalysis by remember { mutableStateOf<ItemEntity?>(null) }
     var mode by remember { mutableStateOf(StackMode.Groups) }
     var query by remember { mutableStateOf("") }
 
@@ -159,7 +161,8 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
             existing = null,
             groupTintArgb = e.tintArgb,
             onDismiss = { editing = null },
-            onSave = { vm.addItem(it); editing = null },
+            // A new item passes through contextual analysis before it's added.
+            onSave = { pendingAnalysis = it; editing = null },
         )
         is Editing.EditItem -> ItemEditorSheet(
             groupId = e.item.groupId,
@@ -176,6 +179,14 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
         ScanScreen(
             onClose = { scanning = false },
             onSaved = { scanning = false }, // item already persisted via the repository
+        )
+    }
+
+    pendingAnalysis?.let { item ->
+        AnalysisScreen(
+            item = item,
+            onAdd = { vm.addItem(item); pendingAnalysis = null },
+            onDismiss = { pendingAnalysis = null },
         )
     }
 }
