@@ -67,14 +67,28 @@ object WakeInferenceEngine {
     }
 
     private fun registerActivityTransitions(context: Context) {
-        // TODO(triggers): restore the "first walk with the phone" signal.
-        // ActivityTransition.Builder().setActivityTransitionType(...) did not
-        // resolve against play-services-location in CI; the exact 21.3.0 builder
-        // API needs verifying on a device SDK. Until then the other wake signals
-        // (Google Sleep API, Health Connect sleep-end, latest-wake fallback
-        // alarm) carry wake inference. ActivityReceiver stays wired for when
-        // registration is re-enabled.
+        if (!hasActivityRecognition(context)) return
+        // "First walk with the phone": STILL→WALKING/ON_FOOT after waking.
+        val transitions = listOf(
+            transition(DetectedActivity.WALKING, ActivityTransition.ACTIVITY_TRANSITION_ENTER),
+            transition(DetectedActivity.ON_FOOT, ActivityTransition.ACTIVITY_TRANSITION_ENTER),
+            transition(DetectedActivity.STILL, ActivityTransition.ACTIVITY_TRANSITION_EXIT),
+        )
+        runCatching {
+            ActivityRecognition.getClient(context)
+                .requestActivityTransitionUpdates(
+                    ActivityTransitionRequest(transitions),
+                    activityPi(context),
+                )
+        }
     }
+
+    /** Correct builder API is setActivityTransition(int) (not …Type). */
+    private fun transition(activity: Int, type: Int): ActivityTransition =
+        ActivityTransition.Builder()
+            .setActivityType(activity)
+            .setActivityTransition(type)
+            .build()
 
     private fun registerSleepUpdates(context: Context) {
         // Sleep API needs ACTIVITY_RECOGNITION on API 29+ as well.
