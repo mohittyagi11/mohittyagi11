@@ -71,7 +71,9 @@ import com.quietdose.brain.analysis.AnalysisLine
 import com.quietdose.brain.analysis.AnalysisProgress
 import com.quietdose.brain.analysis.AnalysisReport
 import com.quietdose.brain.analysis.AspectState
+import com.quietdose.brain.analysis.ClaimStatus
 import com.quietdose.brain.analysis.IngredientCatalog
+import com.quietdose.brain.analysis.RatingDim
 import com.quietdose.brain.analysis.KindDetector
 import com.quietdose.brain.analysis.ModelCapability
 import com.quietdose.brain.analysis.ModelTier
@@ -576,6 +578,25 @@ private fun BlockView(block: ReportBlock) {
         is ReportBlock.Aspect -> ChapterView(block.aspect.title, block.summary, block.lines, block.state)
         is ReportBlock.Chapter -> ChapterView(block.title, block.summary, block.lines, block.state)
         is ReportBlock.Reviews -> ReviewsView(block)
+        is ReportBlock.Ingredients -> ChapterView(
+            "What's in it",
+            null,
+            block.items.map { AnalysisLine(listOf(it.name, it.role, it.note).filter { s -> s.isNotBlank() }.joinToString(" · "), it.severity) },
+            AspectState.MIXED,
+        )
+        is ReportBlock.Claims -> ChapterView(
+            "Claims, checked",
+            null,
+            block.items.map {
+                val sev = when (it.status) {
+                    ClaimStatus.SUPPORTED -> Severity.GOOD
+                    ClaimStatus.OVERREACH -> Severity.CAUTION
+                    else -> Severity.NEUTRAL
+                }
+                AnalysisLine(listOf("“${it.claim}”", it.status.name.lowercase(), it.basis).filter { s -> s.isNotBlank() }.joinToString(" — "), sev)
+            },
+            AspectState.MIXED,
+        )
         is ReportBlock.Reasoning -> ReasoningBlock(block)
     }
 }
@@ -644,7 +665,7 @@ private fun VerdictBlock(b: ReportBlock.Verdict) {
         if (b.dimensions.isNotEmpty()) {
             Spacer(Modifier.height(18.dp))
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                b.dimensions.forEach { (label, value) -> DimensionBar(label, value) }
+                b.dimensions.forEach { DimensionBar(it) }
             }
         }
         // A gentle one-line legend so the dot/state colours read consistently.
@@ -714,12 +735,12 @@ private fun bandColor(score: Int): Color = when {
  * right. Tight and scannable; many of these stack under the overall ring.
  */
 @Composable
-private fun DimensionBar(label: String, score: Int) {
-    val v = score.coerceIn(0, 100)
+private fun DimensionBar(dim: RatingDim) {
+    val v = dim.score.coerceIn(0, 100)
     val color = bandColor(v)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
-            label,
+            dim.label,
             style = MaterialTheme.typography.labelLarge,
             color = TextMid,
             modifier = Modifier.width(74.dp),

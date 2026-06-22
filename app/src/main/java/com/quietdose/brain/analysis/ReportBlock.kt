@@ -17,12 +17,23 @@ sealed interface ReportBlock {
         val score: Int?,          // 0..100 overall confidence/fit, or null
         val tags: List<String>,   // short chips, e.g. "Good fit", "Verify source"
         val byModel: Boolean,
-        /** Per-parameter ratings the verdict is built from — label → 0..100. Rendered as
-         *  calm labelled bars under the overall score (e.g. Fit, Quality, Safety, Trust). */
-        val dimensions: List<Pair<String, Int>> = emptyList(),
+        /** Per-parameter ratings the verdict is built from — rendered as calm labelled
+         *  bars under the overall score (Fit, Quality, Safety, Routine, Trust). Each
+         *  carries a [RatingDim.why] so the bar can be tapped for "how this was scored". */
+        val dimensions: List<RatingDim> = emptyList(),
         /** The product's primary benefits in 1–2 words each (e.g. "Hydration", "Anti-ageing")
          *  — shown as small tags/orbs around the product glyph. */
         val benefits: List<String> = emptyList(),
+    ) : ReportBlock
+
+    /** The actives/ingredients read off the label, each with a plain role + grounded note. */
+    data class Ingredients(
+        val items: List<IngredientLine>,
+    ) : ReportBlock
+
+    /** The product's marketing claims, each checked and given an honest status + basis. */
+    data class Claims(
+        val items: List<ClaimLine>,
     ) : ReportBlock
 
     /** Distilled review intelligence — what people actually say, as keywords, not a URL wall. */
@@ -75,3 +86,24 @@ sealed interface ReportBlock {
         val byModel: Boolean,
     ) : ReportBlock
 }
+
+/** One verdict rating dimension — its 0..100 [score] and a one-line [why] for the drill-down. */
+data class RatingDim(val label: String, val score: Int, val why: String = "")
+
+/** One ingredient/active read off the product, with a plain role and a grounded note. */
+data class IngredientLine(
+    val name: String,
+    val role: String = "",        // e.g. "Humectant", "Active", "Soothing", "Preservative"
+    val note: String = "",        // a grounded one-liner (from the curated KB or the model)
+    val severity: Severity = Severity.NEUTRAL,
+)
+
+/** How a claim held up once checked across mechanism, evidence and what people report. */
+enum class ClaimStatus { SUPPORTED, PLAUSIBLE, UNVERIFIED, OVERREACH }
+
+/** One marketing claim with its checked [status] and a one-line [basis] for the verdict. */
+data class ClaimLine(
+    val claim: String,
+    val status: ClaimStatus,
+    val basis: String = "",
+)

@@ -521,9 +521,9 @@ object StackAnalyzer {
      * dimension bars themselves, so the ring and the bars tell the same story. Safety counts
      * double, mirroring [rollUpScore]. Null only when there are no dimensions to average.
      */
-    private fun rollUpDimensions(dimensions: List<Pair<String, Int>>): Int? {
+    private fun rollUpDimensions(dimensions: List<RatingDim>): Int? {
         if (dimensions.isEmpty()) return null
-        val weighted = dimensions.map { (label, score) -> (if (label == "Safety") 2 else 1) to score }
+        val weighted = dimensions.map { (if (it.label == "Safety") 2 else 1) to it.score }
         val num = weighted.sumOf { it.first * it.second }
         val den = weighted.sumOf { it.first }
         return Math.round(num.toDouble() / den).toInt()
@@ -535,8 +535,12 @@ object StackAnalyzer {
      * shared with the profile path: Fit, Quality, Safety, Routine, Trust. A dimension is
      * omitted when its source score is null (nothing to honestly show).
      */
-    private fun supplementDimensions(blocks: List<ReportBlock.Aspect>): List<Pair<String, Int>> {
-        fun score(a: AnalysisAspect) = blocks.firstOrNull { it.aspect == a }?.score
+    private fun supplementDimensions(blocks: List<ReportBlock.Aspect>): List<RatingDim> {
+        fun aspect(a: AnalysisAspect) = blocks.firstOrNull { it.aspect == a }
+        fun score(a: AnalysisAspect) = aspect(a)?.score
+        fun why(a: AnalysisAspect) = aspect(a)?.let { b ->
+            b.summary?.takeIf { it.isNotBlank() } ?: b.lines.joinToString("; ") { it.text }
+        }.orEmpty()
         val trustSource = score(AnalysisAspect.TRUST_SOURCE)
         val reviews = score(AnalysisAspect.REVIEWS)
         val trust = when {
@@ -544,11 +548,11 @@ object StackAnalyzer {
             else -> trustSource ?: reviews
         }
         return buildList {
-            score(AnalysisAspect.FIT_CONDITION)?.let { add("Fit" to it) }
-            score(AnalysisAspect.QUALITY)?.let { add("Quality" to it) }
-            score(AnalysisAspect.SAFETY)?.let { add("Safety" to it) }
-            score(AnalysisAspect.STACK)?.let { add("Routine" to it) }
-            trust?.let { add("Trust" to it) }
+            score(AnalysisAspect.FIT_CONDITION)?.let { add(RatingDim("Fit", it, why(AnalysisAspect.FIT_CONDITION))) }
+            score(AnalysisAspect.QUALITY)?.let { add(RatingDim("Quality", it, why(AnalysisAspect.QUALITY))) }
+            score(AnalysisAspect.SAFETY)?.let { add(RatingDim("Safety", it, why(AnalysisAspect.SAFETY))) }
+            score(AnalysisAspect.STACK)?.let { add(RatingDim("Routine", it, why(AnalysisAspect.STACK))) }
+            trust?.let { add(RatingDim("Trust", it, why(AnalysisAspect.TRUST_SOURCE).ifBlank { why(AnalysisAspect.REVIEWS) })) }
         }
     }
 
@@ -989,7 +993,7 @@ object StackAnalyzer {
         isCurated: Boolean,
         ratingValue: Double?,
         ratingCount: Int?,
-    ): List<Pair<String, Int>> {
+    ): List<RatingDim> {
         fun clamp(v: Int) = v.coerceIn(0, 100)
         val conf = profile.confidence.coerceIn(0, 100)
 
@@ -1033,12 +1037,19 @@ object StackAnalyzer {
             clamp(t)
         }
 
+        // Plain-language "why" for each bar, so a tap can explain how it was scored.
+        val ratingNote = ratingValue?.let { "rated $it/5${ratingCount?.let { c -> " from $c reviews" } ?: ""}" }
+        val trustWhy = listOfNotNull(
+            if (isCurated) "from the curated knowledge base" else "model-profiled, so held lightly",
+            when (reviewState) { AspectState.GOOD -> "reviews lean positive"; AspectState.CAUTION -> "reviews flag concerns"; else -> null },
+            ratingNote,
+        ).joinToString("; ")
         return buildList {
-            fit?.let { add("Fit" to it) }
-            add("Quality" to quality)
-            add("Safety" to safety)
-            add("Routine" to routine)
-            add("Trust" to trust)
+            fit?.let { add(RatingDim("Fit", it, "How well it lines up with your goal and what it's good for.")) }
+            add(RatingDim("Quality", quality, if (profile.absorption.isNotBlank()) "How it works / absorbs: ${profile.absorption}" else "Judged on type — no absorption detail captured."))
+            add(RatingDim("Safety", safety, if (profile.safety.isEmpty()) "Nothing flagged for irritation, allergens or who-should-avoid." else "${profile.safety.size} thing(s) to mind: ${profile.safety.joinToString("; ")}"))
+            add(RatingDim("Routine", routine, when { clashesWithStack -> "Clashes with something already in your routine."; profile.dontCombine.isNotEmpty() -> "Has don't-layer-with rules: ${profile.dontCombine.joinToString(", ")}"; else -> "Sits cleanly in a routine." }))
+            add(RatingDim("Trust", trust, trustWhy.ifBlank { "Held neutral — little independent signal yet." }))
         }
     }
 
