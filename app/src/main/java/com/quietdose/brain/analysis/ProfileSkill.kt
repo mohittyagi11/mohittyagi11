@@ -21,6 +21,14 @@ object ProfileSkill {
         kindHint: ItemKind,
         currentItems: List<String> = emptyList(),
     ): CategoryProfile? {
+        // Curated ground truth wins: consult the validated KB FIRST, exactly the way
+        // a supplement leans on IngredientCatalog. The model is only for gaps / unknowns.
+        CuratedProfiles.match(name, kindHint)?.let { curated ->
+            // Let the model enrich missing fields when one is present, but the curated facts win.
+            val raw = runCatching { engine.complete(prompt(name, sourceMaterial, kindHint, currentItems)) }.getOrNull()?.trim()
+            val enriched = if (!raw.isNullOrBlank()) parse(raw) else null
+            return if (enriched != null) mergeCuratedFirst(curated, enriched) else curated
+        }
         val raw = runCatching { engine.complete(prompt(name, sourceMaterial, kindHint, currentItems)) }.getOrNull()?.trim()
         if (raw.isNullOrBlank()) return null
         return parse(raw)?.let { p ->
@@ -28,6 +36,24 @@ object ProfileSkill {
             if (p.kind == ItemKind.OTHER && kindHint != ItemKind.OTHER) p.copy(kind = kindHint) else p
         }
     }
+
+    /**
+     * Merge a model fill into a curated profile WITHOUT ever overwriting curated facts:
+     * the curated entry's text, lists, amounts, kind and confidence all win; the model
+     * is only allowed to fill fields the curated entry genuinely left blank.
+     */
+    private fun mergeCuratedFirst(curated: CategoryProfile, model: CategoryProfile): CategoryProfile = curated.copy(
+        whatItIs = curated.whatItIs.ifBlank { model.whatItIs },
+        goodFor = curated.goodFor.ifEmpty { model.goodFor },
+        fitsWho = curated.fitsWho.ifEmpty { model.fitsWho },
+        usage = curated.usage.ifBlank { model.usage },
+        recommendedAmount = curated.recommendedAmount ?: model.recommendedAmount,
+        recommendedUnit = curated.recommendedUnit ?: model.recommendedUnit,
+        absorption = curated.absorption.ifBlank { model.absorption },
+        safety = curated.safety.ifEmpty { model.safety },
+        dontCombine = curated.dontCombine.ifEmpty { model.dontCombine },
+        verify = curated.verify.ifEmpty { model.verify },
+    )
 
     /** A no-model profile so non-supplement items still get a sensible, plain page. */
     fun fallback(name: String, kind: ItemKind): CategoryProfile = CategoryProfile(

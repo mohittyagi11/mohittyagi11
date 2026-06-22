@@ -33,19 +33,36 @@ object KindDetector {
         "sunscreen", "spf", "retinol", "retinoid", "niacinamide", "hyaluronic", "salicylic",
         "glycolic", "lactic", "exfoliant", "peel", "face mask", "sheet mask", "eye cream",
         "face cream", "facial", "rice toner", "snail mucin", "ceramide", "azelaic", "tretinoin",
+        "bha", "aha", "pha", "benzoyl peroxide", "vitamin c serum", "ascorbic", "ascorbate",
+        "squalane", "squalene", "peptide", "centella", "cica", "tranexamic", "mandelic",
+        "kojic", "alpha arbutin", "arbutin", "panthenol", "allantoin", "rosehip", "clay mask",
+        "micellar", "sleeping mask", "spot treatment", "blackhead", "pore", "day cream",
+        "night cream", "anti-aging", "anti-ageing", "lip balm", "facewash", "face wash",
+        "hydrating", "brightening", "exfoliating", "tinted", "primer", "mist", "cleansing oil",
+        "double cleanse", "vitamin c", "bakuchiol", "adapalene", "retinaldehyde",
     )
     private val HAIRCARE = listOf(
         "shampoo", "conditioner", "hair oil", "scalp", "minoxidil", "hair serum", "hair mask",
-        "rosemary oil", "ketoconazole", "hair growth",
+        "rosemary oil", "ketoconazole", "hair growth", "leave-in", "leave in", "scalp serum",
+        "scalp scrub", "clarifying", "sulfate-free", "sulphate-free", "dry shampoo",
+        "hair tonic", "anti-dandruff", "dandruff", "redensyl", "biotin shampoo", "argan oil",
+        "castor oil", "hair conditioner", "deep conditioner", "hair fall", "hair loss",
+        "finasteride", "caffeine shampoo", "onion oil", "hair growth serum",
     )
     private val DEVICE = listOf(
         "derma roller", "dermaroller", "microneedle", "led mask", "red light", "gua sha",
         "ice roller", "facial massager", "cleansing brush", "high frequency", "microcurrent",
-        "device", "wand", "massage tool",
+        "device", "wand", "massage tool", "jade roller", "face roller", "facial steamer",
+        "steamer", "blackhead remover", "pore vacuum", "ipl", "led therapy", "light therapy",
+        "nano mist", "ultrasonic", "skin scrubber", "spatula", "scalp massager", "comb",
     )
     private val FOOD = listOf(
         "protein powder", "whey", "electrolyte", "collagen powder", "greens powder", "fibre",
-        "fiber supplement", "meal replacement", "bar ",
+        "fiber supplement", "meal replacement", "bar ", "apple cider vinegar", "acv",
+        "green tea", "matcha", "kefir", "kombucha", "kimchi", "sauerkraut", "yogurt",
+        "yoghurt", "psyllium husk", "isabgol", "chia", "flaxseed", "flax seed", "oats",
+        "honey", "ginger shot", "bone broth", "spirulina", "chlorella", "wheatgrass",
+        "beetroot", "amla juice",
     )
     private val SUPPLEMENT = listOf(
         "capsule", "tablet", "softgel", "supplement", "vitamin", "mineral", "gummies",

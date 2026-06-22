@@ -765,9 +765,13 @@ object StackAnalyzer {
 
         emit("Working out what it is", "Reading it as ${kind.label.lowercase()}, not a pill…", Mood.CALM, 0.45f)
         val routineNames = currentStack.map { it.name }
+        // Curated ground truth FIRST — the validated KB is the trusted base (same as a
+        // supplement leans on IngredientCatalog). The model only fills gaps / unknowns.
+        val curated = CuratedProfiles.match(name, kind)
         val profile = (if (engineUp) runCatching { ProfileSkill.fill(BrainProvider.engine(app), name, sourceMaterial, kind, routineNames) }.getOrNull() else null)
+            ?: curated
             ?: ProfileSkill.fallback(name, kind)
-        var byModel = engineUp && profile.confidence >= 30
+        var byModel = engineUp && curated == null && profile.confidence >= 30
 
         emit("The big picture", "Weighing it up the way you would…", Mood.REFLECTIVE, 0.85f)
         var rationale = profile.whatItIs.ifBlank { "A ${kind.label.lowercase()} you're tracking." }
