@@ -1,4 +1,5 @@
 # Dose — gitignore
+.claude/
 *.iml
 .gradle/
 /local.properties
