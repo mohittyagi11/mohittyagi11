@@ -56,6 +56,10 @@ object StackAnalyzer {
         val stackKeys = stackIng.map { it.first.key }.toSet()
         val alreadyHave = matched != null && matched.key in stackKeys
 
+        // Ingredientize: parse the label/description (or fall back to the name).
+        val ingredients = IngredientParser.parse(product?.ingredientsText, name)
+        val isFormula = IngredientParser.isFormula(ingredients)
+
         // 1) Your reason — source + goal, with an honest credibility read.
         val reasonLines = mutableListOf<AnalysisLine>()
         if (source != null) {
@@ -189,6 +193,7 @@ object StackAnalyzer {
         val overallScore = rollUpScore(aspectBlocks)
         val verdictTags = buildList {
             add(verdict)
+            if (isFormula) add("Formula · ${ingredients.size} ingredients") else if (ingredients.size == 1) add("Single ingredient")
             if (source?.skeptical == true) add("Verify source")
             if (alreadyHave) add("Possible duplicate")
             if (dependencies.isNotEmpty()) add("Pairs with ${dependencies.first()}")
@@ -232,6 +237,7 @@ object StackAnalyzer {
         val blocks = buildList<ReportBlock> {
             add(ReportBlock.Verdict(verdict, rationale, overallScore, verdictTags, byModel))
             buildFactsBlock(matched, product)?.let { add(it) }
+            buildIngredientsBlock(ingredients)?.let { add(it) }
             buildDoseMeter(matched, recDose, recUnit)?.let { add(it) }
             addAll(aspectBlocks)
             if (grounded.isNotEmpty()) add(ReportBlock.Reasoning(grounded.distinct().take(8), byModel))
@@ -252,6 +258,7 @@ object StackAnalyzer {
             safety = safety,
             safetyReviewedClear = safetyClear,
             blocks = blocks,
+            ingredients = ingredients,
             grounded = grounded.distinct(),
             byModel = byModel,
         )
@@ -769,6 +776,17 @@ object StackAnalyzer {
             }
         }
         return if (rows.isEmpty()) null else ReportBlock.Facts("Product", rows)
+    }
+
+    /** The item's ingredients — single active or the formula's actives, with doses. */
+    private fun buildIngredientsBlock(ingredients: List<com.quietdose.data.model.ItemIngredient>): ReportBlock.Facts? {
+        if (ingredients.isEmpty()) return null
+        val rows = ingredients.map { ing ->
+            val dose = if (ing.doseAmount != null && ing.doseUnit != null) "${fmt(ing.doseAmount)} ${ing.doseUnit.name.lowercase()}" else "—"
+            ing.name to dose
+        }
+        val title = if (ingredients.size > 1) "Ingredients (${ingredients.size})" else "Ingredient"
+        return ReportBlock.Facts(title, rows)
     }
 
     /** Dose as a position on its typical band, with the upper limit marked. */

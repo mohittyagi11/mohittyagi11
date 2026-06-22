@@ -102,6 +102,8 @@ fun ScanScreen(
     var pendingUri by remember { mutableStateOf<android.net.Uri?>(null) }
     // A confirmed draft awaiting contextual analysis before it's saved.
     var pendingItem by remember { mutableStateOf<ItemEntity?>(null) }
+    // The recognized label text for that draft, so the analysis can ingredientize it.
+    var pendingText by remember { mutableStateOf("") }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture(),
@@ -174,7 +176,7 @@ fun ScanScreen(
                 onClose = onClose,
                 onRetake = ::startOver,
                 // Route a scanned item through the same contextual analysis.
-                onSave = { pendingItem = it },
+                onSave = { pendingItem = it; pendingText = p.sourceText },
             )
         }
     }
@@ -184,6 +186,7 @@ fun ScanScreen(
             item = item,
             onAdd = { configured -> vm.save(configured) },
             onDismiss = { pendingItem = null },
+            product = com.quietdose.brain.analysis.ProductSignals(ingredientsText = pendingText.ifBlank { null }),
         )
     }
 }

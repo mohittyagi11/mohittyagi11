@@ -73,7 +73,10 @@ object ProductEnricher {
         val servings = detectServings(title.orEmpty() + " " + html.take(6000))
 
         val cleanedTitle = cleanTitle(title)
-        val combined = listOfNotNull(cleanedTitle, jsonld?.optString("description")?.take(300)).joinToString(". ")
+        val description = jsonld?.optString("description")?.ifBlank { null }
+        val combined = listOfNotNull(cleanedTitle, description?.take(300)).joinToString(". ")
+        // Text the analyzer can ingredientize from — title + description carry the actives.
+        val ingredientsText = listOfNotNull(cleanedTitle, description?.take(1200)).joinToString(". ").ifBlank { null }
 
         // Structured, validated extraction is the spine; the model only refines the name.
         var name = cleanedTitle
@@ -130,6 +133,7 @@ object ProductEnricher {
                 ratingValue = ratingValue,
                 ratingCount = ratingCount,
                 servings = servings,
+                ingredientsText = ingredientsText,
                 sourceTitle = title,
                 url = url,
             ),

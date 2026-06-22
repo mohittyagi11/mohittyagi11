@@ -56,6 +56,8 @@ data class AnalysisReport(
     val safetyReviewedClear: List<SafetyCategory>,
     /** The dynamic, brain-composed page: ordered template blocks the UI renders. */
     val blocks: List<ReportBlock>,
+    /** The item's parsed ingredients (single active or a formula); persisted on add. */
+    val ingredients: List<com.quietdose.data.model.ItemIngredient>,
     val grounded: List<String>,
     val byModel: Boolean,
 )

@@ -71,6 +71,7 @@ import com.quietdose.brain.analysis.StackAnalyzer
 import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
 import com.quietdose.data.model.DoseUnit
+import com.quietdose.data.model.IngredientCodec
 import com.quietdose.di.ServiceLocator
 import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.stack.ChipGroup
@@ -447,6 +448,7 @@ private fun ReportStep(
                         doseAmount = doseText.toDoubleOrNull() ?: item.doseAmount,
                         doseUnit = doseUnit,
                         flags = flags,
+                        ingredients = IngredientCodec.encode(report.ingredients) ?: item.ingredients,
                     ),
                 )
             }

@@ -48,6 +48,8 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             /** True when the on-device model drafted this; false = OCR/barcode-only prefill. */
             val fromModel: Boolean,
             val barcode: String?,
+            /** All recognized label text, so the analysis can ingredientize the item. */
+            val sourceText: String,
         ) : Phase
     }
 
@@ -138,7 +140,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                 }.getOrNull()
 
                 if (drafted != null) {
-                    _phase.value = Phase.Confirm(drafted, fromModel = true, barcode = fused.barcode)
+                    _phase.value = Phase.Confirm(drafted, fromModel = true, barcode = fused.barcode, sourceText = fused.combinedText)
                 } else {
                     val name = fused.prominentLine ?: fused.lines.firstOrNull() ?: fused.barcode ?: ""
                     _phase.value = Phase.Confirm(
@@ -150,6 +152,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                         ),
                         fromModel = false,
                         barcode = fused.barcode,
+                        sourceText = fused.combinedText,
                     )
                 }
             } catch (t: Throwable) {

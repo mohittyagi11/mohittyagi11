@@ -15,6 +15,7 @@ data class ProductSignals(
     val ratingValue: Double? = null,   // aggregate rating, e.g. 4.3
     val ratingCount: Int? = null,      // number of reviews
     val servings: Int? = null,         // units per pack, for price-per-day
+    val ingredientsText: String? = null, // label/description blob to ingredientize from
     val sourceTitle: String? = null,
     val url: String? = null,
 ) {
