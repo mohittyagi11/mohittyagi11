@@ -34,6 +34,7 @@ object WebSearch {
     suspend fun search(query: String, max: Int = 5): List<WebResult> =
         withTimeoutOrNull(TIMEOUT_MS) {
             withContext(Dispatchers.IO) {
+                NaturalBrowsing.humanPause() // arrive like a person, not a flood of bots
                 runCatching { fetchAndParse(query, max) }
                     .onFailure { Log.d(TAG, "search failed: ${it.message}") }
                     .getOrDefault(emptyList())
@@ -46,11 +47,7 @@ object WebSearch {
             connectTimeout = 5000
             readTimeout = 5000
             requestMethod = "GET"
-            setRequestProperty(
-                "User-Agent",
-                "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Mobile Safari/537.36",
-            )
-            setRequestProperty("Accept", "text/html")
+            NaturalBrowsing.applyHeaders(this, referer = "https://duckduckgo.com/")
         }
         if (conn.responseCode !in 200..299) { conn.disconnect(); return emptyList() }
         val html = conn.inputStream.use { input ->

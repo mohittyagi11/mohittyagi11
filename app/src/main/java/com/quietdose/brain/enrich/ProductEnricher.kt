@@ -139,11 +139,7 @@ object ProductEnricher {
                 readTimeout = READ_TIMEOUT
                 instanceFollowRedirects = false
                 requestMethod = "GET"
-                setRequestProperty(
-                    "User-Agent",
-                    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Mobile Safari/537.36",
-                )
-                setRequestProperty("Accept", "text/html,application/xhtml+xml")
+                com.quietdose.brain.web.NaturalBrowsing.applyHeaders(this, referer = "https://www.google.com/")
             }
             c.connect()
             val code = c.responseCode

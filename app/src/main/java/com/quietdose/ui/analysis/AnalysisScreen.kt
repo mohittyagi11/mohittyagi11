@@ -1,5 +1,6 @@
 package com.quietdose.ui.analysis
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -42,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,8 +56,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.quietdose.brain.analysis.AnalysisProgress
 import com.quietdose.brain.analysis.AnalysisReport
 import com.quietdose.brain.analysis.AspectState
+import com.quietdose.brain.analysis.Mood
 import com.quietdose.brain.analysis.IngredientCatalog
 import com.quietdose.brain.analysis.ModelCapability
 import com.quietdose.brain.analysis.ModelTier
@@ -117,29 +121,22 @@ fun AnalysisScreen(
     var goal by remember { mutableStateOf("") }
     var concern by remember { mutableStateOf("") }
     var report by remember { mutableStateOf<AnalysisReport?>(null) }
-    var step by remember { mutableIntStateOf(0) }
+    val thoughts = remember { mutableStateListOf<AnalysisProgress>() }
     val tier = remember { ModelCapability.tier(context) }
 
     LaunchedEffect(phase) {
         if (phase == Phase.ANALYZING) {
-            step = 0
-            val job = async {
-                runCatching {
-                    StackAnalyzer.analyze(
-                        context, item.name, item.category, stack, groups,
-                        item.doseAmount, item.doseUnit,
-                        goal.ifBlank { null }, source, sourceName.ifBlank { null }, concern.ifBlank { null },
-                        product,
-                    )
-                }.getOrNull()
-            }
-            // Let the user *see* the stages move while it works.
-            step = 0; delay(500)
-            step = 1; delay(800)
-            step = 2; delay(500)
-            step = 3; delay(500)
-            report = job.await()
-            step = 4; delay(250)
+            thoughts.clear()
+            report = runCatching {
+                StackAnalyzer.analyze(
+                    context, item.name, item.category, stack, groups,
+                    item.doseAmount, item.doseUnit,
+                    goal.ifBlank { null }, source, sourceName.ifBlank { null }, concern.ifBlank { null },
+                    product,
+                    onProgress = { thoughts.add(it) },
+                )
+            }.getOrNull()
+            delay(300) // let the final thought breathe
             phase = Phase.REPORT
         }
     }
@@ -160,7 +157,7 @@ fun AnalysisScreen(
                     onConcern = { concern = it },
                     onContinue = { phase = Phase.ANALYZING },
                 )
-                Phase.ANALYZING -> AnalyzingStep(item = item, step = step)
+                Phase.ANALYZING -> AnalyzingStep(item = item, thoughts = thoughts)
                 Phase.REPORT -> {
                     val r = report
                     if (r == null) ErrorStep(item, onAdd, onDismiss)
@@ -255,46 +252,61 @@ private fun IntentStep(
 /* ------------------------------ Analyzing ------------------------------ */
 
 @Composable
-private fun AnalyzingStep(item: ItemEntity, step: Int) {
-    val steps = listOf("Grounding in references", "Searching the web", "Checking your stack", "Weighing the evidence", "Synthesizing")
-    val target = ((step + 1).coerceIn(1, steps.size).toFloat() / steps.size)
-    val progress by animateFloatAsState(targetValue = target, animationSpec = tween(500), label = "prog")
+private fun AnalyzingStep(item: ItemEntity, thoughts: List<AnalysisProgress>) {
+    val current = thoughts.lastOrNull()
+    val mood = current?.mood ?: Mood.CALM
+    val lightTarget = moodColor(mood)
+    val light by animateColorAsState(lightTarget, tween(700), label = "light")
+    val progress by animateFloatAsState(current?.fraction ?: 0.04f, tween(600), label = "prog")
     val t = rememberInfiniteTransition(label = "an")
-    val a by t.animateFloat(0.4f, 1f, infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse), label = "pulse")
+    val a by t.animateFloat(0.45f, 1f, infiniteRepeatable(tween(950, easing = LinearEasing), RepeatMode.Reverse), label = "pulse")
 
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         Spacer(Modifier.height(8.dp))
         ItemHero(item)
         Spacer(Modifier.height(28.dp))
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(64.dp).clip(CircleShape).background(Accent.copy(alpha = 0.12f)).graphicsLayer { alpha = a },
-        ) {
-            Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = Accent, modifier = Modifier.size(30.dp))
+
+        // The mind: a mood-lit orb that breathes while it thinks.
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(120.dp).clip(CircleShape).background(light.copy(alpha = 0.10f * a)))
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(72.dp).clip(CircleShape).background(light.copy(alpha = 0.18f)).graphicsLayer { alpha = a },
+            ) {
+                Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = light, modifier = Modifier.size(34.dp))
+            }
         }
-        Spacer(Modifier.height(18.dp))
-        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Accent, trackColor = Outline)
+
         Spacer(Modifier.height(20.dp))
-        steps.forEachIndexed { i, label ->
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 5.dp)) {
-                val done = i < step
-                val active = i == step
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(20.dp).clip(CircleShape)
-                        .background(if (done) Done.copy(alpha = 0.2f) else if (active) Accent.copy(alpha = 0.2f) else Surface2),
-                ) {
-                    if (done) Icon(Icons.Rounded.Check, contentDescription = null, tint = Done, modifier = Modifier.size(13.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (done || active) TextHigh else TextLow,
-                )
+        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = light, trackColor = Outline)
+        Spacer(Modifier.height(20.dp))
+
+        // The live label + commentary (the brain talking).
+        Text(current?.label ?: "Thinking", style = MaterialTheme.typography.titleMedium, color = TextHigh)
+        Spacer(Modifier.height(4.dp))
+        Text(current?.commentary ?: "Settling in…", style = MaterialTheme.typography.bodyLarge, color = TextMid)
+
+        // The stream of consciousness — recent thoughts, freshest brightest.
+        Spacer(Modifier.height(20.dp))
+        val recent = thoughts.takeLast(6).dropLast(1).asReversed()
+        recent.forEachIndexed { i, th ->
+            val fade = (1f - i * 0.16f).coerceIn(0.25f, 0.8f)
+            Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 3.dp).graphicsLayer { alpha = fade }) {
+                Box(Modifier.padding(top = 6.dp).size(6.dp).clip(CircleShape).background(moodColor(th.mood)))
+                Spacer(Modifier.width(10.dp))
+                Text("${th.label} · ${th.commentary}", style = MaterialTheme.typography.bodyMedium, color = TextMid, maxLines = 1)
             }
         }
     }
+}
+
+private fun moodColor(mood: Mood): Color = when (mood) {
+    Mood.FAVORABLE -> Done
+    Mood.CAUTIOUS -> Accent
+    Mood.SKEPTICAL -> Accent
+    Mood.CURIOUS -> Accent
+    Mood.REFLECTIVE -> Accent
+    Mood.CALM -> TextMid
 }
 
 /* ------------------------------- Report ------------------------------- */

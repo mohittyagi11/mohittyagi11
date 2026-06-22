@@ -36,7 +36,11 @@ object StackAnalyzer {
         sourceName: String?,
         concern: String?,
         product: ProductSignals? = null,
+        onProgress: ((AnalysisProgress) -> Unit)? = null,
     ): AnalysisReport {
+        fun emit(label: String, commentary: String, mood: Mood, fraction: Float) =
+            onProgress?.invoke(AnalysisProgress(label, commentary, mood, fraction))
+        emit("Settling in", "Taking a first look at ${name.ifBlank { "this" }}…", Mood.CALM, 0.04f)
         val app = context.applicationContext
         val tier = ModelCapability.tier(app)
         val engineUp = tier.isModel && ModelCapability.engineReady(app)
@@ -124,16 +128,22 @@ object StackAnalyzer {
         cautions.clear(); cautions.addAll(cautionsDistinct)
 
         // --- Live web research: what people actually say (key-free, time-boxed) ---
+        emit("Listening to the web", "Seeing what reviewers and users actually say about it…", Mood.CURIOUS, 0.14f)
         val webResults = runCatching { researchWeb(name, product?.brand) }.getOrDefault(emptyList())
         webResults.take(3).forEach { grounded += "Web/${it.domain}: ${it.title}" }
+        if (webResults.isNotEmpty()) {
+            emit("Heard the room", "Picked up ${webResults.size} voice${if (webResults.size > 1) "s" else ""} from around the web.", Mood.CURIOUS, 0.22f)
+        }
 
         // Brand reputation — the model's own hedged read, clearly labelled (opt-in).
         val brandTake: String? = if (engineUp && !product?.brand.isNullOrBlank()) {
+            emit("Sizing up the brand", "Forming an honest impression of ${product!!.brand}…", Mood.SKEPTICAL, 0.28f)
             runCatching {
-                BrainProvider.engine(app).complete(brandTakePrompt(product!!.brand!!, name)).trim()
+                BrainProvider.engine(app).complete(brandTakePrompt(product.brand!!, name)).trim()
             }.getOrNull()?.let { sanitize(it) }
         } else null
 
+        emit("Mapping it out", "Laying out what matters, chapter by chapter…", Mood.CALM, 0.32f)
         // --- Aspect chapters: small grounded contexts, one per AnalysisAspect ---
         var aspectBlocks = buildAspectBlocks(
             matched, goodLines, fitLines, safety, safetyClear, source, goal, concern,
@@ -152,18 +162,21 @@ object StackAnalyzer {
         val placement = matched?.let { placementText(it) }
         var rationale = buildRationale(matched, goal, dependencies, cautions)
         var byModel = false
+        // Walk the chapters out loud: emit each as a "thought", and on a capable
+        // model let it write that chapter's prose (small contexts) as it goes.
+        val total = aspectBlocks.size.coerceAtLeast(1)
+        aspectBlocks = aspectBlocks.mapIndexed { i, block ->
+            emit(block.aspect.title, chapterCommentary(block), moodFor(block), 0.35f + 0.5f * (i.toFloat() / total))
+            if (engineUp && tier == ModelTier.CAPABLE && block.state != AspectState.NOT_ASSESSED) {
+                val enriched = runCatching {
+                    BrainProvider.engine(app).complete(aspectPrompt(name, matched, block, goal, concern)).trim()
+                }.getOrNull()?.let { sanitize(it) }
+                if (!enriched.isNullOrBlank()) { byModel = true; block.copy(summary = enriched) } else block
+            } else block
+        }
+        // …then step back and synthesize the larger picture from those contexts.
+        emit("The big picture", "Stepping back to weigh it all together…", Mood.REFLECTIVE, 0.9f)
         if (engineUp) {
-            // Incremental: let a capable model fill each chapter's prose (small contexts)…
-            if (tier == ModelTier.CAPABLE) {
-                aspectBlocks = aspectBlocks.map { block ->
-                    if (block.state == AspectState.NOT_ASSESSED) return@map block
-                    val enriched = runCatching {
-                        BrainProvider.engine(app).complete(aspectPrompt(name, matched, block, goal, concern)).trim()
-                    }.getOrNull()?.let { sanitize(it) }
-                    if (!enriched.isNullOrBlank()) { byModel = true; block.copy(summary = enriched) } else block
-                }
-            }
-            // …then synthesize the larger picture from those contexts.
             val enriched = runCatching {
                 BrainProvider.engine(app).complete(
                     verdictPrompt(name, matched, goal, source, concern, verdict, aspectBlocks, tier),
@@ -643,6 +656,39 @@ object StackAnalyzer {
         }
 
         return out
+    }
+
+    /** The brain's mood as it works a chapter — drives the screen's lighting. */
+    private fun moodFor(block: ReportBlock.Aspect): Mood = when {
+        block.aspect == AnalysisAspect.SAFETY && block.state == AspectState.CAUTION -> Mood.CAUTIOUS
+        block.aspect == AnalysisAspect.REVIEWS -> Mood.CURIOUS
+        block.aspect == AnalysisAspect.TRUST_SOURCE && block.state == AspectState.CAUTION -> Mood.SKEPTICAL
+        block.state == AspectState.GOOD || block.state == AspectState.CLEAR -> Mood.FAVORABLE
+        block.state == AspectState.CAUTION -> Mood.CAUTIOUS
+        block.state == AspectState.MIXED -> Mood.CURIOUS
+        else -> Mood.CALM
+    }
+
+    /** A short, first-person-ish line for the chapter being weighed right now. */
+    private fun chapterCommentary(block: ReportBlock.Aspect): String {
+        val base = when (block.aspect) {
+            AnalysisAspect.WHAT_FOR -> "Getting a feel for what this really does"
+            AnalysisAspect.QUALITY -> "Checking the form and dose — is it the real thing"
+            AnalysisAspect.FIT_CONDITION -> "Does this actually fit what you're after"
+            AnalysisAspect.CLAIMS -> "Holding the claims up to the evidence"
+            AnalysisAspect.TRUST_SOURCE -> "Weighing who's vouching for it"
+            AnalysisAspect.REVIEWS -> "Sitting with what people are saying"
+            AnalysisAspect.VALUE -> "Asking whether it's worth the money"
+            AnalysisAspect.STACK -> "Seeing how it sits with your stack"
+            AnalysisAspect.SAFETY -> "Walking the safety checklist, carefully"
+        }
+        val tail = when (block.state) {
+            AspectState.GOOD, AspectState.CLEAR -> " — looking good."
+            AspectState.CAUTION -> " — something to flag."
+            AspectState.MIXED -> " — it's nuanced."
+            else -> "…"
+        }
+        return base + tail
     }
 
     /** Two time-boxed web queries — general reviews + red flags — merged and de-duped. */
