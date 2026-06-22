@@ -1,6 +1,5 @@
 package com.quietdose.ui.home
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -33,7 +32,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -45,8 +43,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.quietdose.ui.theme.Done
 import com.quietdose.ui.theme.GroupStyle
+import com.quietdose.data.model.ItemType
+import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.theme.Ink
-import com.quietdose.ui.theme.Outline
 import com.quietdose.ui.theme.Surface1
 import com.quietdose.ui.theme.TextHigh
 import com.quietdose.ui.theme.TextLow
@@ -243,7 +242,7 @@ private fun DoseRow(row: ItemRow, tint: Color, onToggle: () -> Unit) {
             }
             .padding(vertical = 10.dp),
     ) {
-        CheckCircle(checked = row.taken, tint = tint)
+        ItemLeading(type = row.item.type, tint = tint, checked = row.taken)
         Spacer(Modifier.size(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -261,39 +260,51 @@ private fun DoseRow(row: ItemRow, tint: Color, onToggle: () -> Unit) {
     }
 }
 
+/**
+ * The procedural pill icon doubles as the status: tap the row and a tinted
+ * "done" badge springs onto the icon, which softens back. Recognition + state
+ * in one calm element.
+ */
 @Composable
-private fun CheckCircle(checked: Boolean, tint: Color) {
-    val scale by animateFloatAsState(
+private fun ItemLeading(type: ItemType, tint: Color, checked: Boolean) {
+    val iconAlpha by animateFloatAsState(
+        targetValue = if (checked) 0.4f else 1f,
+        label = "iconAlpha",
+    )
+    val badge by animateFloatAsState(
         targetValue = if (checked) 1f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow,
         ),
-        label = "checkScale",
+        label = "badge",
     )
-    val fill by animateColorAsState(
-        targetValue = if (checked) tint else Surface1,
-        label = "checkFill",
-    )
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(26.dp)
-            .border(
-                width = 1.5.dp,
-                color = if (checked) tint else Outline,
-                shape = CircleShape,
-            )
-            .background(fill, CircleShape),
-    ) {
-        Icon(
-            Icons.Rounded.Check,
-            contentDescription = if (checked) "Taken" else "Mark taken",
-            tint = Ink,
+    Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+        ItemIcon(
+            type = type,
+            tint = tint,
             modifier = Modifier
-                .size(16.dp)
-                .scale(scale)
-                .graphicsLayer { alpha = scale },
+                .size(34.dp)
+                .graphicsLayer { alpha = iconAlpha },
         )
+        if (badge > 0f) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(18.dp)
+                    .graphicsLayer {
+                        scaleX = badge; scaleY = badge; alpha = badge
+                    }
+                    .background(tint, CircleShape),
+            ) {
+                Icon(
+                    Icons.Rounded.Check,
+                    contentDescription = "Taken",
+                    tint = Ink,
+                    modifier = Modifier.size(12.dp),
+                )
+            }
+        }
     }
 }

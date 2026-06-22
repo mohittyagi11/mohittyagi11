@@ -10,9 +10,10 @@ object Format {
     fun dose(item: ItemEntity): String {
         val n = trimNumber(item.doseAmount)
         return when (item.doseUnit) {
-            DoseUnit.UNIT -> when (item.type.name) {
-                "SPRAY" -> "$n ${plural(item.doseAmount, "spray")}"
-                else -> n
+            DoseUnit.UNIT -> when {
+                item.type.name == "SPRAY" -> "$n ${plural(item.doseAmount, "spray")}"
+                item.doseAmount > 1.0 -> "×$n"
+                else -> "" // a single capsule/tablet needs no dose line
             }
             DoseUnit.MG -> "$n mg"
             DoseUnit.MCG -> "$n mcg"
