@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import com.quietdose.brain.enrich.ProductEnricher
+import com.quietdose.ui.MainActivity
 import com.quietdose.ui.theme.DoseTheme
 import com.quietdose.ui.theme.Ink
 
@@ -33,11 +34,32 @@ class ShareReceiverActivity : ComponentActivity() {
                     ShareConfirmScreen(
                         url = url,
                         onClose = { finish() },
-                        onSaved = { finish() },
+                        // After a successful add, bring Dose itself to the front (its own
+                        // task) so the user lands in the app on their stack — not dropped
+                        // back into Amazon. The app takes control.
+                        onSaved = { openAppAndFinish() },
                     )
                 }
             }
         }
+    }
+
+    /** Re-shared while still open (singleTask) — handle the new link in place. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        recreate()
+    }
+
+    private fun openAppAndFinish() {
+        runCatching {
+            startActivity(
+                Intent(this, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                },
+            )
+        }
+        finish()
     }
 
     private fun extractUrl(intent: Intent?): String? {

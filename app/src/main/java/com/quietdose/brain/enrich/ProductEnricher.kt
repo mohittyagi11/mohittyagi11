@@ -85,12 +85,16 @@ object ProductEnricher {
         var doseUnit = DoseUnit.UNIT
 
         detectForm(title.orEmpty() + " " + html.take(4000))?.let { type = it }
-        detectDose(title.orEmpty())?.let { (amt, unit) -> doseAmount = amt; doseUnit = unit }
+        // The dose lives in the description/panel, not just the title — scan the
+        // broader text so e.g. "Selenium 200 mcg" is read instead of defaulting to 1.
+        detectDose(ingredientsText ?: title.orEmpty())?.let { (amt, unit) -> doseAmount = amt; doseUnit = unit }
 
-        // Optional on-device refinement of the product name (never overrides a good title).
-        if (ModelCapability.engineReady(context) && !combined.isNullOrBlank()) {
+        // Optional on-device refinement — feed the broader page text so the model
+        // can also read the dose, not just the name.
+        val modelInput = ingredientsText ?: combined
+        if (ModelCapability.engineReady(context) && !modelInput.isNullOrBlank()) {
             runCatching {
-                val drafted = IdentifyProductSkill().run(BrainProvider.engine(context), combined)
+                val drafted = IdentifyProductSkill().run(BrainProvider.engine(context), modelInput)
                 if (drafted != null) {
                     if (name.isNullOrBlank()) name = drafted.name
                     if (type == ItemType.CAPSULE) type = drafted.type

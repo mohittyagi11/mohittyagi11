@@ -56,6 +56,8 @@
             android:name=".ui.share.ShareReceiverActivity"
             android:exported="true"
             android:label="Add to Dose"
+            android:launchMode="singleTask"
+            android:taskAffinity="${applicationId}"
             android:theme="@style/Theme.Dose">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
