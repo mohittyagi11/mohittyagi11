@@ -23,6 +23,10 @@ data class CategoryProfile(
     val fitsWho: List<String> = emptyList(),
     /** How AND when to use it — AM/PM, where in the routine, frequency. (generalises timing) */
     val usage: String = "",
+    /** Where it sits in a routine — e.g. "After toner, before serum" (skincare) or
+     *  "Massage into damp scalp" (haircare). The routine-placement answer, scoped to
+     *  the category; NOT supplement timing (fasted / with-food). Empty when n/a. */
+    val routineStep: String = "",
     /** Suggested amount per use, with [recommendedUnit] — the "how many drops" answer. */
     val recommendedAmount: Double? = null,
     val recommendedUnit: String? = null,
@@ -48,6 +52,7 @@ object ProfileCodec {
         put("goodFor", JSONArray(p.goodFor))
         put("fitsWho", JSONArray(p.fitsWho))
         put("usage", p.usage)
+        put("routineStep", p.routineStep)
         p.recommendedAmount?.let { put("recommendedAmount", it) }
         p.recommendedUnit?.let { put("recommendedUnit", it) }
         put("absorption", p.absorption)
@@ -68,6 +73,7 @@ object ProfileCodec {
                 goodFor = o.optJSONArray("goodFor").toStringList(),
                 fitsWho = o.optJSONArray("fitsWho").toStringList(),
                 usage = o.optString("usage"),
+                routineStep = o.optString("routineStep"),
                 recommendedAmount = if (o.has("recommendedAmount")) o.optDouble("recommendedAmount").takeIf { !it.isNaN() } else null,
                 recommendedUnit = o.optString("recommendedUnit").ifBlank { null },
                 absorption = o.optString("absorption"),

@@ -16,6 +16,9 @@ data class ProductSignals(
     val ratingCount: Int? = null,      // number of reviews
     val servings: Int? = null,         // units per pack, for price-per-day
     val ingredientsText: String? = null, // label/description blob to ingredientize from
+    val directionsText: String? = null,  // the page's "how to use / directions" section, if found
+    val packSize: String? = null,        // net volume/count as printed, e.g. "100 ml" — NOT a per-use dose
+    val imageUrl: String? = null,         // og:image / product photo URL (a colour cue for the glyph, never a per-use fact)
     val sourceTitle: String? = null,
     val url: String? = null,
 ) {

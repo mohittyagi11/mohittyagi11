@@ -17,6 +17,18 @@ sealed interface ReportBlock {
         val score: Int?,          // 0..100 overall confidence/fit, or null
         val tags: List<String>,   // short chips, e.g. "Good fit", "Verify source"
         val byModel: Boolean,
+        /** Per-parameter ratings the verdict is built from — label → 0..100. Rendered as
+         *  calm labelled bars under the overall score (e.g. Fit, Quality, Safety, Trust). */
+        val dimensions: List<Pair<String, Int>> = emptyList(),
+    ) : ReportBlock
+
+    /** Distilled review intelligence — what people actually say, as keywords, not a URL wall. */
+    data class Reviews(
+        val takeaway: String,          // one calm line summarising the consensus
+        val loved: List<String>,       // recurring praise keywords
+        val watch: List<String>,       // recurring complaint / watch-out keywords
+        val sources: List<String>,     // domains the read is drawn from
+        val state: AspectState,
     ) : ReportBlock
 
     /** One chapter. [summary] is the brain's prose; [lines] are grounded points. */

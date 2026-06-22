@@ -460,6 +460,14 @@ private fun BlockView(block: ReportBlock) {
         is ReportBlock.Meter -> MeterBlock(block)
         is ReportBlock.Aspect -> ChapterView(block.aspect.title, block.summary, block.lines, block.state)
         is ReportBlock.Chapter -> ChapterView(block.title, block.summary, block.lines, block.state)
+        is ReportBlock.Reviews -> ChapterView(
+            "What people say",
+            block.takeaway,
+            block.loved.map { AnalysisLine("Loved — $it", Severity.GOOD) } +
+                block.watch.map { AnalysisLine("Watch — $it", Severity.CAUTION) } +
+                (block.sources.takeIf { it.isNotEmpty() }?.let { listOf(AnalysisLine("From ${it.joinToString(", ")}", Severity.NEUTRAL)) } ?: emptyList()),
+            block.state,
+        )
         is ReportBlock.Reasoning -> ReasoningBlock(block)
     }
 }
