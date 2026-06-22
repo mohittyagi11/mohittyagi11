@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,9 +36,29 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Upload APK
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/debug/app-debug.apk out/dose-debug.apk
+
+      - name: Upload APK (workflow artifact)
         uses: actions/upload-artifact@v4
         with:
           name: dose-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: out/dose-debug.apk
           if-no-files-found: error
+
+      # Publish a direct-download, installable APK to a rolling prerelease so it
+      # can be grabbed straight from a phone browser — no login, no zip.
+      - name: Publish APK to "latest debug" release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: debug-latest
+          name: Dose — latest debug build
+          prerelease: true
+          body: |
+            Auto-built debug APK from `${{ github.ref_name }}` @ ${{ github.sha }}.
+            Install on Android: download **dose-debug.apk**, then allow "install
+            from unknown sources" when prompted. Debug build — not for production.
+          files: out/dose-debug.apk
