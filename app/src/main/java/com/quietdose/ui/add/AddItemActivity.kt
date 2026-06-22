@@ -38,6 +38,7 @@ import com.quietdose.data.entity.ItemEntity
 import com.quietdose.di.ServiceLocator
 import com.quietdose.ui.MainActivity
 import com.quietdose.ui.analysis.AnalysisScreen
+import com.quietdose.ui.scan.ScanScreen
 import com.quietdose.ui.stack.FilledButton
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.DoseTheme
@@ -100,6 +101,7 @@ class AddItemActivity : ComponentActivity() {
     companion object {
         const val MODE_TYPED = "typed"
         const val MODE_LINK = "link"
+        const val MODE_SCAN = "scan"
         private const val EXTRA_MODE = "mode"
         private const val EXTRA_URL = "url"
         private const val EXTRA_GROUP = "group"
@@ -109,11 +111,15 @@ class AddItemActivity : ComponentActivity() {
 
         fun link(context: Context, url: String): Intent =
             Intent(context, AddItemActivity::class.java).putExtra(EXTRA_MODE, MODE_LINK).putExtra(EXTRA_URL, url)
+
+        fun scan(context: Context): Intent =
+            Intent(context, AddItemActivity::class.java).putExtra(EXTRA_MODE, MODE_SCAN)
     }
 }
 
 private sealed interface AddPhase {
     data object Resolving : AddPhase
+    data object Capturing : AddPhase
     data class Failed(val reason: String) : AddPhase
     data class Confirm(
         val draft: DraftItem,
@@ -135,8 +141,11 @@ private fun AddFlow(mode: String, url: String?, groupId: Long, onDone: () -> Uni
 
     var phase by remember {
         mutableStateOf<AddPhase>(
-            if (mode == AddItemActivity.MODE_LINK) AddPhase.Resolving
-            else AddPhase.Confirm(DraftItem(name = ""), AddProvenance.Typed, null, null, groupId.takeIf { it > 0 }),
+            when (mode) {
+                AddItemActivity.MODE_LINK -> AddPhase.Resolving
+                AddItemActivity.MODE_SCAN -> AddPhase.Capturing
+                else -> AddPhase.Confirm(DraftItem(name = ""), AddProvenance.Typed, null, null, groupId.takeIf { it > 0 })
+            },
         )
     }
 
@@ -156,6 +165,18 @@ private fun AddFlow(mode: String, url: String?, groupId: Long, onDone: () -> Uni
     }
 
     when (val p = phase) {
+        AddPhase.Capturing -> ScanScreen(
+            onScanned = { draft, ocr, shots ->
+                phase = AddPhase.Confirm(
+                    draft,
+                    AddProvenance.Scanned(shots, ocr),
+                    ProductSignals(ingredientsText = ocr.ifBlank { null }),
+                    null,
+                    groupId.takeIf { it > 0 },
+                )
+            },
+            onClose = onDone,
+        )
         AddPhase.Resolving -> Center {
             CircularProgressIndicator(color = Accent, strokeWidth = 2.dp, modifier = Modifier.size(34.dp))
             Spacer(Modifier.height(16.dp))

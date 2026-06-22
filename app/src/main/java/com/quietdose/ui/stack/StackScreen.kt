@@ -56,7 +56,6 @@ import com.quietdose.data.entity.ItemEntity
 import androidx.compose.ui.window.Dialog
 import com.quietdose.ui.add.AddItemActivity
 import com.quietdose.ui.icons.ItemIcon
-import com.quietdose.ui.scan.ScanScreen
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.GroupStyle
 import com.quietdose.ui.theme.Surface1
@@ -84,7 +83,6 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
     val context = LocalContext.current
     val expanded = remember { mutableStateMapOf<Long, Boolean>() }
     var editing by remember { mutableStateOf<Editing?>(null) }
-    var scanning by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(StackMode.Groups) }
     var query by remember { mutableStateOf("") }
     var showAddChooser by remember { mutableStateOf(false) }
@@ -105,7 +103,7 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
         modifier = modifier.fillMaxSize().padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item { StackHeader(onScan = { scanning = true }) }
+        item { StackHeader(onScan = { context.startActivity(AddItemActivity.scan(context)) }) }
         item { ModeToggle(mode = mode, onMode = { mode = it }) }
 
         if (mode == StackMode.Groups) {
@@ -189,7 +187,7 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
                     context.startActivity(AddItemActivity.typed(context, sg.group.id))
                 }
             },
-            onScan = { showAddChooser = false; scanning = true },
+            onScan = { showAddChooser = false; context.startActivity(AddItemActivity.scan(context)) },
             onLink = { showAddChooser = false; showLinkInput = true },
             onDismiss = { showAddChooser = false },
         )
@@ -202,13 +200,6 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
                 runCatching { context.startActivity(AddItemActivity.link(context, url)) }
             },
             onDismiss = { showLinkInput = false },
-        )
-    }
-
-    if (scanning) {
-        ScanScreen(
-            onClose = { scanning = false },
-            onSaved = { scanning = false }, // item already persisted via the repository
         )
     }
 }
