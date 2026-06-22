@@ -64,5 +64,8 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
 
+    // On-device brain (LLM path is dormant until a model file is present)
+    implementation(libs.mediapipe.tasks.genai)
+
     debugImplementation(libs.androidx.ui.tooling)
 }

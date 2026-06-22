@@ -13,7 +13,6 @@ import com.quietdose.ui.theme.GroupStyle
 import com.quietdose.ui.viz.DayEvent
 import com.quietdose.ui.viz.EventSource
 import com.quietdose.util.DateUtils
-import com.quietdose.util.Format
 import org.json.JSONObject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -64,6 +63,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = ServiceLocator.repository(app)
     private val settingsStore = ServiceLocator.settings(app)
+    private val brain = ServiceLocator.brain(app)
 
     val state: StateFlow<HomeUiState> =
         settingsStore.settings.flatMapLatest { s ->
@@ -144,15 +144,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         else -> "Anytime"
     }
 
-    private fun summaryFor(c: GroupCard, status: NodeStatus): String {
-        val behaviour = c.items.firstNotNullOfOrNull { Format.behaviour(it.item).firstOrNull() }
-        return when (status) {
-            NodeStatus.DONE -> "All taken"
-            NodeStatus.NOW -> listOfNotNull("Take now", behaviour).joinToString(" · ")
-            NodeStatus.DUE -> listOfNotNull("Still pending", behaviour).joinToString(" · ")
-            NodeStatus.UPCOMING -> GroupStyle.whenLabel(c.group).ifBlank { "Coming up" }
-        }
-    }
+    private fun summaryFor(c: GroupCard, status: NodeStatus): String =
+        brain.narrate(
+            group = c.group,
+            items = c.items.map { it.item },
+            takenCount = c.takenCount,
+            status = status.name,
+            hour = java.time.LocalTime.now().hour,
+        )
 
     /**
      * Choose the group that's most relevant *right now* by time of day, falling

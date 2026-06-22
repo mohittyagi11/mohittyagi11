@@ -1,6 +1,8 @@
 package com.quietdose.di
 
 import android.content.Context
+import com.quietdose.brain.Brain
+import com.quietdose.brain.BrainProvider
 import com.quietdose.data.DoseRepository
 import com.quietdose.data.db.DoseDatabase
 import com.quietdose.data.settings.SettingsStore
@@ -27,4 +29,7 @@ object ServiceLocator {
         settings ?: synchronized(this) {
             settings ?: SettingsStore(context.applicationContext).also { settings = it }
         }
+
+    /** The on-device brain (heuristic by default; on-device LLM if a model is present). */
+    fun brain(context: Context): Brain = BrainProvider.get(context)
 }
