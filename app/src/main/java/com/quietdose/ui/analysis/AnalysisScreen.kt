@@ -994,16 +994,19 @@ private fun ItemHero(
     }
 }
 
-/** A calm benefit chip — a small tinted dot (matching the glyph's orbit) + the word. */
+/** A calm benefit chip — the benefit's derived symbol (matching the glyph's orb) + the word. */
 @Composable
 private fun BenefitChip(text: String, color: Color) {
+    val symbol = remember(text) { benefitSymbolFor(text) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.clip(RoundedCornerShape(99.dp))
             .background(Surface1)
-            .padding(start = 10.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 9.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
     ) {
-        Box(Modifier.size(7.dp).clip(CircleShape).background(color))
+        Canvas(Modifier.size(13.dp)) {
+            drawBenefitSymbol(symbol, Offset(size.width / 2f, size.height / 2f), size.minDimension * 0.42f, color)
+        }
         Spacer(Modifier.width(7.dp))
         Text(text, style = MaterialTheme.typography.labelMedium, color = TextMid)
     }

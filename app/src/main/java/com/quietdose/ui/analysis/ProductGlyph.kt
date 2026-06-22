@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.TextMeasurer
@@ -197,15 +198,15 @@ fun ProductGlyph(
         else paletteFor(name, brand, kind)
     }
     val initials = remember(name, brand) { if (showInitials) initialsFor(name, brand) else "" }
-    // Cap the orbit to keep it calm; colours come from the shared BenefitOrbit
-    // spectrum so dot N == chip N in the legend.
-    val orbitColors = remember(benefits) {
-        benefits.take(6).mapIndexed { i, _ -> BenefitOrbit[i % BenefitOrbit.size] }
+    // Cap the orbit to keep it calm; each benefit becomes a small symbol-orb whose
+    // colour comes from the shared BenefitOrbit spectrum so orb N == chip N in the legend.
+    val orbs = remember(benefits) {
+        benefits.take(6).mapIndexed { i, b -> BenefitOrbit[i % BenefitOrbit.size] to benefitSymbolFor(b) }
     }
     val measurer = rememberTextMeasurer()
 
     Canvas(modifier) {
-        if (orbitColors.isNotEmpty()) drawOrbitDots(orbitColors)
+        if (orbs.isNotEmpty()) drawBenefitOrbs(orbs)
         drawGlyph(form, palette, initials, measurer)
     }
 }
@@ -214,28 +215,32 @@ fun ProductGlyph(
 fun benefitColor(index: Int): Color = BenefitOrbit[index % BenefitOrbit.size]
 
 /**
- * Small tinted dots circling the glyph — one per primary benefit. Placed on a ring
- * just outside the container, faint and evenly spaced, each with a soft halo so it
- * reads as a calm "orb" rather than a sticker. Subtle by design.
+ * Small symbol-orbs circling the glyph — one per primary benefit. Each is a soft
+ * tinted badge with a tiny symbol DEPICTING the benefit (a droplet for hydration, a
+ * sun for brightening…), evenly spaced on a ring just inside the canvas edge. The
+ * symbol is derived from the benefit word (see [benefitSymbolFor]); the colour matches
+ * that benefit's legend chip, so orb ↔ chip read together. Calm, never a sticker.
  */
-private fun DrawScope.drawOrbitDots(colors: List<Color>) {
-    if (colors.isEmpty()) return
+private fun DrawScope.drawBenefitOrbs(orbs: List<Pair<Color, BenefitSymbol>>) {
+    if (orbs.isEmpty()) return
     val s = size.minDimension
     val cx = size.width / 2f
     val cy = size.height / 2f
-    val ringR = s * 0.46f          // just inside the canvas edge
-    val dotR = s * 0.045f
-    val start = -90.0              // first dot at top
-    val step = 360.0 / colors.size
-    colors.forEachIndexed { i, c ->
+    val ringR = s * 0.45f          // just inside the canvas edge
+    val orbR = s * 0.085f          // badge radius — big enough to seat a symbol
+    val symR = orbR * 0.6f
+    val start = -90.0              // first orb at top
+    val step = 360.0 / orbs.size
+    orbs.forEachIndexed { i, (c, sym) ->
         val ang = Math.toRadians(start + i * step)
         val x = cx + (ringR * cos(ang)).toFloat()
         val y = cy + (ringR * sin(ang)).toFloat()
-        // soft halo
-        drawCircle(c.copy(alpha = 0.18f), radius = dotR * 2.1f, center = Offset(x, y))
-        // a thin dark seat so the dot sits on the dark surface cleanly
-        drawCircle(Ink.copy(alpha = 0.55f), radius = dotR * 1.35f, center = Offset(x, y))
-        drawCircle(c.copy(alpha = 0.92f), radius = dotR, center = Offset(x, y))
+        val center = Offset(x, y)
+        // soft halo, then a dark seat so the badge sits cleanly on the dark surface
+        drawCircle(c.copy(alpha = 0.16f), radius = orbR * 1.7f, center = center)
+        drawCircle(Ink.copy(alpha = 0.85f), radius = orbR, center = center)
+        drawCircle(c.copy(alpha = 0.28f), radius = orbR, center = center, style = Stroke(width = s * 0.012f))
+        drawBenefitSymbol(sym, center, symR, c.copy(alpha = 0.95f))
     }
 }
 
