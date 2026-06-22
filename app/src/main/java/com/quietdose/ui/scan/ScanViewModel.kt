@@ -116,37 +116,44 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         }
         _phase.value = Phase.Working
         viewModelScope.launch {
-            val app = getApplication<Application>()
-            val fused = withContext(Dispatchers.IO) {
-                val results = shots.map { LabelScanner.scan(app, it) }
-                LabelFusion.fuse(results)
-            }
+            // Belt-and-braces: OCR/model/decoding run off the main thread and are
+            // individually guarded, but wrap the whole pipeline too so nothing —
+            // not even an OutOfMemoryError — can take the screen down.
+            try {
+                val app = getApplication<Application>()
+                val fused = withContext(Dispatchers.IO) {
+                    val results = shots.map { LabelScanner.scan(app, it) }
+                    LabelFusion.fuse(results)
+                }
 
-            if (fused.isEmpty) {
-                _phase.value = Phase.Empty(
-                    "Couldn't read the label. Move closer, steady the bottle, and try again.",
-                )
-                return@launch
-            }
+                if (fused.isEmpty) {
+                    _phase.value = Phase.Empty(
+                        "Couldn't read the label. Move closer, steady the bottle, and try again.",
+                    )
+                    return@launch
+                }
 
-            val drafted = runCatching {
-                ServiceLocator.agent(app).identifyProduct(fused.combinedText)
-            }.getOrNull()
+                val drafted = runCatching {
+                    ServiceLocator.agent(app).identifyProduct(fused.combinedText)
+                }.getOrNull()
 
-            if (drafted != null) {
-                _phase.value = Phase.Confirm(drafted, fromModel = true, barcode = fused.barcode)
-            } else {
-                val name = fused.prominentLine ?: fused.lines.firstOrNull() ?: fused.barcode ?: ""
-                _phase.value = Phase.Confirm(
-                    DraftItem(
-                        name = name,
-                        type = LabelFusion.guessType(fused),
-                        doseAmount = fused.dose?.first ?: 1.0,
-                        doseUnit = fused.dose?.second ?: DoseUnit.UNIT,
-                    ),
-                    fromModel = false,
-                    barcode = fused.barcode,
-                )
+                if (drafted != null) {
+                    _phase.value = Phase.Confirm(drafted, fromModel = true, barcode = fused.barcode)
+                } else {
+                    val name = fused.prominentLine ?: fused.lines.firstOrNull() ?: fused.barcode ?: ""
+                    _phase.value = Phase.Confirm(
+                        DraftItem(
+                            name = name,
+                            type = LabelFusion.guessType(fused),
+                            doseAmount = fused.dose?.first ?: 1.0,
+                            doseUnit = fused.dose?.second ?: DoseUnit.UNIT,
+                        ),
+                        fromModel = false,
+                        barcode = fused.barcode,
+                    )
+                }
+            } catch (t: Throwable) {
+                _phase.value = Phase.Empty("Something went wrong reading the photos. Try again.")
             }
         }
     }

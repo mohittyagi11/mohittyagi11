@@ -1,6 +1,9 @@
 package com.quietdose.brain.vision
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.ExifInterface
 import android.net.Uri
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
@@ -41,13 +44,22 @@ object LabelScanner {
         val isEmpty: Boolean get() = lines.isEmpty() && barcode.isNullOrBlank()
     }
 
+    /** Max edge we feed ML Kit. Camera shots are 12MP+ (~48 MB decoded); a label
+     *  reads fine at ~1600px and this keeps three photos well clear of OOM. */
+    private const val MAX_EDGE = 1600
+
     /** Recognize text + barcode from [uri]. Never throws; returns an empty result on failure. */
     suspend fun scan(context: Context, uri: Uri): ScanResult {
-        val image = runCatching { InputImage.fromFilePath(context, uri) }.getOrNull()
-            ?: return ScanResult(emptyList(), null, null, "")
+        val empty = ScanResult(emptyList(), null, null, "")
+        // Decode downsampled (not full-resolution) so big camera photos don't OOM.
+        val decoded = runCatching { decodeDownsampled(context, uri, MAX_EDGE) }.getOrNull() ?: return empty
+        val (bitmap, rotation) = decoded
+        val image = runCatching { InputImage.fromBitmap(bitmap, rotation) }.getOrNull()
+            ?: run { runCatching { bitmap.recycle() }; return empty }
 
         val lines = runCatching { recognizeText(image) }.getOrDefault(emptyList())
         val barcode = runCatching { recognizeBarcode(image) }.getOrNull()
+        runCatching { bitmap.recycle() }
 
         val prominent = lines
             .filter { it.any(Char::isLetter) }
@@ -64,6 +76,40 @@ object LabelScanner {
             prominentLine = prominent,
             combinedText = combined,
         )
+    }
+
+    /**
+     * Decode [uri] downsampled so its longest edge is ~[maxEdge] px, and read the
+     * EXIF orientation so ML Kit gets the right rotation. Returns the bitmap and
+     * its rotation in degrees, or null if the image can't be read.
+     */
+    private fun decodeDownsampled(context: Context, uri: Uri, maxEdge: Int): Pair<Bitmap, Int>? {
+        val resolver = context.contentResolver
+        // 1) bounds only — cheap, no full decode.
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        val (w, h) = bounds.outWidth to bounds.outHeight
+        if (w <= 0 || h <= 0) return null
+
+        // 2) pick a power-of-two sample size that brings the long edge under maxEdge.
+        var sample = 1
+        while (maxOf(w, h) / sample > maxEdge) sample *= 2
+        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+        val bitmap = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+            ?: return null
+
+        // 3) EXIF rotation so text isn't sideways.
+        val rotation = runCatching {
+            resolver.openInputStream(uri)?.use { stream ->
+                when (ExifInterface(stream).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                    ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                    ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                    ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                    else -> 0
+                }
+            } ?: 0
+        }.getOrDefault(0)
+        return bitmap to rotation
     }
 
     private suspend fun recognizeText(image: InputImage): List<String> {
