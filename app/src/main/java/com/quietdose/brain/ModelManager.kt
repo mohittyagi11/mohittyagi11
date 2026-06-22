@@ -225,6 +225,98 @@ object ModelManager {
     }
 
     /**
+     * Download a model from a URL captured by the in-app browser — the user has
+     * already signed in / accepted the licence there, so we reuse the WebView's
+     * session by forwarding its [cookie] and [userAgent]. We control the fetch
+     * (progress, archive extraction, format verification) instead of handing off
+     * to the system download manager. The credential is sent only to the original
+     * host; redirects to a signed CDN drop it.
+     */
+    suspend fun downloadFromBrowser(
+        context: Context,
+        url: String,
+        cookie: String?,
+        userAgent: String?,
+        onProgress: (Float) -> Unit,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val part = partFile(context)
+        val target = modelFile(context)
+        var connection: HttpURLConnection? = null
+        try {
+            part.delete()
+            connection = openBrowserDownload(url, cookie, userAgent)
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                return@withContext Result.failure(
+                    IllegalStateException(
+                        "Download failed (HTTP $code). In the browser, sign in and accept the model's " +
+                            "licence first, then tap the .task download again.",
+                    ),
+                )
+            }
+            val total = connection.contentLengthLong
+            connection.inputStream.use { input ->
+                part.outputStream().use { output -> streamTo(input, output, total, onProgress) }
+            }
+            if (part.length() <= 0L) {
+                part.delete()
+                return@withContext Result.failure(IllegalStateException("Downloaded an empty file."))
+            }
+            target.delete()
+            val produced = materialize(part, target) { p -> onProgress(p) }
+            part.delete()
+            if (!produced || !target.exists() || target.length() <= 0L) {
+                target.delete()
+                return@withContext Result.failure(
+                    IllegalStateException("Downloaded, but found no model file inside."),
+                )
+            }
+            onProgress(1f)
+            BrainProvider.reset()
+            Result.success(Unit)
+        } catch (t: Throwable) {
+            runCatching { part.delete() }
+            Log.w(TAG, "Browser download failed", t)
+            Result.failure(t)
+        } finally {
+            runCatching { connection?.disconnect() }
+        }
+    }
+
+    /** Like [openFollowingRedirects], but forwards a browser session cookie + UA. */
+    private fun openBrowserDownload(urlStr: String, cookie: String?, userAgent: String?): HttpURLConnection {
+        var current = urlStr
+        var hops = 0
+        val firstHost = URL(urlStr).host ?: ""
+        while (true) {
+            val c = (URL(current).openConnection() as HttpURLConnection).apply {
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                instanceFollowRedirects = false
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/octet-stream")
+                if (!userAgent.isNullOrBlank()) setRequestProperty("User-Agent", userAgent)
+                // The cookie authorises only the gated host; the CDN it redirects
+                // to uses a signed URL and must not receive it.
+                if (!cookie.isNullOrBlank() && (url.host ?: "") == firstHost) {
+                    setRequestProperty("Cookie", cookie)
+                }
+            }
+            c.connect()
+            val code = c.responseCode
+            if (code in 300..399 && hops < 5) {
+                val location = c.getHeaderField("Location")
+                c.disconnect()
+                if (location.isNullOrBlank()) return c
+                current = URL(URL(current), location).toString()
+                hops++
+                continue
+            }
+            return c
+        }
+    }
+
+    /**
      * Turn a downloaded/imported [part] into the installed model at [target].
      *
      * Important: a MediaPipe `.task` model is **itself a zip bundle**, so we must

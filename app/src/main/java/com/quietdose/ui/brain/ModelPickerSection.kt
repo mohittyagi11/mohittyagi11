@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
@@ -86,7 +85,9 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
     var downloadingId by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableStateOf(0f) }
     var importing by remember { mutableStateOf(false) }
-    var heavierExpanded by remember { mutableStateOf(false) }
+    var moreExpanded by remember { mutableStateOf(false) }
+    // The model whose gated files are open in the in-app browser, if any.
+    var browserModel by remember { mutableStateOf<OnDeviceModel?>(null) }
 
     // Optional Hugging Face token + Kaggle credentials for gated downloads. Loaded once.
     var hfToken by remember { mutableStateOf("") }
@@ -151,6 +152,32 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                 result.exceptionOrNull()?.message ?: "Download failed — open the page and import instead."
             }
         }
+    }
+
+    /** Download a file the in-app browser captured (with its session cookie). */
+    fun startBrowserDownload(model: OnDeviceModel, url: String, cookie: String?, userAgent: String?) {
+        if (busy) return
+        busy = true
+        downloadingId = model.id
+        progress = -1f
+        note = "Downloading ${model.displayName}…"
+        scope.launch {
+            val result = ModelManager.downloadFromBrowser(context, url, cookie, userAgent) { p -> progress = p }
+            busy = false
+            downloadingId = null
+            refreshInstalled()
+            note = if (result.isSuccess) {
+                installedNote(context)
+            } else {
+                result.exceptionOrNull()?.message ?: "Download failed — try again in the browser."
+            }
+        }
+    }
+
+    /** The page to open in the in-app browser — the repo's file tree for HF. */
+    fun browseUrl(model: OnDeviceModel): String {
+        val page = model.sourcePageUrl
+        return if (page.contains("huggingface.co") && !page.contains("/tree/")) "$page/tree/main" else page
     }
 
     /** Save the HF token, then immediately download the best-fit downloadable model. */
@@ -253,7 +280,9 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
             HairLine()
             Spacer(Modifier.height(14.dp))
 
-            // Recommended
+            // Recommended — one clear pick, the rest folded away.
+            val primary = recommended.firstOrNull()
+            val others = recommended.drop(1)
             Text(
                 "Recommended for your device",
                 style = MaterialTheme.typography.titleMedium,
@@ -261,25 +290,72 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                 fontWeight = FontWeight.Medium,
             )
             Spacer(Modifier.height(8.dp))
-            if (recommended.isEmpty()) {
+            if (primary == null) {
                 Text(
                     "No catalog model comfortably fits this device. You can still import a .task file you trust.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextMid,
                 )
             } else {
-                recommended.forEach { model ->
-                    ModelCard(
-                        model = model,
-                        enabled = !busy,
-                        downloading = downloadingId == model.id,
-                        progress = progress,
-                        onDownloadHf = { startDownload(model, ModelManager.Source.HUGGING_FACE) },
-                        onDownloadKaggle = { startDownload(model, ModelManager.Source.KAGGLE) },
-                        onOpenHf = { openUrl(context, model.sourcePageUrl) },
-                        onOpenKaggle = { model.kagglePageUrl?.let { openUrl(context, it) } },
+                ModelCard(
+                    model = primary,
+                    enabled = !busy,
+                    downloading = downloadingId == primary.id,
+                    progress = progress,
+                    onBrowse = { browserModel = primary },
+                    onDirect = { startDownload(primary, ModelManager.Source.HUGGING_FACE) },
+                )
+            }
+
+            // Other models (the rest of the recommended + the heavier ones), folded.
+            val otherCount = others.size + tooLarge.size
+            if (otherCount > 0) {
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { moreExpanded = !moreExpanded }
+                        .padding(vertical = 4.dp),
+                ) {
+                    Text(
+                        "More models ($otherCount)",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextMid,
+                        modifier = Modifier.weight(1f),
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        if (moreExpanded) "Hide" else "Show",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Accent,
+                    )
+                }
+                AnimatedVisibility(visible = moreExpanded) {
+                    Column {
+                        others.forEach { model ->
+                            Spacer(Modifier.height(8.dp))
+                            ModelCard(
+                                model = model,
+                                enabled = !busy,
+                                downloading = downloadingId == model.id,
+                                progress = progress,
+                                onBrowse = { browserModel = model },
+                                onDirect = { startDownload(model, ModelManager.Source.HUGGING_FACE) },
+                            )
+                        }
+                        tooLarge.forEach { entry ->
+                            Spacer(Modifier.height(8.dp))
+                            TooLargeCard(
+                                model = entry.model,
+                                reason = entry.reason,
+                                onBrowse = { browserModel = entry.model },
+                            )
+                        }
+                    }
                 }
             }
 
@@ -374,49 +450,6 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                 )
             }
 
-            // Heavier than this device (collapsed)
-            if (tooLarge.isNotEmpty()) {
-                Spacer(Modifier.height(14.dp))
-                HairLine()
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { heavierExpanded = !heavierExpanded }
-                        .padding(vertical = 4.dp),
-                ) {
-                    Text(
-                        "Heavier than this device (${tooLarge.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = TextMid,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        if (heavierExpanded) "Hide" else "Show",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Accent,
-                    )
-                }
-                AnimatedVisibility(visible = heavierExpanded) {
-                    Column {
-                        Spacer(Modifier.height(8.dp))
-                        tooLarge.forEach { entry ->
-                            TooLargeCard(
-                                model = entry.model,
-                                reason = entry.reason,
-                                onGetPage = { openUrl(context, entry.model.sourcePageUrl) },
-                            )
-                            Spacer(Modifier.height(8.dp))
-                        }
-                    }
-                }
-            }
-
             // Remove
             if (installed != null) {
                 Spacer(Modifier.height(8.dp))
@@ -437,6 +470,20 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                 Text(note ?: "", style = MaterialTheme.typography.bodyMedium, color = TextLow)
             }
         }
+    }
+
+    // In-app browser for gated downloads: the user signs in / accepts the licence,
+    // taps the file, and we fetch it ourselves (progress + verify) via its session.
+    browserModel?.let { model ->
+        ModelBrowserDialog(
+            startUrl = browseUrl(model),
+            title = model.displayName,
+            onClose = { browserModel = null },
+            onDownload = { url, cookie, ua ->
+                browserModel = null
+                startBrowserDownload(model, url, cookie, ua)
+            },
+        )
     }
 }
 
@@ -475,10 +522,8 @@ private fun ModelCard(
     enabled: Boolean,
     downloading: Boolean,
     progress: Float,
-    onDownloadHf: () -> Unit,
-    onDownloadKaggle: () -> Unit,
-    onOpenHf: () -> Unit,
-    onOpenKaggle: () -> Unit,
+    onBrowse: () -> Unit,
+    onDirect: () -> Unit,
 ) {
     Surface(color = Surface2, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
@@ -525,26 +570,13 @@ private fun ModelCard(
                     Text("Downloading…", style = MaterialTheme.typography.bodySmall, color = TextMid)
                 }
             } else {
-                // Two sources: download directly when a credentialed link exists,
-                // otherwise open the (clean) page to grab it and import.
-                SourceRow(
-                    name = "Hugging Face",
-                    canDownload = model.directUrl != null,
-                    hasPage = true,
-                    enabled = enabled,
-                    onDownload = onDownloadHf,
-                    onOpen = onOpenHf,
-                )
-                if (model.kaggleUrl != null || model.kagglePageUrl != null) {
-                    Spacer(Modifier.height(8.dp))
-                    SourceRow(
-                        name = "Kaggle",
-                        canDownload = model.kaggleUrl != null,
-                        hasPage = model.kagglePageUrl != null,
-                        enabled = enabled,
-                        onDownload = onDownloadKaggle,
-                        onOpen = onOpenKaggle,
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Primary: in-app browser — sign in + accept + download, all controlled here.
+                    PillButton(label = "Download in app", enabled = enabled, onClick = onBrowse)
+                    // Secondary: direct fetch with a saved token, when a direct link exists.
+                    if (model.directUrl != null) {
+                        GhostButton(label = "Direct (token)", enabled = enabled, onClick = onDirect)
+                    }
                 }
             }
         }
@@ -552,35 +584,7 @@ private fun ModelCard(
 }
 
 @Composable
-private fun SourceRow(
-    name: String,
-    canDownload: Boolean,
-    hasPage: Boolean,
-    enabled: Boolean,
-    onDownload: () -> Unit,
-    onOpen: () -> Unit,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(
-            name,
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextMid,
-            modifier = Modifier.width(104.dp),
-        )
-        if (canDownload) {
-            PillButton(label = "Download", enabled = enabled, onClick = onDownload)
-            if (hasPage) GhostButton(label = "Page", enabled = enabled, onClick = onOpen)
-        } else if (hasPage) {
-            PillButton(label = "Open page", enabled = enabled, onClick = onOpen)
-        }
-    }
-}
-
-@Composable
-private fun TooLargeCard(model: OnDeviceModel, reason: String, onGetPage: () -> Unit) {
+private fun TooLargeCard(model: OnDeviceModel, reason: String, onBrowse: () -> Unit) {
     Surface(color = Surface2.copy(alpha = 0.5f), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Text(
@@ -597,7 +601,7 @@ private fun TooLargeCard(model: OnDeviceModel, reason: String, onGetPage: () -> 
             Spacer(Modifier.height(4.dp))
             Text(reason, style = MaterialTheme.typography.bodySmall, color = TextLow)
             Spacer(Modifier.height(8.dp))
-            GhostButton(label = "Open page", color = TextLow, onClick = onGetPage)
+            GhostButton(label = "Download in app", color = TextLow, onClick = onBrowse)
         }
     }
 }
