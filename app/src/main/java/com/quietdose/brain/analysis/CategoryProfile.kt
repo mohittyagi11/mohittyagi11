@@ -4,34 +4,41 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The generic, category-agnostic *template the SLM fills* for ANY item — the
- * workflow the brain runs when the curated knowledge base has nothing (skincare,
- * a device, a novel product). It deliberately generalises "dose": [usage] captures
- * how and when something is used, whether that's "1 capsule with breakfast", "apply
- * a few drops PM, leave on", or "roll 1–2× a week". Plain language, no jargon.
- *
- * Curated facts (when we have them) override/augment this; otherwise it stands on
- * its own, grounded in the fetched source material and web reviews.
+ * The generic, category-agnostic template the SLM fills for ANY item the curated
+ * KB can't cover. The brain reasons the SAME way across categories — what it's for,
+ * who it suits, how it's absorbed, how to use it, safety, what it clashes with,
+ * trust — but the *impact is scoped* to the category: a supplement's "dose +
+ * bioavailability + drug interactions" becomes, for skincare, "per-use amount +
+ * skin absorption + don't-layer-with". Plain language, no jargon, no invented numbers.
  */
 data class CategoryProfile(
     val kind: ItemKind,
-    /** Free sub-category the SLM names, e.g. "Hydrating toner", "LED face mask". */
+    /** Free sub-category the SLM names — the product TYPE, not the brand. e.g. "Hydrating essence". */
     val categoryLabel: String,
     /** One plain sentence: what this actually is. */
     val whatItIs: String,
     /** What it genuinely helps with / targets. */
     val goodFor: List<String> = emptyList(),
-    /** How and WHEN to use it — AM/PM, apply vs ingest, frequency. (generalises dose) */
+    /** Who it suits — skin types, hair types, situations. */
+    val fitsWho: List<String> = emptyList(),
+    /** How AND when to use it — AM/PM, where in the routine, frequency. (generalises timing) */
     val usage: String = "",
-    /** Irritants, don't-mix, interactions, who-should-avoid — surfaced, not hidden. */
-    val watchOuts: List<String> = emptyList(),
+    /** Suggested amount per use, with [recommendedUnit] — the "how many drops" answer. */
+    val recommendedAmount: Double? = null,
+    val recommendedUnit: String? = null,
+    /** How it works / how well it's absorbed — the "quality" lens, scoped to the category. */
+    val absorption: String = "",
+    /** Safety — irritation, allergens, pregnancy, who-should-avoid. */
+    val safety: List<String> = emptyList(),
+    /** What NOT to combine/layer it with — interactions, scoped (e.g. retinol + AHA). */
+    val dontCombine: List<String> = emptyList(),
     /** Concrete things the user should check before trusting it. */
     val verify: List<String> = emptyList(),
     /** 0..100 — how confident the fill is (low when the model guessed). */
     val confidence: Int = 50,
 )
 
-/** Serialise a [CategoryProfile] to/from JSON (for the SLM fill and for persistence). */
+/** Serialise a [CategoryProfile] to/from JSON (the SLM fill + persistence). Never throws. */
 object ProfileCodec {
 
     fun encode(p: CategoryProfile): String = JSONObject().apply {
@@ -39,8 +46,13 @@ object ProfileCodec {
         put("categoryLabel", p.categoryLabel)
         put("whatItIs", p.whatItIs)
         put("goodFor", JSONArray(p.goodFor))
+        put("fitsWho", JSONArray(p.fitsWho))
         put("usage", p.usage)
-        put("watchOuts", JSONArray(p.watchOuts))
+        p.recommendedAmount?.let { put("recommendedAmount", it) }
+        p.recommendedUnit?.let { put("recommendedUnit", it) }
+        put("absorption", p.absorption)
+        put("safety", JSONArray(p.safety))
+        put("dontCombine", JSONArray(p.dontCombine))
         put("verify", JSONArray(p.verify))
         put("confidence", p.confidence)
     }.toString()
@@ -54,8 +66,13 @@ object ProfileCodec {
                 categoryLabel = o.optString("categoryLabel").ifBlank { "Item" },
                 whatItIs = o.optString("whatItIs"),
                 goodFor = o.optJSONArray("goodFor").toStringList(),
+                fitsWho = o.optJSONArray("fitsWho").toStringList(),
                 usage = o.optString("usage"),
-                watchOuts = o.optJSONArray("watchOuts").toStringList(),
+                recommendedAmount = if (o.has("recommendedAmount")) o.optDouble("recommendedAmount").takeIf { !it.isNaN() } else null,
+                recommendedUnit = o.optString("recommendedUnit").ifBlank { null },
+                absorption = o.optString("absorption"),
+                safety = o.optJSONArray("safety").toStringList(),
+                dontCombine = o.optJSONArray("dontCombine").toStringList(),
                 verify = o.optJSONArray("verify").toStringList(),
                 confidence = o.optInt("confidence", 50),
             )

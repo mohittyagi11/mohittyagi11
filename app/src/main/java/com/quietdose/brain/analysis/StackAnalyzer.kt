@@ -50,7 +50,7 @@ object StackAnalyzer {
         // SLM-profiled path with the right fields (how & when to use, not a "dose").
         val kind = KindDetector.detect(name, product?.ingredientsText)
         if (kind != ItemKind.SUPPLEMENT) {
-            return analyzeProfile(app, engineUp, tier, kind, name, currentDoseAmount, currentDoseUnit, groups, source, goal, concern, product, onProgress)
+            return analyzeProfile(app, engineUp, tier, kind, name, currentStack, currentDoseAmount, currentDoseUnit, groups, source, goal, concern, product, onProgress)
         }
 
         val matched = IngredientCatalog.match(name)
@@ -745,6 +745,7 @@ object StackAnalyzer {
         tier: ModelTier,
         kind: ItemKind,
         name: String,
+        currentStack: List<ItemEntity>,
         enteredDose: Double,
         enteredUnit: DoseUnit,
         groups: List<GroupEntity>,
@@ -763,7 +764,8 @@ object StackAnalyzer {
         val sourceMaterial = buildSourceMaterial(product?.ingredientsText, webResults)
 
         emit("Working out what it is", "Reading it as ${kind.label.lowercase()}, not a pill…", Mood.CALM, 0.45f)
-        val profile = (if (engineUp) runCatching { ProfileSkill.fill(BrainProvider.engine(app), name, sourceMaterial, kind) }.getOrNull() else null)
+        val routineNames = currentStack.map { it.name }
+        val profile = (if (engineUp) runCatching { ProfileSkill.fill(BrainProvider.engine(app), name, sourceMaterial, kind, routineNames) }.getOrNull() else null)
             ?: ProfileSkill.fallback(name, kind)
         var byModel = engineUp && profile.confidence >= 30
 
@@ -779,47 +781,109 @@ object StackAnalyzer {
         val grounded = mutableListOf<String>()
         webResults.take(4).forEach { grounded += "Web/${it.domain}: ${it.title}" }
         profile.goodFor.take(4).forEach { grounded += "Good for: $it" }
+        profile.dontCombine.take(4).forEach { grounded += "Don't combine: $it" }
 
+        // Same reasoning as a supplement, scoped: cautions = safety + clashes.
+        val hasCautions = profile.safety.isNotEmpty() || profile.dontCombine.isNotEmpty()
         val verdictLabel = when {
-            profile.watchOuts.isNotEmpty() && source?.skeptical == true -> "Worth a look — verify first"
-            profile.watchOuts.isNotEmpty() -> "Worth trying — mind the details"
+            hasCautions && source?.skeptical == true -> "Worth a look — verify first"
+            hasCautions -> "Worth trying — mind the details"
             else -> "Worth tracking"
         }
 
+        // The "how much" answer the user asked for — recommended amount + unit, in words.
+        val amountText: String? = profile.recommendedAmount?.let { amt ->
+            val unitWord = profile.recommendedUnit?.trim()?.ifBlank { null } ?: "per use"
+            "${fmt(amt)} $unitWord per use"
+        }
         val usageText = profile.usage.ifBlank {
             if (kind.isIngested) "Take as directed on the label." else "Use as directed — note whether it's an AM or PM step."
+        }
+
+        // Title the absorption/quality lens to the category, not "bioavailability".
+        val absorbTitle = when (kind) {
+            ItemKind.SKINCARE -> "Quality & skin absorption"
+            ItemKind.HAIRCARE -> "Quality & how it works"
+            ItemKind.DEVICE -> "How well it works"
+            else -> "Quality & absorption"
+        }
+
+        // Match dontCombine against the user's actual routine (token overlap, both ways).
+        val stackClashes = currentStack.filter { item ->
+            val n = item.name.lowercase()
+            profile.dontCombine.any { dc ->
+                dc.split(Regex("[^a-zA-Z0-9]+")).filter { it.length >= 4 }.any { tok -> n.contains(tok.lowercase()) }
+            }
         }
 
         val blocks = buildList<ReportBlock> {
             add(ReportBlock.Verdict(verdictLabel, rationale, profile.confidence, listOf(profile.kind.label, profile.categoryLabel).filter { it.isNotBlank() }.distinct(), byModel))
             buildProfileFacts(profile, product)?.let { add(it) }
-            if (profile.goodFor.isNotEmpty()) {
-                add(ReportBlock.Chapter("Good for", null, profile.goodFor.map { AnalysisLine(it, Severity.GOOD) }, AspectState.GOOD))
+
+            // Good for & who it's for.
+            if (profile.goodFor.isNotEmpty() || profile.fitsWho.isNotEmpty()) {
+                val lines = profile.goodFor.map { AnalysisLine(it, Severity.GOOD) } +
+                    profile.fitsWho.map { AnalysisLine("Suits — $it", Severity.NEUTRAL) }
+                add(ReportBlock.Chapter("Good for & who it's for", null, lines, AspectState.GOOD))
             }
-            add(ReportBlock.Chapter("How & when to use", usageText, emptyList(), AspectState.MIXED))
-            if (profile.watchOuts.isNotEmpty()) {
-                add(ReportBlock.Chapter("Watch-outs", null, profile.watchOuts.map { AnalysisLine(it, Severity.CAUTION) }, AspectState.CAUTION))
+
+            // Quality & (skin) absorption — the category-scoped "is it the real thing" lens.
+            if (profile.absorption.isNotBlank()) {
+                add(ReportBlock.Chapter(absorbTitle, profile.absorption, emptyList(), AspectState.MIXED))
             }
+
+            // How & when to use — with the auto-recommended amount up front.
+            run {
+                val lines = buildList {
+                    amountText?.let { add(AnalysisLine("Suggested amount — $it", Severity.GOOD)) }
+                }
+                add(ReportBlock.Chapter("How & when to use", usageText, lines, AspectState.MIXED))
+            }
+
+            // Safety — scoped (irritation, allergens, pregnancy, who should avoid).
+            if (profile.safety.isNotEmpty()) {
+                add(ReportBlock.Chapter("Safety", null, profile.safety.map { AnalysisLine(it, Severity.CAUTION) }, AspectState.CAUTION))
+            }
+
+            // Plays with your routine — don't-layer-with + clashes already in their stack.
+            if (profile.dontCombine.isNotEmpty() || stackClashes.isNotEmpty()) {
+                val lines = buildList {
+                    profile.dontCombine.forEach { add(AnalysisLine("Don't layer with $it", Severity.CAUTION)) }
+                    if (stackClashes.isNotEmpty()) {
+                        add(AnalysisLine("In your routine: ${stackClashes.joinToString(", ") { it.name }} — keep them at different times of day.", Severity.CAUTION))
+                    } else if (currentStack.isNotEmpty()) {
+                        add(AnalysisLine("Nothing in your current routine clashes with it.", Severity.GOOD))
+                    }
+                }
+                add(ReportBlock.Chapter("Plays with your routine", null, lines, AspectState.CAUTION))
+            }
+
+            // Trust & reviews — what the web says.
             if (webResults.isNotEmpty()) {
                 val lines = webResults.take(5).map { AnalysisLine("${it.domain}: ${(it.snippet.ifBlank { it.title }).take(160)}") } +
                     AnalysisLine("From the open web — weigh the source, treat as leads.", Severity.CAUTION)
-                add(ReportBlock.Chapter("What people say", null, lines, AspectState.MIXED))
+                add(ReportBlock.Chapter("Trust & reviews", null, lines, AspectState.MIXED))
             }
+
+            // Check yourself.
             if (profile.verify.isNotEmpty()) {
                 add(ReportBlock.Chapter("Check yourself", null, profile.verify.map { AnalysisLine(it) }, AspectState.MIXED))
             }
             if (grounded.isNotEmpty()) add(ReportBlock.Reasoning(grounded.distinct().take(8), byModel))
         }
 
+        // Pre-fill the add screen with the recommended amount + a sensible unit.
+        val recAmount = profile.recommendedAmount ?: enteredDose
+        val recUnit = if (profile.recommendedAmount != null) mapRecUnit(profile.recommendedUnit, kind) else enteredUnit
         val (recGroupId, groupReason) = pickGroup(groups, null)
-        val recommendation = Recommendation(recGroupId, groupReason, enteredDose, enteredUnit, null, null, 0, emptyList())
+        val recommendation = Recommendation(recGroupId, groupReason, recAmount, recUnit, null, null, 0, emptyList())
 
         return AnalysisReport(
             title = name,
             matchedIngredientKey = null,
             recommendation = recommendation,
             sections = emptyList(),
-            synthesis = Synthesis(verdictLabel, rationale, null, emptyList(), profile.watchOuts),
+            synthesis = Synthesis(verdictLabel, rationale, null, emptyList(), profile.safety + profile.dontCombine),
             safety = emptyList(),
             safetyReviewedClear = emptyList(),
             blocks = blocks,
@@ -829,10 +893,29 @@ object StackAnalyzer {
         )
     }
 
+    /** Map the SLM's free-text unit ("drops", "pump", "pea-size") to a tracked [DoseUnit].
+     *  Descriptive words we can't measure (pump, dab, pea-size) become a countable UNIT;
+     *  the human wording is preserved in the "How & when to use" chapter. */
+    private fun mapRecUnit(s: String?, kind: ItemKind): DoseUnit = when (s?.lowercase()?.trim()?.removeSuffix("s")) {
+        "drop" -> DoseUnit.DROP
+        "ml", "milliliter", "millilitre" -> DoseUnit.ML
+        "g", "gram" -> DoseUnit.G
+        "mg" -> DoseUnit.MG
+        "mcg" -> DoseUnit.MCG
+        "iu" -> DoseUnit.IU
+        "scoop" -> DoseUnit.SCOOP
+        else -> DoseUnit.UNIT
+    }
+
     private fun buildProfileFacts(profile: CategoryProfile, product: ProductSignals?): ReportBlock.Facts? {
+        val brand = product?.brand?.trim()
+        // "Type" is the product TYPE, never the brand — guard against the SLM echoing it.
+        val typeLabel = profile.categoryLabel.trim().takeIf {
+            it.isNotBlank() && (brand == null || !it.equals(brand, ignoreCase = true))
+        } ?: profile.kind.label
         val rows = buildList {
-            add("Type" to profile.categoryLabel.ifBlank { profile.kind.label })
-            product?.brand?.let { add("Brand" to it) }
+            add("Type" to typeLabel)
+            brand?.takeIf { it.isNotBlank() }?.let { add("Brand" to it) }
             product?.priceText?.let { add("Price" to it) }
             product?.ratingValue?.let { r -> add("Rating" to "$r/5${product.ratingCount?.let { " ($it)" } ?: ""}") }
         }
@@ -855,8 +938,12 @@ object StackAnalyzer {
         appendLine("Item: $name (${profile.categoryLabel})")
         appendLine("What it is: ${profile.whatItIs}")
         if (profile.goodFor.isNotEmpty()) appendLine("Good for: ${profile.goodFor.joinToString(", ")}")
+        if (profile.fitsWho.isNotEmpty()) appendLine("Suits: ${profile.fitsWho.joinToString(", ")}")
         if (profile.usage.isNotBlank()) appendLine("Usage: ${profile.usage}")
-        if (profile.watchOuts.isNotEmpty()) appendLine("Watch-outs: ${profile.watchOuts.joinToString("; ")}")
+        profile.recommendedAmount?.let { appendLine("Amount per use: ${fmt(it)} ${profile.recommendedUnit ?: ""}".trim()) }
+        if (profile.absorption.isNotBlank()) appendLine("Absorption: ${profile.absorption}")
+        if (profile.safety.isNotEmpty()) appendLine("Safety: ${profile.safety.joinToString("; ")}")
+        if (profile.dontCombine.isNotEmpty()) appendLine("Don't combine with: ${profile.dontCombine.joinToString(", ")}")
         if (!goal.isNullOrBlank()) appendLine("Their goal: $goal")
         if (!concern.isNullOrBlank()) appendLine("Their worry: $concern")
         if (source != null) appendLine("Heard from: ${source.label} (${if (source.skeptical) "weak — verify" else "credible"})")
