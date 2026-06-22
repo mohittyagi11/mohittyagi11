@@ -1,6 +1,9 @@
 package com.quietdose.ui.settings
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -131,10 +134,6 @@ private fun PermissionsSection(vm: SettingsViewModel, status: TriggerPermissions
         TriggerPermissions.singlePermissionContract(),
     ) { vm.reArm() }
 
-    val backgroundLauncher = rememberLauncherForActivityResult(
-        TriggerPermissions.singlePermissionContract(),
-    ) { vm.reArm() }
-
     val specialAccessLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { vm.reArm() }
@@ -182,22 +181,20 @@ private fun PermissionsSection(vm: SettingsViewModel, status: TriggerPermissions
             StatusRow(
                 granted = status.backgroundLocation,
                 title = "Background location",
-                detail = "So arrive-home can fire while Dose is closed. Choose \"Allow all the time\".",
-                actionLabel = "Allow",
-                onAction = { backgroundLauncher.launch(SettingsViewModel.BACKGROUND_LOCATION) },
+                detail = "So arrive-home fires while Dose is closed. Opens app settings — set Location to \"Allow all the time\".",
+                actionLabel = "Open",
+                onAction = {
+                    runCatching {
+                        specialAccessLauncher.launch(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.fromParts("package", context.packageName, null),
+                            ),
+                        )
+                    }
+                },
             )
         }
-        StatusRow(
-            granted = status.exactAlarms,
-            title = "Exact alarms",
-            detail = "Optional — pin-point timing. Dose works without it.",
-            actionLabel = "Open",
-            onAction = {
-                TriggerPermissions.requestExactAlarmIntent(context)?.let {
-                    runCatching { specialAccessLauncher.launch(it) }
-                }
-            },
-        )
         StatusRow(
             granted = status.batteryExempt,
             title = "Ignore battery limits",
