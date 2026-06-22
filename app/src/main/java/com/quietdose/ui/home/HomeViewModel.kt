@@ -9,7 +9,10 @@ import com.quietdose.data.model.IntakeSource
 import com.quietdose.data.model.TriggerType
 import com.quietdose.di.ServiceLocator
 import com.quietdose.notify.Notifier
+import com.quietdose.ui.theme.GroupStyle
 import com.quietdose.util.DateUtils
+import com.quietdose.util.Format
+import org.json.JSONObject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,8 +30,20 @@ data class GroupCard(val group: GroupEntity, val items: List<ItemRow>) {
     val done: Boolean get() = total > 0 && takenCount == total
 }
 
+/** Where a timeline moment sits relative to now. */
+enum class NodeStatus { DONE, NOW, DUE, UPCOMING }
+
+/** One moment on the day's timeline — a routine anchored to its trigger. */
+data class TimelineNode(
+    val card: GroupCard,
+    val status: NodeStatus,
+    val anchorLabel: String,
+    val summary: String,
+)
+
 data class HomeUiState(
     val cards: List<GroupCard> = emptyList(),
+    val timeline: List<TimelineNode> = emptyList(),
     val focusGroupId: Long? = null,
     val epochDay: Long = 0,
     val loading: Boolean = true,
@@ -64,9 +79,63 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                         .map { ItemRow(it, it.id in taken) }
                     GroupCard(g, rows)
                 }.filter { it.items.isNotEmpty() }
-                HomeUiState(cards, focusGroupId = pickFocus(cards), epochDay, loading = false)
+                val focusId = pickFocus(cards)
+                HomeUiState(
+                    cards = cards,
+                    timeline = buildTimeline(cards, focusId),
+                    focusGroupId = focusId,
+                    epochDay = epochDay,
+                    loading = false,
+                )
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
+
+    /** Order the day's routines into a timeline and tag each with its status. */
+    private fun buildTimeline(cards: List<GroupCard>, focusId: Long?): List<TimelineNode> {
+        val nowMin = java.time.LocalTime.now().toSecondOfDay() / 60
+        return cards
+            .map { it to anchorMinute(it.group) }
+            .sortedBy { it.second }
+            .map { (c, min) ->
+                val status = when {
+                    c.done -> NodeStatus.DONE
+                    c.group.id == focusId -> NodeStatus.NOW
+                    min <= nowMin -> NodeStatus.DUE
+                    else -> NodeStatus.UPCOMING
+                }
+                TimelineNode(c, status, anchorShort(c.group), summaryFor(c, status))
+            }
+    }
+
+    private fun anchorMinute(g: GroupEntity): Int = when (g.trigger) {
+        TriggerType.WAKE -> 7 * 60
+        TriggerType.TIME_WINDOW ->
+            runCatching { JSONObject(g.triggerConfig).optInt("startMin", 14 * 60) }.getOrDefault(14 * 60)
+        TriggerType.ARRIVE_HOME, TriggerType.ARRIVE_PLACE -> 18 * 60 + 30
+        TriggerType.LEAVE -> 18 * 60
+        TriggerType.BEFORE_SLEEP -> 22 * 60 + 30
+        TriggerType.MONTHLY -> 23 * 60
+        TriggerType.MANUAL -> 12 * 60
+    }
+
+    private fun anchorShort(g: GroupEntity): String = when (g.iconKey) {
+        "sun" -> "Waking"
+        "droplet" -> "Afternoon"
+        "home" -> "Evening"
+        "moon" -> "Night"
+        "calendar" -> "Monthly"
+        else -> "Anytime"
+    }
+
+    private fun summaryFor(c: GroupCard, status: NodeStatus): String {
+        val behaviour = c.items.firstNotNullOfOrNull { Format.behaviour(it.item).firstOrNull() }
+        return when (status) {
+            NodeStatus.DONE -> "All taken"
+            NodeStatus.NOW -> listOfNotNull("Take now", behaviour).joinToString(" · ")
+            NodeStatus.DUE -> listOfNotNull("Still pending", behaviour).joinToString(" · ")
+            NodeStatus.UPCOMING -> GroupStyle.whenLabel(c.group).ifBlank { "Coming up" }
+        }
+    }
 
     /**
      * Choose the group that's most relevant *right now* by time of day, falling
