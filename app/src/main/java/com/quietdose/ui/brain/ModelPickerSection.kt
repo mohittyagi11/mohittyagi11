@@ -433,9 +433,9 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                                                     "Installed but produced no output — this .task may not be " +
                                                         "supported by the on-device runtime. Try Gemma 3 1B int4."
                                                 err.contains("zip", ignoreCase = true) ->
-                                                    "This file isn't a MediaPipe .task bundle — it looks like a raw " +
-                                                        ".tflite. You need a .task (a zip). Download Gemma 3 1B int4 .task."
-                                                else -> "Couldn't run this model — $err  Try a Gemma 3 1B int4 .task."
+                                                    "This file isn't a loadable model — a raw .tflite won't work. " +
+                                                        "Use a .task or .litertlm (e.g. Gemma 3 1B int4 .task)."
+                                                else -> "Couldn't run this model — $err  Try a Gemma 3 1B int4 .task or .litertlm."
                                             }
                                         }
                                     }
@@ -697,13 +697,13 @@ private fun TokenField(
     }
 }
 
-/** Post-install note: warn immediately if the file isn't a loadable .task bundle. */
+/** Post-install note, tailored to the detected format. */
 private fun installedNote(context: android.content.Context): String =
     if (ModelManager.installedLooksLoadable(context) == false) {
-        "Installed, but this isn't a .task bundle — it looks like a raw .tflite/.litertlm. This build " +
-            "loads .task (a zip). Try the Gemma 3 1B int4 .task."
+        "Installed a non-.task model (likely a .litertlm). Tap “Test model” — this runtime loads " +
+            "both .task and .litertlm; a raw .tflite won't."
     } else {
-        "Model installed. Tap “Test model” to confirm it runs."
+        "Installed a .task bundle. Tap “Test model” to confirm it runs."
     }
 
 /** Open an external URL in the browser; failures are silently ignored. */
