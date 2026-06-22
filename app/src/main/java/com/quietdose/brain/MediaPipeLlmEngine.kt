@@ -36,6 +36,10 @@ class MediaPipeLlmEngine(
 
     @Volatile private var engine: LlmInference? = null
     @Volatile private var loadFailed: Boolean = false
+    @Volatile private var errorMessage: String? = null
+
+    /** The reason the most recent load/inference failed, for the self-test. */
+    override fun lastError(): String? = errorMessage
 
     /**
      * We can only know readiness by trying to load. To keep [isReady] cheap and
@@ -50,6 +54,7 @@ class MediaPipeLlmEngine(
         runCatching { session.generateResponse(prompt) }
             .getOrElse {
                 Log.w(TAG, "Inference failed", it)
+                errorMessage = "Inference failed: ${it.message ?: it.javaClass.simpleName}"
                 ""
             }
             .trim()
@@ -58,20 +63,26 @@ class MediaPipeLlmEngine(
     /** Build the session once, off the main thread; null if unavailable. */
     private fun ensureLoaded(): LlmInference? {
         engine?.let { return it }
-        if (loadFailed || !modelFile.exists()) {
-            loadFailed = loadFailed || !modelFile.exists()
+        if (!modelFile.exists()) {
+            loadFailed = true
+            errorMessage = "No model file at ${modelFile.name}."
             return null
         }
+        if (loadFailed) return null
         return synchronized(this) {
             engine ?: runCatching {
                 val options = LlmInferenceOptions.builder()
                     .setModelPath(modelFile.absolutePath)
                     .setMaxTokens(maxTokens)
                     .build()
-                LlmInference.createFromOptions(appContext, options).also { engine = it }
+                LlmInference.createFromOptions(appContext, options).also {
+                    engine = it
+                    errorMessage = null
+                }
             }.getOrElse {
                 Log.w(TAG, "Model load failed; falling back to heuristic", it)
                 loadFailed = true
+                errorMessage = "Load failed: ${it.message ?: it.javaClass.simpleName}"
                 null
             }
         }

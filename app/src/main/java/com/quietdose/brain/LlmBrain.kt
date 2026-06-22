@@ -36,6 +36,9 @@ class LlmBrain(
     /** True when a model file is loaded and inference can run. */
     fun isModelReady(): Boolean = engine.isReady()
 
+    /** Why the last load/inference failed (for the self-test), or null. */
+    fun lastError(): String? = engine.lastError()
+
     /**
      * Run a tiny prompt through the engine to prove it loads and infers. Returns
      * the model's reply, or "" if no model is ready or it produced nothing

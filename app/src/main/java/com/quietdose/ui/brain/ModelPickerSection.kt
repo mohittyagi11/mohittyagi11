@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.quietdose.brain.BrainProvider
 import com.quietdose.brain.DeviceCapability
 import com.quietdose.brain.LlmBrain
 import com.quietdose.brain.ModelAuth
@@ -84,6 +85,7 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
     // Per-model download progress: id -> 0f..1f (or -1f when size unknown).
     var downloadingId by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableStateOf(0f) }
+    var importing by remember { mutableStateOf(false) }
     var heavierExpanded by remember { mutableStateOf(false) }
 
     // Optional Hugging Face token + Kaggle credentials for gated downloads. Loaded once.
@@ -110,10 +112,13 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         busy = true
+        importing = true
+        progress = -1f
         note = "Importing…"
         scope.launch {
-            val result = ModelManager.importFrom(context, uri)
+            val result = ModelManager.importFrom(context, uri) { p -> progress = p }
             busy = false
+            importing = false
             refreshInstalled()
             note = if (result.isSuccess) {
                 "Model installed. Tap “Test model” to confirm it runs."
@@ -282,7 +287,7 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
 
             // Import any file
             PillButton(
-                label = if (busy && downloadingId == null) "Working…" else "Import file…",
+                label = if (importing) "Importing…" else "Import file…",
                 enabled = !busy,
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
@@ -291,6 +296,31 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                     }.onFailure { note = "Couldn't open the file picker." }
                 },
             )
+            if (importing) {
+                Spacer(Modifier.height(8.dp))
+                if (progress >= 0f) {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Accent,
+                        trackColor = Outline,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "${(progress * 100).toInt()}% · extracting on-device",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMid,
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Accent,
+                        trackColor = Outline,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text("Reading file…", style = MaterialTheme.typography.bodySmall, color = TextMid)
+                }
+            }
 
             // Test whether the installed model actually loads + infers.
             if (installed != null) {
@@ -304,8 +334,12 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                         note = "Testing the model… the first load can take a minute."
                         scope.launch {
                             try {
+                                // Fresh engine each test, so a previous failed attempt
+                                // doesn't poison the result.
+                                BrainProvider.reset()
                                 val brain = ServiceLocator.brain(context)
-                                if (brain is LlmBrain && brain.isModelReady()) {
+                                val hasFile = ModelManager.installedModelInfo(context) != null
+                                if (brain is LlmBrain && hasFile) {
                                     // Hard cap so a too-large or unsupported model can never
                                     // leave the screen stuck on "Testing…".
                                     val reply = withTimeoutOrNull(180_000L) {
@@ -313,15 +347,21 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                                     }
                                     note = when {
                                         reply == null ->
-                                            "Timed out after 3 min — this model is likely too large for this " +
-                                                "device, or unsupported. Try Gemma 3 1B (int4)."
-                                        reply.isBlank() ->
-                                            "Installed but produced no output — this .task may not be supported " +
-                                                "by the on-device runtime. Try Gemma 3 1B (int4)."
-                                        else -> "Working ✓ — the model replied: “$reply”"
+                                            "Timed out after 3 min — this model is likely too large for this device."
+                                        reply.isNotBlank() ->
+                                            "Working ✓ — the model replied: “$reply”"
+                                        else -> {
+                                            val err = brain.lastError()
+                                            if (err != null) {
+                                                "Couldn't run this model — $err  Try a Gemma 3 1B int4 .task."
+                                            } else {
+                                                "Installed but produced no output — this .task may not be " +
+                                                    "supported by the on-device runtime. Try Gemma 3 1B int4."
+                                            }
+                                        }
                                     }
                                 } else {
-                                    note = "No loadable model — running on the built-in heuristic."
+                                    note = "No model installed — import a .task or download one above."
                                 }
                             } finally {
                                 busy = false

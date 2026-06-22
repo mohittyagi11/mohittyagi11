@@ -2,6 +2,7 @@ package com.quietdose.brain
 
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -39,6 +40,13 @@ object ModelManager {
     private const val CONNECT_TIMEOUT_MS = 30_000
     private const val READ_TIMEOUT_MS = 60_000
     private const val BUFFER = 64 * 1024
+
+    /**
+     * A tar entry must be at least this big to be considered the model — any real
+     * on-device LLM `.task` is hundreds of MB, while tokenizer/metadata entries
+     * are tiny, so this cleanly skips them in a single forward pass.
+     */
+    private const val MIN_MODEL_BYTES = 8L * 1024 * 1024
 
     /** Which gated host a download targets. */
     enum class Source { HUGGING_FACE, KAGGLE }
@@ -177,15 +185,16 @@ object ModelManager {
             }
 
             // Kaggle (and some HF) downloads are archives — pull the .task out.
-            // Raw .task downloads pass straight through.
+            // Raw .task downloads pass straight through. Reuse the bar for the
+            // (single-pass) extraction phase.
             target.delete()
-            materialize(part, target)
+            val produced = materialize(part, target) { p -> onProgress(p) }
             part.delete()
 
-            if (!target.exists() || target.length() <= 0L) {
+            if (!produced || !target.exists() || target.length() <= 0L) {
                 target.delete()
                 return@withContext Result.failure(
-                    IllegalStateException("Downloaded an archive but found no .task model inside."),
+                    IllegalStateException("Downloaded an archive but found no model file inside."),
                 )
             }
 
@@ -210,13 +219,17 @@ object ModelManager {
      * **gzip-tar** wrapper that Kaggle serves; everything else (a raw `.task`,
      * which sniffs as a zip, or any other file) is installed whole.
      */
-    private suspend fun materialize(part: File, target: File) {
+    private suspend fun materialize(part: File, target: File, onProgress: (Float) -> Unit): Boolean =
         when (archiveKind(part)) {
-            ArchiveKind.GZIP_TAR -> extractTar(part, target)
+            ArchiveKind.GZIP_TAR ->
+                GZIPInputStream(part.inputStream().buffered()).use { gz -> extractTarTo(gz, target, onProgress) }
             // A .task bundle is a zip — install it as-is, do not unpack it.
-            ArchiveKind.ZIP, ArchiveKind.RAW -> installAsIs(part, target)
+            ArchiveKind.ZIP, ArchiveKind.RAW -> {
+                installAsIs(part, target)
+                onProgress(1f)
+                true
+            }
         }
-    }
 
     /** Move [part] onto [target] without touching its contents. */
     private fun installAsIs(part: File, target: File) {
@@ -242,59 +255,32 @@ object ModelManager {
     }
 
     /**
-     * Extract the model from a gzip-tar [part] into [target]. We pick the
-     * **largest regular file** in the archive — the model is always by far the
-     * biggest entry — rather than guessing its name/extension (Kaggle's layout
-     * and filenames vary). Two passes over the on-disk archive: scan to find the
-     * largest entry, then extract exactly that one. Leaves [target] absent if the
-     * archive holds no regular file.
+     * Extract the model out of an already-gunzipped tar [tar] into [target] in a
+     * **single pass**: walk the 512-byte headers and write the first regular file
+     * that is large enough to be a model ([MIN_MODEL_BYTES]) — tiny metadata /
+     * tokenizer-config entries are skipped. We stop as soon as it's written, so
+     * we never decompress past the model. Returns true if a model was extracted.
+     *
+     * [onProgress] reports 0f..1f across the model entry once its size is known
+     * (the dominant cost), and -1f while still scanning small leading entries.
      */
-    private suspend fun extractTar(part: File, target: File) {
-        val biggest = scanLargestTarEntry(part) ?: return
-        gzipTar(part).use { stream ->
-            val header = ByteArray(512)
-            while (true) {
-                coroutineContext.ensureActive()
-                if (!readFully(stream, header)) return
-                if (header.all { it.toInt() == 0 }) return // end-of-archive padding
-                val name = tarName(header)
-                val size = parseOctal(header, 124, 12)
-                if (isRegularFile(header) && name == biggest) {
-                    target.outputStream().use { out -> copyExact(stream, out, size) }
-                    return
-                }
-                skipExact(stream, roundUp512(size)) // skip data to next 512-block
+    private suspend fun extractTarTo(tar: InputStream, target: File, onProgress: (Float) -> Unit): Boolean {
+        val stream = BufferedInputStream(tar)
+        val header = ByteArray(512)
+        onProgress(-1f)
+        while (true) {
+            coroutineContext.ensureActive()
+            if (!readFully(stream, header)) return false
+            if (header.all { it.toInt() == 0 }) return false // end-of-archive padding
+            val size = parseOctal(header, 124, 12)
+            if (isRegularFile(header) && size >= MIN_MODEL_BYTES) {
+                target.outputStream().use { out -> copyExact(stream, out, size, onProgress) }
+                onProgress(1f)
+                return true
             }
+            skipExact(stream, roundUp512(size)) // skip data to next 512-block
         }
     }
-
-    /** First pass: the name of the largest regular file in the tar, or null. */
-    private suspend fun scanLargestTarEntry(part: File): String? {
-        gzipTar(part).use { stream ->
-            val header = ByteArray(512)
-            var bestName: String? = null
-            var bestSize = -1L
-            while (true) {
-                coroutineContext.ensureActive()
-                if (!readFully(stream, header)) break
-                if (header.all { it.toInt() == 0 }) break
-                val name = tarName(header)
-                val size = parseOctal(header, 124, 12)
-                if (isRegularFile(header) && name.isNotEmpty() && size > bestSize) {
-                    bestSize = size
-                    bestName = name
-                }
-                skipExact(stream, roundUp512(size))
-            }
-            return bestName
-        }
-    }
-
-    private fun gzipTar(part: File): BufferedInputStream =
-        BufferedInputStream(GZIPInputStream(part.inputStream().buffered()))
-
-    private fun tarName(header: ByteArray): String =
-        String(header, 0, 100, Charsets.UTF_8).trimEnd('\u0000', ' ')
 
     /** USTAR typeflag at offset 156: '0' or NUL is a regular file. */
     private fun isRegularFile(header: ByteArray): Boolean {
@@ -304,9 +290,16 @@ object ModelManager {
 
     // ---- small stream helpers -------------------------------------------
 
-    private suspend fun copyExact(input: InputStream, output: java.io.OutputStream, size: Long) {
+    /** Copy exactly [size] bytes, reporting 0f..1f across them. */
+    private suspend fun copyExact(
+        input: InputStream,
+        output: java.io.OutputStream,
+        size: Long,
+        onProgress: (Float) -> Unit = {},
+    ) {
         val buf = ByteArray(BUFFER)
         var remaining = size
+        var written = 0L
         while (remaining > 0) {
             coroutineContext.ensureActive()
             val want = minOf(remaining, buf.size.toLong()).toInt()
@@ -314,9 +307,43 @@ object ModelManager {
             if (read < 0) break
             output.write(buf, 0, read)
             remaining -= read
+            written += read
+            if (size > 0) onProgress((written.toFloat() / size).coerceIn(0f, 1f))
         }
         output.flush()
     }
+
+    /** Copy until EOF, reporting progress against [total] (or -1f if unknown). */
+    private suspend fun streamTo(
+        input: InputStream,
+        output: java.io.OutputStream,
+        total: Long,
+        onProgress: (Float) -> Unit,
+    ) {
+        val buf = ByteArray(BUFFER)
+        var written = 0L
+        onProgress(if (total > 0) 0f else -1f)
+        while (true) {
+            coroutineContext.ensureActive()
+            val read = input.read(buf)
+            if (read < 0) break
+            output.write(buf, 0, read)
+            written += read
+            if (total > 0) onProgress((written.toFloat() / total).coerceIn(0f, 1f))
+        }
+        output.flush()
+    }
+
+    /** Best-effort size of a content [uri] (for import progress); -1 if unknown. */
+    private fun querySize(context: Context, uri: Uri): Long =
+        runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val idx = c.getColumnIndex(OpenableColumns.SIZE)
+                    if (idx >= 0 && !c.isNull(idx)) c.getLong(idx) else -1L
+                } else -1L
+            } ?: -1L
+        }.getOrDefault(-1L)
 
     private fun readFully(input: InputStream, buf: ByteArray): Boolean {
         var off = 0
@@ -365,59 +392,74 @@ object ModelManager {
         get() = if (this == Source.HUGGING_FACE) "token" else "username + key"
 
     /**
-     * Import a `.task` model the user picked via the document picker. Streams the
-     * content from [uri] to a `.part` file, then atomically installs it. Returns
-     * a failure (never throws) if the stream can't be opened or is empty.
+     * Import a model the user picked via the document picker, with progress.
+     *
+     * Streams in a **single pass** straight from the content provider into the
+     * install file — no intermediate compressed copy:
+     *  - a `.tar.gz` is gunzipped + untarred on the fly (the model is extracted
+     *    as it streams), and
+     *  - a raw `.task` (which sniffs as a zip) or any other file is copied whole.
+     *
+     * [onProgress] reports 0f..1f (or -1f when the size is unknown). Never throws.
      */
-    suspend fun importFrom(context: Context, uri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun importFrom(
+        context: Context,
+        uri: Uri,
+        onProgress: (Float) -> Unit = {},
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
-        val part = partFile(appContext)
+        val tmp = partFile(appContext)
         val target = modelFile(appContext)
         try {
-            part.delete()
-            val input: InputStream = appContext.contentResolver.openInputStream(uri)
+            tmp.delete()
+            val raw = appContext.contentResolver.openInputStream(uri)
                 ?: return@withContext Result.failure(IllegalStateException("Couldn't open the selected file."))
-            input.use { stream ->
-                part.outputStream().use { output ->
-                    val buf = ByteArray(BUFFER)
-                    while (true) {
-                        coroutineContext.ensureActive()
-                        val read = stream.read(buf)
-                        if (read < 0) break
-                        output.write(buf, 0, read)
-                    }
-                    output.flush()
+
+            var wasArchive = false
+            val produced = raw.buffered().use { buffered ->
+                // Peek the magic without consuming it (BufferedInputStream supports reset).
+                buffered.mark(8)
+                val head = ByteArray(4)
+                val n = buffered.read(head)
+                buffered.reset()
+                val isGzip = n >= 2 &&
+                    (head[0].toInt() and 0xFF) == 0x1F && (head[1].toInt() and 0xFF) == 0x8B
+                if (isGzip) {
+                    wasArchive = true
+                    GZIPInputStream(buffered).use { gz -> extractTarTo(gz, tmp, onProgress) }
+                } else {
+                    val total = querySize(appContext, uri)
+                    tmp.outputStream().use { out -> streamTo(buffered, out, total, onProgress) }
+                    true
                 }
             }
 
-            if (part.length() <= 0L) {
-                part.delete()
-                return@withContext Result.failure(IllegalStateException("The selected file was empty."))
-            }
-
-            // Allow importing an archive too (a .tar.gz gets unpacked), not just a
-            // raw .task — which is itself a zip and is installed whole.
-            val wasArchive = archiveKind(part) == ArchiveKind.GZIP_TAR
-            target.delete()
-            materialize(part, target)
-            part.delete()
-            if (!target.exists() || target.length() <= 0L) {
-                target.delete()
+            if (!produced || tmp.length() <= 0L) {
+                tmp.delete()
                 return@withContext Result.failure(
                     IllegalStateException(
                         if (wasArchive) {
                             "That .tar.gz didn't contain a model file. Open the archive and import the .task directly."
                         } else {
-                            "Couldn't install the imported file."
+                            "The selected file was empty."
                         },
                     ),
                 )
             }
 
+            target.delete()
+            installAsIs(tmp, target)
+            tmp.delete()
+            if (!target.exists() || target.length() <= 0L) {
+                target.delete()
+                return@withContext Result.failure(IllegalStateException("Couldn't install the model file."))
+            }
+
+            onProgress(1f)
             BrainProvider.reset()
             Result.success(Unit)
         } catch (t: Throwable) {
-            runCatching { part.delete() }
+            runCatching { tmp.delete() }
             Log.w(TAG, "Import failed", t)
             Result.failure(t)
         }
