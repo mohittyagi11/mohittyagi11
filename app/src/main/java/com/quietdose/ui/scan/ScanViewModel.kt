@@ -50,6 +50,8 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             val barcode: String?,
             /** All recognized label text, so the analysis can ingredientize the item. */
             val sourceText: String,
+            /** How many photos were read (shown for transparency). */
+            val shotCount: Int,
         ) : Phase
     }
 
@@ -150,6 +152,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                     fromModel = false,
                     barcode = fused.barcode,
                     sourceText = fused.combinedText,
+                    shotCount = shots.size,
                 )
             } catch (t: Throwable) {
                 _phase.value = Phase.Empty("Something went wrong reading the photos. Try again.")

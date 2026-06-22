@@ -172,6 +172,8 @@ fun ScanScreen(
                 draft = p.draft,
                 fromModel = p.fromModel,
                 barcode = p.barcode,
+                recognizedText = p.sourceText,
+                shotCount = p.shotCount,
                 groups = groups,
                 onClose = onClose,
                 onRetake = ::startOver,
@@ -376,6 +378,8 @@ private fun ConfirmContent(
     draft: DraftItem,
     fromModel: Boolean,
     barcode: String?,
+    recognizedText: String,
+    shotCount: Int,
     groups: List<GroupEntity>,
     onClose: () -> Unit,
     onRetake: () -> Unit,
@@ -429,6 +433,13 @@ private fun ConfirmContent(
             if (!barcode.isNullOrBlank()) {
                 Spacer(Modifier.height(10.dp))
                 BarcodeChip(barcode)
+            }
+
+            // Transparency: show exactly what was read, from how many photos, so the
+            // prefill is inspectable and fixable — not a black box.
+            if (recognizedText.isNotBlank()) {
+                Spacer(Modifier.height(12.dp))
+                WhatWeReadCard(shotCount = shotCount, text = recognizedText)
             }
 
             EditorSection("Name") {
@@ -559,6 +570,25 @@ private fun ScanPreview(type: ItemType, tint: Color, title: String, fromModel: B
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun WhatWeReadCard(shotCount: Int, text: String) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Surface1).padding(14.dp)) {
+        Text("WHAT WE READ", style = MaterialTheme.typography.labelSmall, color = TextLow)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "From $shotCount photo${if (shotCount == 1) "" else "s"} · check the prefill below and fix anything off",
+            style = MaterialTheme.typography.labelSmall,
+            color = TextLow,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text.take(600),
+            style = MaterialTheme.typography.bodySmall,
+            color = TextMid,
+        )
     }
 }
 
