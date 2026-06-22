@@ -71,40 +71,72 @@ private sealed interface Editing {
     data class EditItem(val item: ItemEntity, val tintArgb: Int) : Editing
 }
 
+/** Stack tab views: routines by group, or the flat catalogue of every item. */
+private enum class StackMode { Groups, Items }
+
 @Composable
 fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val expanded = remember { mutableStateMapOf<Long, Boolean>() }
     var editing by remember { mutableStateOf<Editing?>(null) }
     var scanning by remember { mutableStateOf(false) }
+    var mode by remember { mutableStateOf(StackMode.Groups) }
+    var query by remember { mutableStateOf("") }
 
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item { StackHeader(onScan = { scanning = true }) }
+        item { ModeToggle(mode = mode, onMode = { mode = it }) }
 
-        items(state.groups, key = { it.group.id }) { sg ->
-            GroupCardEditable(
-                stack = sg,
-                expanded = expanded[sg.group.id] ?: false,
-                onToggleExpand = { expanded[sg.group.id] = !(expanded[sg.group.id] ?: false) },
-                onEditGroup = { editing = Editing.EditGroup(sg.group) },
-                onMoveUp = { vm.moveGroup(sg.group.id, up = true) },
-                onMoveDown = { vm.moveGroup(sg.group.id, up = false) },
-                onAddItem = { editing = Editing.NewItem(sg.group.id, GroupStyle.tint(sg.group).toArgb()) },
-                onEditItem = { item -> editing = Editing.EditItem(item, GroupStyle.tint(sg.group).toArgb()) },
-            )
-        }
+        if (mode == StackMode.Groups) {
+            items(state.groups, key = { it.group.id }) { sg ->
+                GroupCardEditable(
+                    stack = sg,
+                    expanded = expanded[sg.group.id] ?: false,
+                    onToggleExpand = { expanded[sg.group.id] = !(expanded[sg.group.id] ?: false) },
+                    onEditGroup = { editing = Editing.EditGroup(sg.group) },
+                    onMoveUp = { vm.moveGroup(sg.group.id, up = true) },
+                    onMoveDown = { vm.moveGroup(sg.group.id, up = false) },
+                    onAddItem = { editing = Editing.NewItem(sg.group.id, GroupStyle.tint(sg.group).toArgb()) },
+                    onEditItem = { item -> editing = Editing.EditItem(item, GroupStyle.tint(sg.group).toArgb()) },
+                )
+            }
 
-        if (state.isEmpty) {
-            item { EmptyState() }
-        }
+            if (state.isEmpty) {
+                item { EmptyState() }
+            }
 
-        item {
-            Spacer(Modifier.height(4.dp))
-            AddGroupButton { editing = Editing.NewGroup }
-            Spacer(Modifier.height(24.dp))
+            item {
+                Spacer(Modifier.height(4.dp))
+                AddGroupButton { editing = Editing.NewGroup }
+                Spacer(Modifier.height(24.dp))
+            }
+        } else {
+            // Flat catalogue: every tracked item, across groups, searchable.
+            val rows = remember(state.groups) {
+                state.groups.flatMap { sg -> sg.items.map { it to sg.group } }
+            }
+            val filtered = rows.filter { (item, _) ->
+                query.isBlank() ||
+                    item.name.contains(query, ignoreCase = true) ||
+                    (item.brand?.contains(query, ignoreCase = true) == true) ||
+                    (item.category?.contains(query, ignoreCase = true) == true)
+            }
+            item { CatalogSearch(query = query, onQuery = { query = it }, count = filtered.size) }
+            if (filtered.isEmpty()) {
+                item { CatalogEmpty(hasItems = rows.isNotEmpty()) }
+            } else {
+                items(filtered, key = { it.first.id }) { (item, group) ->
+                    CatalogRow(
+                        item = item,
+                        group = group,
+                        onClick = { editing = Editing.EditItem(item, GroupStyle.tint(group).toArgb()) },
+                    )
+                }
+            }
+            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 
@@ -179,6 +211,97 @@ private fun StackHeader(onScan: () -> Unit) {
             )
         }
     }
+}
+
+/* ----------------------------- Catalogue view ----------------------------- */
+
+@Composable
+private fun ModeToggle(mode: StackMode, onMode: (StackMode) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Surface1)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        ModeSegment("Groups", mode == StackMode.Groups, Modifier.weight(1f)) { onMode(StackMode.Groups) }
+        ModeSegment("All items", mode == StackMode.Items, Modifier.weight(1f)) { onMode(StackMode.Items) }
+    }
+}
+
+@Composable
+private fun ModeSegment(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .clip(RoundedCornerShape(9.dp))
+            .background(if (selected) Accent.copy(alpha = 0.20f) else Color.Transparent)
+            .androidxClickable(onClick)
+            .padding(vertical = 9.dp),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) Accent else TextMid,
+        )
+    }
+}
+
+@Composable
+private fun CatalogSearch(query: String, onQuery: (String) -> Unit, count: Int) {
+    Column(Modifier.fillMaxWidth()) {
+        StackTextField(value = query, onValueChange = onQuery, placeholder = "Search items…")
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "$count item${if (count == 1) "" else "s"}",
+            style = MaterialTheme.typography.labelSmall,
+            color = TextLow,
+        )
+    }
+}
+
+@Composable
+private fun CatalogRow(item: ItemEntity, group: GroupEntity, onClick: () -> Unit) {
+    val tint = GroupStyle.tint(group)
+    Surface(color = Surface1, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.androidxClickable(onClick).padding(14.dp),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(40.dp).clip(CircleShape).background(tint.copy(alpha = 0.14f)),
+            ) {
+                ItemIcon(type = item.type, tint = tint, modifier = Modifier.size(28.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(item.name, style = MaterialTheme.typography.titleMedium, color = TextHigh)
+                val sub = listOfNotNull(item.brand?.ifBlank { null }, group.name).joinToString(" · ")
+                if (sub.isNotBlank()) {
+                    Text(sub, style = MaterialTheme.typography.bodyMedium, color = TextMid)
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(catalogDose(item), style = MaterialTheme.typography.bodyMedium, color = TextLow)
+        }
+    }
+}
+
+private fun catalogDose(item: ItemEntity): String {
+    val amt = if (item.doseAmount % 1.0 == 0.0) item.doseAmount.toLong().toString() else item.doseAmount.toString()
+    return "$amt ${item.doseUnit.label()}"
+}
+
+@Composable
+private fun CatalogEmpty(hasItems: Boolean) {
+    Text(
+        if (hasItems) "No items match." else "No items yet — add one in Groups, scan a label, or share a link.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = TextLow,
+        modifier = Modifier.padding(vertical = 20.dp),
+    )
 }
 
 @Composable
