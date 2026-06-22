@@ -9,9 +9,7 @@ import com.quietdose.data.model.IntakeSource
 import com.quietdose.data.model.TriggerType
 import com.quietdose.di.ServiceLocator
 import com.quietdose.notify.Notifier
-import com.quietdose.ui.theme.GroupStyle
 import com.quietdose.ui.viz.DayEvent
-import com.quietdose.ui.viz.EventSource
 import com.quietdose.util.DateUtils
 import org.json.JSONObject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -64,6 +63,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = ServiceLocator.repository(app)
     private val settingsStore = ServiceLocator.settings(app)
     private val brain = ServiceLocator.brain(app)
+    private val daySources = ServiceLocator.daySources(app)
 
     val state: StateFlow<HomeUiState> =
         settingsStore.settings.flatMapLatest { s ->
@@ -86,11 +86,18 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 HomeUiState(
                     cards = cards,
                     timeline = buildTimeline(cards, focusId),
-                    dayEvents = buildEvents(cards),
+                    dayEvents = emptyList(),
                     focusGroupId = focusId,
                     epochDay = epochDay,
                     loading = false,
                 )
+            }.flatMapLatest { base ->
+                // Paint cards/timeline immediately, then fuse all enabled day
+                // sources (supplements + device + skincare) a beat later.
+                flow {
+                    emit(base)
+                    emit(base.copy(dayEvents = daySources.events(epochDay)))
+                }
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
@@ -109,19 +116,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 TimelineNode(c, status, anchorShort(c.group), summaryFor(c, status))
             }
-    }
-
-    /** Project the day's routines into source-agnostic events for the day graph. */
-    private fun buildEvents(cards: List<GroupCard>): List<DayEvent> = cards.map { c ->
-        DayEvent(
-            minuteOfDay = anchorMinute(c.group),
-            category = c.group.name,
-            label = c.group.name,
-            magnitude = c.total.toFloat(),
-            done = c.done,
-            color = GroupStyle.tint(c.group),
-            source = EventSource.SUPPLEMENT,
-        )
     }
 
     private fun anchorMinute(g: GroupEntity): Int = when (g.trigger) {

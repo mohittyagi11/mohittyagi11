@@ -67,5 +67,8 @@ dependencies {
     // On-device brain (LLM path is dormant until a model file is present)
     implementation(libs.mediapipe.tasks.genai)
 
+    // Day-data sources: Health Connect (sleep/steps) read
+    implementation(libs.androidx.health.connect)
+
     debugImplementation(libs.androidx.ui.tooling)
 }
