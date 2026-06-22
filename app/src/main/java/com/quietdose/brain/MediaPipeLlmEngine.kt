@@ -42,6 +42,20 @@ class MediaPipeLlmEngine(
     override fun lastError(): String? = errorMessage
 
     /**
+     * Release the native LLM session and its (potentially multi-GB) memory.
+     * Crucial before loading another model — otherwise two models can be
+     * resident at once and OOM-crash the process.
+     */
+    override fun close() {
+        synchronized(this) {
+            runCatching { engine?.close() }
+            engine = null
+            loadFailed = false
+            errorMessage = null
+        }
+    }
+
+    /**
      * We can only know readiness by trying to load. To keep [isReady] cheap and
      * synchronous (it's used to pick a Brain), it reports "could be ready":
      * the model file exists and a prior load hasn't failed. The real, guarded

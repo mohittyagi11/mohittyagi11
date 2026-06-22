@@ -44,6 +44,9 @@ object BrainProvider {
      */
     fun reset() {
         synchronized(this) {
+            // Free the native model memory before dropping the reference, so we
+            // never hold two models resident at once (OOM on large models).
+            runCatching { engineRef?.close() }
             instance = null
             engineRef = null
         }

@@ -23,4 +23,7 @@ interface LlmEngine {
      * is no error (or the implementation doesn't track one).
      */
     fun lastError(): String? = null
+
+    /** Release any native resources/memory held by a loaded model. */
+    fun close() {}
 }

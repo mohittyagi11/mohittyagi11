@@ -41,7 +41,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.quietdose.brain.BrainProvider
 import com.quietdose.brain.DeviceCapability
 import com.quietdose.brain.LlmBrain
 import com.quietdose.brain.ModelAuth
@@ -410,9 +409,9 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                         note = "Testing the model… the first load can take a minute."
                         scope.launch {
                             try {
-                                // Fresh engine each test, so a previous failed attempt
-                                // doesn't poison the result.
-                                BrainProvider.reset()
+                                // Reuse the already-loaded engine — do NOT reset/reload,
+                                // which would load a second copy of a multi-GB model on
+                                // top of the first and OOM-crash the process.
                                 val brain = ServiceLocator.brain(context)
                                 val hasFile = ModelManager.installedModelInfo(context) != null
                                 if (brain is LlmBrain && hasFile) {
