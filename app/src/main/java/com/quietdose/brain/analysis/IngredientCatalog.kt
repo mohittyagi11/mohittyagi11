@@ -24,7 +24,8 @@ object IngredientCatalog {
             typicalDoseLow = 1000.0, typicalDoseHigh = 4000.0, doseUnit = DoseUnit.IU,
             timingFlags = f(ItemFlags.FAT_SOLUBLE, ItemFlags.WITH_FOOD),
             pairsWith = listOf("vitamin_k2", "magnesium"),
-            evidenceNote = "Well established; absorbed best with dietary fat.", tier = 1,
+            evidenceNote = "Well established; absorbed best with dietary fat.",
+            cautions = listOf("Very high doses build up over time — fat-soluble.", "Best dosed to a blood level, not guessed."), tier = 1,
         ),
         Ingredient(
             key = "vitamin_k2", displayName = "Vitamin K2", category = "Vitamins",
@@ -43,7 +44,8 @@ object IngredientCatalog {
             timingFlags = f(ItemFlags.EMPTY_STOMACH, ItemFlags.AVOID_CAFFEINE, ItemFlags.AVOID_CALCIUM),
             pairsWith = listOf("vitamin_c"),
             avoidWith = listOf("calcium", "magnesium", "zinc"),
-            evidenceNote = "Absorption drops with tea/coffee and calcium; vitamin C helps.", tier = 1,
+            evidenceNote = "Absorption drops with tea/coffee and calcium; vitamin C helps.",
+            cautions = listOf("Don't supplement iron without knowing your levels — excess is harmful.", "Can upset the stomach; bisglycinate is gentler."), tier = 1,
         ),
         Ingredient(
             key = "vitamin_c", displayName = "Vitamin C", category = "Vitamins",
@@ -79,7 +81,8 @@ object IngredientCatalog {
             timingFlags = f(ItemFlags.WITH_FOOD),
             pairsWith = listOf("copper"),
             avoidWith = listOf("calcium", "iron"),
-            evidenceNote = "Long-term high zinc can lower copper — many pair the two.", tier = 1,
+            evidenceNote = "Long-term high zinc can lower copper — many pair the two.",
+            cautions = listOf("Sustained high doses deplete copper.", "On an empty stomach it can cause nausea."), tier = 1,
         ),
         Ingredient(
             key = "copper", displayName = "Copper", category = "Minerals",
@@ -102,7 +105,8 @@ object IngredientCatalog {
             aliases = listOf("selenium", "selenomethionine"),
             benefits = listOf("Antioxidant; thyroid support"),
             typicalDoseLow = 100.0, typicalDoseHigh = 200.0, doseUnit = DoseUnit.MCG,
-            evidenceNote = "A narrow range — more is not better.", tier = 2,
+            evidenceNote = "A narrow range — more is not better.",
+            cautions = listOf("Toxic in excess — easy to overdo with multivitamins.", "Often already covered by diet/multis."), tier = 2,
         ),
         Ingredient(
             key = "folate", displayName = "L-Methylfolate", category = "Vitamins",
@@ -140,7 +144,8 @@ object IngredientCatalog {
             benefits = listOf("Sleep-onset support"),
             typicalDoseLow = 0.5, typicalDoseHigh = 3.0, doseUnit = DoseUnit.MG,
             avoidWith = listOf("caffeine"),
-            evidenceNote = "Low doses near bedtime are commonly noted; more isn't better.", tier = 1,
+            evidenceNote = "Low doses near bedtime are commonly noted; more isn't better.",
+            cautions = listOf("Higher doses can cause grogginess; 0.5–1 mg is often enough.", "Best occasional, not a nightly crutch."), tier = 1,
         ),
         Ingredient(
             key = "creatine", displayName = "Creatine", category = "Actives",
@@ -200,7 +205,8 @@ object IngredientCatalog {
             aliases = listOf("ashwagandha", "ksm-66", "withania"),
             benefits = listOf("Stress and sleep support"),
             typicalDoseLow = 300.0, typicalDoseHigh = 600.0, doseUnit = DoseUnit.MG,
-            evidenceNote = "Reasonable evidence for stress; often taken in the evening.", tier = 2,
+            evidenceNote = "Reasonable evidence for stress; often taken in the evening.",
+            cautions = listOf("Often cycled, not taken indefinitely.", "Caution with thyroid conditions or sedatives."), tier = 2,
         ),
         Ingredient(
             key = "berberine", displayName = "Berberine", category = "Actives",
@@ -208,7 +214,8 @@ object IngredientCatalog {
             benefits = listOf("Metabolic / glucose support"),
             typicalDoseLow = 500.0, typicalDoseHigh = 1500.0, doseUnit = DoseUnit.MG,
             timingFlags = f(ItemFlags.WITH_FOOD),
-            evidenceNote = "Taken with meals, usually split through the day.", tier = 2,
+            evidenceNote = "Taken with meals, usually split through the day.",
+            cautions = listOf("Commonly causes GI upset.", "Interacts with several medications — check if you take any."), tier = 2,
         ),
         Ingredient(
             key = "taurine", displayName = "Taurine", category = "Actives",

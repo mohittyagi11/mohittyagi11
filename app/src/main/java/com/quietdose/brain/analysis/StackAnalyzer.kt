@@ -30,118 +30,144 @@ object StackAnalyzer {
         groups: List<GroupEntity>,
         currentDoseAmount: Double,
         currentDoseUnit: DoseUnit,
-        intent: String?,
+        goal: String?,
+        source: SourceKind?,
+        sourceName: String?,
+        concern: String?,
     ): AnalysisReport {
         val app = context.applicationContext
         val tier = ModelCapability.tier(app)
         val matched = IngredientCatalog.match(name)
         val grounded = mutableListOf<String>()
+        val sections = mutableListOf<AnalysisSection>()
+        val cautions = mutableListOf<String>()
+        val dependencies = mutableListOf<String>()
 
-        // --- Resolve the current stack into known ingredients ---------------
         val stackIng = currentStack.mapNotNull { item ->
             IngredientCatalog.match(item.name)?.let { it to item }
         }
         val stackKeys = stackIng.map { it.first.key }.toSet()
+        val alreadyHave = matched != null && matched.key in stackKeys
 
-        // --- Deterministic sections (the validated read) --------------------
-        val contextLines = mutableListOf<AnalysisLine>()
-        if (!intent.isNullOrBlank()) contextLines += AnalysisLine("You're adding this for: ${intent.trim()}")
-        if (matched != null) {
-            matched.benefits.forEach { contextLines += AnalysisLine(it, Severity.GOOD) }
-            grounded += "${matched.displayName}: ${matched.benefits.joinToString("; ")}"
-            contextLines += AnalysisLine(
-                "Typical range ${doseRange(matched)} · ${matched.category.lowercase()} · ${tierWord(matched.tier)}",
-            )
-        } else {
-            contextLines += AnalysisLine("Not in the curated reference yet — basing this on what you entered.")
+        // 1) Your reason — source + goal, with an honest credibility read.
+        val reasonLines = mutableListOf<AnalysisLine>()
+        if (source != null) {
+            val who = if (!sourceName.isNullOrBlank()) "${source.label}: ${sourceName.trim()}" else source.label
+            reasonLines += AnalysisLine("Heard about it from — $who", if (source.skeptical) Severity.CAUTION else Severity.GOOD)
+            reasonLines += AnalysisLine(source.trust, if (source.skeptical) Severity.CAUTION else Severity.NEUTRAL)
+            grounded += "Source: $who (${if (source.skeptical) "treat as a lead" else "credible"})"
         }
+        if (!goal.isNullOrBlank()) reasonLines += AnalysisLine("Your goal — ${goal.trim()}")
+        if (reasonLines.isNotEmpty()) sections += AnalysisSection("Your reason", reasonLines)
 
-        // --- Fit: synergies, conflicts, timing against the current stack ----
-        val fitLines = mutableListOf<AnalysisLine>()
-        val dependencies = mutableListOf<String>()
-        val cautions = mutableListOf<String>()
+        // 2) What it's good for.
+        val goodLines = mutableListOf<AnalysisLine>()
         if (matched != null) {
-            // synergies already present
+            matched.benefits.forEach { goodLines += AnalysisLine(it, Severity.GOOD) }
+            goodLines += AnalysisLine("Typical ${doseRange(matched)} \u00b7 ${tierWord(matched.tier)}")
+            grounded += "${matched.displayName}: ${matched.benefits.joinToString("; ")}"
+            if (!goal.isNullOrBlank()) {
+                goodLines += AnalysisLine("Weigh these against your goal — does it really target it?", Severity.NEUTRAL)
+            }
+        } else {
+            goodLines += AnalysisLine("Not in the curated reference yet — going on what you entered.")
+        }
+        sections += AnalysisSection("What it's good for", goodLines)
+
+        // 3) Fit with your stack — redundancy, synergy, conflicts, dose sanity, timing.
+        val fitLines = mutableListOf<AnalysisLine>()
+        if (alreadyHave) {
+            val m = "You already have ${matched!!.displayName} — adding it again may double the dose"
+            fitLines += AnalysisLine(m, Severity.CAUTION); cautions += m
+        }
+        if (matched != null) {
             stackIng.forEach { (ing, _) ->
                 if (matched.pairsWith.contains(ing.key) || ing.pairsWith.contains(matched.key)) {
                     fitLines += AnalysisLine("Pairs well with ${ing.displayName}, already in your stack", Severity.GOOD)
                 }
             }
-            // synergies still missing → dependencies to add
             matched.pairsWith.forEach { k ->
-                if (k !in stackKeys) {
-                    IngredientCatalog.byKey(k)?.let { dep ->
-                        dependencies += dep.displayName
-                        fitLines += AnalysisLine("Often paired with ${dep.displayName} — consider adding it", Severity.NEUTRAL)
-                    }
+                if (k !in stackKeys) IngredientCatalog.byKey(k)?.let { dep ->
+                    dependencies += dep.displayName
+                    fitLines += AnalysisLine("Often paired with ${dep.displayName} — consider adding it")
                 }
             }
-            // conflicts present in the stack
             stackIng.forEach { (ing, _) ->
                 if (matched.avoidWith.contains(ing.key) || ing.avoidWith.contains(matched.key)) {
-                    val msg = "Separate in time from ${ing.displayName} (they compete for absorption)"
-                    fitLines += AnalysisLine(msg, Severity.CAUTION)
-                    cautions += msg
-                    grounded += "${matched.displayName} ↔ ${ing.displayName}: separate timing"
+                    val m = "Separate in time from ${ing.displayName} — they compete for absorption"
+                    fitLines += AnalysisLine(m, Severity.CAUTION); cautions += m
+                    grounded += "${matched.displayName} vs ${ing.displayName}: separate timing"
                 }
+            }
+            if (currentDoseUnit != matched.doseUnit && currentDoseAmount > 0) {
+                val m = "You entered ${fmt(currentDoseAmount)} ${currentDoseUnit.name.lowercase()}, but ${matched.displayName} is usually ${matched.doseUnit.name.lowercase()} (${doseRange(matched)}) — check the unit"
+                fitLines += AnalysisLine(m, Severity.CAUTION); cautions += "Dose unit looks off"
+                grounded += m
             }
             timingLine(matched)?.let { fitLines += it }
             if (fitLines.none { it.severity == Severity.CAUTION } && stackIng.isNotEmpty()) {
                 fitLines += AnalysisLine("No interaction flags with your current stack", Severity.GOOD)
             }
         }
-
-        // --- Peer review & recent research (from curated evidence) ----------
-        val peerLines = buildList {
-            if (matched != null && matched.evidenceNote.isNotBlank()) {
-                add(AnalysisLine(matched.evidenceNote, severityForTier(matched.tier)))
-            }
-            add(AnalysisLine("Summarised from curated references, not live scraping."))
+        if (fitLines.isEmpty()) {
+            fitLines += AnalysisLine(if (stackIng.isEmpty()) "Your stack is empty — this would be the first." else "Nothing notable against your current stack.")
         }
-        val researchLines = buildList {
-            if (matched != null) {
+        sections += AnalysisSection("Fit with your stack", fitLines)
+
+        // 4) Worth knowing — criticism, what to verify (weak sources), your concern.
+        val knowLines = mutableListOf<AnalysisLine>()
+        matched?.cautions?.forEach { knowLines += AnalysisLine(it, Severity.CAUTION) }
+        if (source != null && source.skeptical) {
+            source.verify.forEach { knowLines += AnalysisLine("Verify — $it", Severity.NEUTRAL) }
+        }
+        if (!concern.isNullOrBlank()) {
+            knowLines += AnalysisLine("Your worry — ${concern.trim()}. Keep it in view as you decide.", Severity.NEUTRAL)
+        }
+        if (matched != null) {
+            knowLines += AnalysisLine(
                 when (matched.tier) {
-                    1 -> add(AnalysisLine("Body of evidence is mature and broadly consistent.", Severity.GOOD))
-                    2 -> add(AnalysisLine("Supportive evidence; still maturing.", Severity.NEUTRAL))
-                    else -> add(AnalysisLine("Emerging/early evidence — promising but not settled.", Severity.CAUTION))
-                }
-            } else {
-                add(AnalysisLine("No curated research flags for this one yet.", Severity.NEUTRAL))
-            }
+                    1 -> "Evidence is mature and broadly consistent."
+                    2 -> "Evidence is supportive but still maturing."
+                    else -> "Evidence is emerging — promising, not settled."
+                },
+                severityForTier(matched.tier),
+            )
         }
+        if (knowLines.isEmpty()) knowLines += AnalysisLine("Nothing major flagged.")
+        sections += AnalysisSection("Worth knowing", knowLines)
 
-        // --- Deterministic synthesis ----------------------------------------
+        // Verdict + rationale.
         val verdict = when {
+            alreadyHave -> "Already in your stack"
             matched == null -> "Worth tracking"
-            cautions.isNotEmpty() -> "Fits — mind the timing"
+            source?.skeptical == true && cautions.isNotEmpty() -> "Promising — verify first"
+            cautions.isNotEmpty() -> "Fits — mind the details"
             else -> "Good fit"
         }
         val placement = matched?.let { placementText(it) }
-        var rationale = buildRationale(matched, intent, dependencies, cautions)
-
-        // --- Model enrichment, scaled by tier -------------------------------
+        var rationale = buildRationale(matched, goal, dependencies, cautions)
         var byModel = false
         if (tier.isModel && ModelCapability.engineReady(app)) {
             val enriched = runCatching {
-                val engine = BrainProvider.engine(app)
-                val prompt = synthesisPrompt(name, matched, intent, stackIng.map { it.first.displayName }, dependencies, cautions, tier)
-                engine.complete(prompt).trim()
+                BrainProvider.engine(app).complete(
+                    synthesisPrompt(name, matched, goal, source, concern, stackIng.map { it.first.displayName }, dependencies, cautions, tier),
+                ).trim()
             }.getOrNull()
             val cleaned = enriched?.let { sanitize(it) }
-            if (!cleaned.isNullOrBlank()) {
-                rationale = cleaned
-                byModel = true
-            }
+            if (!cleaned.isNullOrBlank()) { rationale = cleaned; byModel = true }
         }
 
-        // --- Accrue facts/deductions into the reusable context store --------
+        // Accrue context for reuse.
         runCatching {
             val itemKey = name
-            ContextStore.recordIntent(app, itemKey, intent.orEmpty())
+            source?.let {
+                ContextStore.recordIntent(app, itemKey, "source=${it.label}" + if (!sourceName.isNullOrBlank()) " (${sourceName.trim()})" else "")
+            }
+            if (!goal.isNullOrBlank()) ContextStore.recordIntent(app, itemKey, "goal=${goal.trim()}")
             val entries = buildList {
                 grounded.forEach { add(ContextStore.entry(ContextKind.FACT, it, "catalog", 1f)) }
                 cautions.forEach { add(ContextStore.entry(ContextKind.DEDUCTION, it, if (byModel) "model+catalog" else "logic", 0.9f)) }
-                add(ContextStore.entry(ContextKind.DEDUCTION, "$verdict — $rationale", if (byModel) "model" else "logic", if (byModel) 0.8f else 0.7f))
+                add(ContextStore.entry(ContextKind.DEDUCTION, "$verdict \u2014 $rationale", if (byModel) "model" else "logic", 0.8f))
             }
             ContextStore.add(app, itemKey, entries)
         }
@@ -169,12 +195,7 @@ object StackAnalyzer {
             title = matched?.displayName ?: name,
             matchedIngredientKey = matched?.key,
             recommendation = recommendation,
-            sections = listOf(
-                AnalysisSection("Context", contextLines),
-                AnalysisSection("Fit with your stack", fitLines.ifEmpty { listOf(AnalysisLine("Your stack is empty — this would be the first.")) }),
-                AnalysisSection("Peer review", peerLines),
-                AnalysisSection("Recent research", researchLines),
-            ),
+            sections = sections,
             synthesis = Synthesis(
                 verdict = verdict,
                 rationale = rationale,
@@ -199,6 +220,8 @@ object StackAnalyzer {
     private fun tierWord(tier: Int) = when (tier) {
         1 -> "well-established"; 2 -> "supportive evidence"; else -> "emerging"
     }
+
+    private fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toLong().toString() else d.toString()
 
     private fun severityForTier(tier: Int) = when (tier) {
         1 -> Severity.GOOD; 2 -> Severity.NEUTRAL; else -> Severity.CAUTION
@@ -271,24 +294,30 @@ object StackAnalyzer {
     private fun synthesisPrompt(
         name: String,
         matched: Ingredient?,
-        intent: String?,
+        goal: String?,
+        source: SourceKind?,
+        concern: String?,
         stack: List<String>,
         deps: List<String>,
         cautions: List<String>,
         tier: ModelTier,
     ): String = buildString {
-        appendLine("You are a calm, precise supplement assistant. Using ONLY the grounded facts below,")
-        appendLine("write a short synthesis (${if (tier == ModelTier.CAPABLE) "2-3 sentences" else "1-2 sentences"}) on whether and how this fits.")
-        appendLine("Do NOT invent doses or interactions. No medical claims. Hedged, plain language.")
+        appendLine("You are a calm, precise, slightly skeptical supplement advisor. Using ONLY the grounded facts below,")
+        appendLine("write a short, natural synthesis (${if (tier == ModelTier.CAPABLE) "2-3 sentences" else "1-2 sentences"}) — conversational, no bullet labels.")
+        appendLine("Speak to their goal and where they heard it; if the source is weak (influencer/brand/ad), gently say to verify the claim and dose.")
+        appendLine("Do NOT invent doses or interactions; only use what's given. No medical claims.")
         appendLine()
         appendLine("Item: $name${matched?.let { " (${it.displayName})" } ?: ""}")
-        if (!intent.isNullOrBlank()) appendLine("User's reason: $intent")
+        if (!goal.isNullOrBlank()) appendLine("Their goal: $goal")
+        if (source != null) appendLine("Heard from: ${source.label} (${if (source.skeptical) "weak source — verify" else "credible"})")
+        if (!concern.isNullOrBlank()) appendLine("Their worry: $concern")
         if (matched != null) {
             appendLine("Facts: ${matched.benefits.joinToString("; ")}. Evidence: ${matched.evidenceNote} (${tierWord(matched.tier)}).")
+            if (matched.cautions.isNotEmpty()) appendLine("Criticism: ${matched.cautions.joinToString("; ")}")
         }
         appendLine("Current stack: ${if (stack.isEmpty()) "empty" else stack.joinToString(", ")}")
         if (deps.isNotEmpty()) appendLine("Suggested pairings: ${deps.joinToString(", ")}")
-        if (cautions.isNotEmpty()) appendLine("Cautions: ${cautions.joinToString("; ")}")
+        if (cautions.isNotEmpty()) appendLine("Watch-outs: ${cautions.joinToString("; ")}")
         appendLine()
         appendLine("Reply with only the synthesis text.")
     }

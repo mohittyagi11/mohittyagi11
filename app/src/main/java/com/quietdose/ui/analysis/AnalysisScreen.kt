@@ -55,9 +55,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.quietdose.brain.analysis.AnalysisReport
 import com.quietdose.brain.analysis.AnalysisSection
+import com.quietdose.brain.analysis.IngredientCatalog
 import com.quietdose.brain.analysis.ModelCapability
 import com.quietdose.brain.analysis.ModelTier
 import com.quietdose.brain.analysis.Severity
+import com.quietdose.brain.analysis.SourceKind
 import com.quietdose.brain.analysis.StackAnalyzer
 import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
@@ -102,7 +104,10 @@ fun AnalysisScreen(item: ItemEntity, onAdd: (ItemEntity) -> Unit, onDismiss: () 
         .collectAsStateWithLifecycle(initialValue = emptyList<GroupEntity>())
 
     var phase by remember { mutableStateOf(Phase.INTENT) }
-    var intent by remember { mutableStateOf("") }
+    var source by remember { mutableStateOf<SourceKind?>(null) }
+    var sourceName by remember { mutableStateOf("") }
+    var goal by remember { mutableStateOf("") }
+    var concern by remember { mutableStateOf("") }
     var report by remember { mutableStateOf<AnalysisReport?>(null) }
     var step by remember { mutableIntStateOf(0) }
     val tier = remember { ModelCapability.tier(context) }
@@ -114,7 +119,8 @@ fun AnalysisScreen(item: ItemEntity, onAdd: (ItemEntity) -> Unit, onDismiss: () 
                 runCatching {
                     StackAnalyzer.analyze(
                         context, item.name, item.category, stack, groups,
-                        item.doseAmount, item.doseUnit, intent.ifBlank { null },
+                        item.doseAmount, item.doseUnit,
+                        goal.ifBlank { null }, source, sourceName.ifBlank { null }, concern.ifBlank { null },
                     )
                 }.getOrNull()
             }
@@ -134,8 +140,14 @@ fun AnalysisScreen(item: ItemEntity, onAdd: (ItemEntity) -> Unit, onDismiss: () 
             when (phase) {
                 Phase.INTENT -> IntentStep(
                     item = item,
-                    intent = intent,
-                    onIntent = { intent = it },
+                    source = source,
+                    onSource = { source = it },
+                    sourceName = sourceName,
+                    onSourceName = { sourceName = it },
+                    goal = goal,
+                    onGoal = { goal = it },
+                    concern = concern,
+                    onConcern = { concern = it },
                     onContinue = { phase = Phase.ANALYZING },
                 )
                 Phase.ANALYZING -> AnalyzingStep(item = item, step = step)
@@ -181,28 +193,47 @@ private fun brainLabel(tier: ModelTier): String = when (tier) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun IntentStep(item: ItemEntity, intent: String, onIntent: (String) -> Unit, onContinue: () -> Unit) {
-    val quick = listOf("Longevity", "Sleep", "Energy", "Recovery", "Deficiency", "Doctor advised", "Skin & hair", "Focus")
+private fun IntentStep(
+    item: ItemEntity,
+    source: SourceKind?,
+    onSource: (SourceKind?) -> Unit,
+    sourceName: String,
+    onSourceName: (String) -> Unit,
+    goal: String,
+    onGoal: (String) -> Unit,
+    concern: String,
+    onConcern: (String) -> Unit,
+    onContinue: () -> Unit,
+) {
     Column(Modifier.fillMaxSize()) {
         Column(
             Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
         ) {
             Spacer(Modifier.height(8.dp))
             ItemHero(item)
-            Spacer(Modifier.height(24.dp))
-            Text("Why are you adding this?", style = MaterialTheme.typography.headlineSmall, color = TextHigh)
-            Text("A line of context sharpens the analysis. Optional.", style = MaterialTheme.typography.bodyMedium, color = TextMid)
-            Spacer(Modifier.height(14.dp))
+
+            Spacer(Modifier.height(22.dp))
+            Text("Where did you come across it?", style = MaterialTheme.typography.headlineSmall, color = TextHigh)
+            Text("This shapes how much to trust the claim.", style = MaterialTheme.typography.bodyMedium, color = TextMid)
+            Spacer(Modifier.height(12.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                quick.forEach { q ->
-                    val on = intent.contains(q, ignoreCase = true)
-                    ChoiceChip(q, on, Accent) {
-                        onIntent(if (on) intent.replace(q, "").replace(", ,", ",").trim().trim(',') else listOf(intent, q).filter { it.isNotBlank() }.joinToString(", "))
-                    }
+                SourceKind.entries.forEach { s ->
+                    ChoiceChip(s.label, s == source, Accent) { onSource(if (s == source) null else s) }
                 }
             }
-            Spacer(Modifier.height(14.dp))
-            StackTextField(intent, onIntent, "e.g. low ferritin, advised by my doctor", singleLine = false)
+            Spacer(Modifier.height(10.dp))
+            StackTextField(sourceName, onSourceName, "Who, specifically? (optional)")
+
+            Spacer(Modifier.height(22.dp))
+            Text("What are you hoping it helps with?", style = MaterialTheme.typography.titleMedium, color = TextHigh)
+            Spacer(Modifier.height(8.dp))
+            StackTextField(goal, onGoal, "e.g. better sleep, low energy, advised for ferritin", singleLine = false)
+
+            Spacer(Modifier.height(22.dp))
+            Text("Anything you're unsure about?", style = MaterialTheme.typography.titleMedium, color = TextHigh)
+            Spacer(Modifier.height(8.dp))
+            StackTextField(concern, onConcern, "optional — a worry, a side effect, a question", singleLine = false)
+
             Spacer(Modifier.height(24.dp))
         }
         BottomBar {
@@ -386,9 +417,13 @@ private fun ReportStep(
 
         BottomBar {
             FilledButton(label = "Add to checklist", accent = Accent, modifier = Modifier.fillMaxWidth()) {
+                // Fill in what the catalog knows but the source omitted — category
+                // (and the canonical name) so brand/category aren't lost on a link add.
+                val matched = report.matchedIngredientKey?.let { IngredientCatalog.byKey(it) }
                 onAdd(
                     item.copy(
                         groupId = groupId,
+                        category = item.category?.ifBlank { null } ?: matched?.category,
                         doseAmount = doseText.toDoubleOrNull() ?: item.doseAmount,
                         doseUnit = doseUnit,
                         flags = flags,

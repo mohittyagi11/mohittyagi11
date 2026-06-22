@@ -54,6 +54,8 @@ object ProductEnricher {
         val brand = jsonLdBrand(jsonld)
             ?: meta(html, "og:brand")
             ?: meta(html, "product:brand")
+            ?: detectBrand(html)
+        val category = jsonLdCategory(jsonld) ?: meta(html, "product:category")
 
         val cleanedTitle = cleanTitle(title)
         val combined = listOfNotNull(cleanedTitle, jsonld?.optString("description")?.take(300)).joinToString(". ")
@@ -89,7 +91,7 @@ object ProductEnricher {
             draft = DraftItem(
                 name = name!!.take(80),
                 brand = brand?.take(60),
-                category = null,
+                category = category?.take(40),
                 type = type,
                 doseAmount = doseAmount,
                 doseUnit = doseUnit,
@@ -199,6 +201,35 @@ object ProductEnricher {
             is JSONObject -> b.optString("name").ifBlank { null }
             else -> null
         }
+    }
+
+    private fun jsonLdCategory(product: JSONObject?): String? {
+        val c = product?.opt("category") ?: return null
+        return when (c) {
+            is String -> c.substringAfterLast(">").substringAfterLast("/").trim().ifBlank { null }
+            is JSONArray -> c.optString(c.length() - 1).ifBlank { null }
+            is JSONObject -> c.optString("name").ifBlank { null }
+            else -> null
+        }
+    }
+
+    /** Last-resort brand extraction from common marketplace markup (e.g. Amazon byline). */
+    private fun detectBrand(html: String): String? {
+        val patterns = listOf(
+            // Amazon: "Visit the Foo Store" / "Brand: Foo" in the byline.
+            "Visit the\\s+(.+?)\\s+Store",
+            "id=[\"']bylineInfo[\"'][^>]*>\\s*(?:Brand:\\s*)?(.+?)<",
+            // Generic "Brand</…>…>Foo<" table rows and "Brand: Foo" labels.
+            ">\\s*Brand\\s*</[^>]+>\\s*<[^>]+>\\s*(.+?)<",
+            "\\bBrand\\s*[:\\-]\\s*([A-Z][\\w&'.\\- ]{1,40}?)\\s*[<\\n]",
+        )
+        for (p in patterns) {
+            Regex(p, RegexOption.IGNORE_CASE).find(html)?.let {
+                val v = decode(it.groupValues[1]).trim()
+                if (v.length in 2..40 && !v.contains("<")) return v
+            }
+        }
+        return null
     }
 
     private fun meta(html: String, property: String): String? {

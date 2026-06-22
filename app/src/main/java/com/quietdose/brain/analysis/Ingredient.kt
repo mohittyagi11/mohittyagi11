@@ -39,6 +39,8 @@ data class Ingredient(
 
     /** One calm, hedged line about the evidence. Curated, not scraped; never advice. */
     val evidenceNote: String = "",
+    /** Honest criticism / who should be careful — surfaced, not hidden. */
+    val cautions: List<String> = emptyList(),
     /** 1 = strong/established evidence; 2 = supportive; 3 = emerging/early. */
     val tier: Int = 2,
 )
