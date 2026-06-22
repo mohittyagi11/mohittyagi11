@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Lightweight platform theme so we don't pull in the Material Components
+      view library (the UI is 100% Compose). Edge-to-edge + system bar colours
+      are handled in Compose via enableEdgeToEdge().
+    -->
+    <style name="Theme.Dose" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/dose_bg</item>
+        <item name="android:statusBarColor">@color/transparent</item>
+        <item name="android:navigationBarColor">@color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

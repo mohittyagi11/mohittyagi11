@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Deep, calm near-black. The app is dark-first. -->
+    <color name="dose_bg">#0B0B0D</color>
+    <color name="dose_accent">#7C9CFF</color>
+    <color name="transparent">#00000000</color>
+</resources>

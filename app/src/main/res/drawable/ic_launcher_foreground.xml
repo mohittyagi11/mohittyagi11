@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- A calm capsule mark, tilted, centred in the adaptive safe zone. -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-45">
+        <path
+            android:fillColor="#7C9CFF"
+            android:pathData="M40,34 h28 a14,14 0 0 1 14,14 v12 a14,14 0 0 1 -14,14 h-28 a14,14 0 0 1 -14,-14 v-12 a14,14 0 0 1 14,-14 z" />
+        <path
+            android:fillColor="#E8ECFF"
+            android:pathData="M40,34 h14 v40 h-14 a14,14 0 0 1 -14,-14 v-12 a14,14 0 0 1 14,-14 z" />
+    </group>
+</vector>

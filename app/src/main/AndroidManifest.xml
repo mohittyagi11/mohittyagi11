@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Notifications (Android 13+). Reminders are the whole point. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Survive reboots: re-arm all triggers. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      Feature permissions (Activity Recognition, location/geofencing, exact
+      alarms, Health Connect, notification listener, usage access) are declared
+      in the increments that introduce them, so the manifest always reflects
+      what is actually wired up.
+    -->
+
+    <application
+        android:name=".DoseApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Dose">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Dose">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>
