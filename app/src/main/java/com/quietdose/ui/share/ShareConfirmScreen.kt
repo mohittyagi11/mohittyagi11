@@ -61,7 +61,9 @@ import com.quietdose.ui.theme.Surface2
 import com.quietdose.ui.theme.TextHigh
 import com.quietdose.ui.theme.TextLow
 import com.quietdose.ui.theme.TextMid
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private sealed interface SharePhase {
     data object Reading : SharePhase
@@ -125,8 +127,13 @@ fun ShareConfirmScreen(url: String?, onClose: () -> Unit, onSaved: () -> Unit) {
         AnalysisScreen(
             item = item,
             onAdd = { configured ->
-                scope.launch { repo.upsertItem(configured) }
-                onSaved()
+                // Finish ONLY after the write commits — otherwise dismissing the
+                // screen cancels the launched coroutine and the item is never saved
+                // ("no trace in the app"). NonCancellable guarantees it lands.
+                scope.launch {
+                    withContext(NonCancellable) { repo.upsertItem(configured) }
+                    onSaved()
+                }
             },
             onDismiss = { pendingItem = null },
             product = pendingSignals,
@@ -262,7 +269,11 @@ private fun ConfirmBody(
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // Pinned so the primary action is always reachable, never lost below the fold.
+        Column(Modifier.fillMaxWidth().background(Surface1).imePadding().navigationBarsPadding().padding(16.dp)) {
             FilledButton(
                 label = "Analyze & add",
                 accent = accent,
