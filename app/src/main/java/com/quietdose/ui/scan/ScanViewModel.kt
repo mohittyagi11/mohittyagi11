@@ -6,6 +6,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.quietdose.brain.skills.DraftItem
+import com.quietdose.brain.vision.LabelFusion
 import com.quietdose.brain.vision.LabelScanner
 import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
@@ -29,10 +30,13 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Where the scan is in its lifecycle. The UI renders one screen per phase. */
     sealed interface Phase {
-        /** Waiting for the camera result (initial, and after Retake). */
+        /** Waiting for the next camera result. */
         data object Capturing : Phase
 
-        /** Photo taken; OCR + barcode + model running. */
+        /** One or more shots taken; review and add more (front + back) or proceed. */
+        data class Reviewing(val shots: Int) : Phase
+
+        /** Photos taken; OCR + barcode + model running over all of them. */
         data object Working : Phase
 
         /** Nothing usable came back (denied camera, blurry photo, empty label). */
@@ -58,8 +62,11 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     private val _saved = MutableStateFlow(false)
     val saved: StateFlow<Boolean> = _saved.asStateFlow()
 
-    /** Cached capture target so Retake reuses one cache file. */
-    private var captureFile: File? = null
+    /** Up to three captured photos (front, back, extra), in order. */
+    private val shots = mutableListOf<Uri>()
+    val shotCount: Int get() = shots.size
+
+    companion object { const val MAX_SHOTS = 3 }
 
     init {
         viewModelScope.launch {
@@ -68,61 +75,77 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Build (or reuse) a FileProvider [Uri] in cacheDir for the camera to write into.
-     * The authority must match the `<provider>` declared in the manifest (see INTEGRATION.md).
+     * Build a fresh FileProvider [Uri] for the *next* shot (front/back/extra), so
+     * each photo lands in its own cache file. The authority matches the manifest's
+     * `<provider>`.
      */
     fun newCaptureUri(): Uri {
         val app = getApplication<Application>()
         val dir = File(app.cacheDir, "scans").apply { mkdirs() }
-        val file = File(dir, "scan_capture.jpg").also { captureFile = it }
+        val index = shots.size.coerceAtMost(MAX_SHOTS - 1)
+        val file = File(dir, "scan_$index.jpg")
         return FileProvider.getUriForFile(app, "${app.packageName}.fileprovider", file)
     }
 
-    /** The camera was launched again. */
-    fun onRetake() {
+    /** Start over (the host re-launches the camera for the first shot). */
+    fun reset() {
+        shots.clear()
         _phase.value = Phase.Capturing
     }
 
-    /** The user dismissed the camera without taking a photo, or denied permission. */
+    /** The user dismissed the camera. If we already have shots, keep them; else empty. */
     fun onCaptureCancelled() {
-        _phase.value = Phase.Empty("No photo was taken. Try Retake when you're ready.")
+        _phase.value = if (shots.isNotEmpty()) {
+            Phase.Reviewing(shots.size)
+        } else {
+            Phase.Empty("No photo was taken. Try again when you're ready.")
+        }
     }
 
-    /** A photo was captured at [uri]; run recognition + the agent off the main thread. */
+    /** A photo was captured at [uri]; record it and return to review (front + back). */
     fun onCaptured(uri: Uri) {
+        if (shots.size < MAX_SHOTS) shots.add(uri)
+        _phase.value = Phase.Reviewing(shots.size)
+    }
+
+    /** Run OCR + barcode over every shot, fuse them, and draft an item. */
+    fun useShots() {
+        if (shots.isEmpty()) {
+            onCaptureCancelled()
+            return
+        }
         _phase.value = Phase.Working
         viewModelScope.launch {
             val app = getApplication<Application>()
-            val scan = withContext(Dispatchers.IO) { LabelScanner.scan(app, uri) }
+            val fused = withContext(Dispatchers.IO) {
+                val results = shots.map { LabelScanner.scan(app, it) }
+                LabelFusion.fuse(results)
+            }
 
-            if (scan.isEmpty) {
+            if (fused.isEmpty) {
                 _phase.value = Phase.Empty(
-                    "Couldn't read the label. Move closer, steady the bottle, and retake.",
+                    "Couldn't read the label. Move closer, steady the bottle, and try again.",
                 )
                 return@launch
             }
 
             val drafted = runCatching {
-                ServiceLocator.agent(app).identifyProduct(scan.combinedText)
+                ServiceLocator.agent(app).identifyProduct(fused.combinedText)
             }.getOrNull()
 
             if (drafted != null) {
-                _phase.value = Phase.Confirm(drafted, fromModel = true, barcode = scan.barcode)
+                _phase.value = Phase.Confirm(drafted, fromModel = true, barcode = fused.barcode)
             } else {
-                // No model (or it declined): still help by prefilling the name from OCR.
-                val name = scan.prominentLine
-                    ?: scan.lines.firstOrNull()
-                    ?: scan.barcode
-                    ?: ""
+                val name = fused.prominentLine ?: fused.lines.firstOrNull() ?: fused.barcode ?: ""
                 _phase.value = Phase.Confirm(
                     DraftItem(
                         name = name,
-                        type = ItemType.CAPSULE,
-                        doseAmount = 1.0,
-                        doseUnit = DoseUnit.UNIT,
+                        type = LabelFusion.guessType(fused),
+                        doseAmount = fused.dose?.first ?: 1.0,
+                        doseUnit = fused.dose?.second ?: DoseUnit.UNIT,
                     ),
                     fromModel = false,
-                    barcode = scan.barcode,
+                    barcode = fused.barcode,
                 )
             }
         }

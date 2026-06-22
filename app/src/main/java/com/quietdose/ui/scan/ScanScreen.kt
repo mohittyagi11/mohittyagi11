@@ -114,8 +114,12 @@ fun ScanScreen(
             return
         }
         pendingUri = uri
-        vm.onRetake()
         runCatching { cameraLauncher.launch(uri) }.onFailure { vm.onCaptureCancelled() }
+    }
+
+    fun startOver() {
+        vm.reset()
+        launchCamera()
     }
 
     // Auto-open the camera the first time the screen appears.
@@ -135,9 +139,18 @@ fun ScanScreen(
                 onClose = onClose,
             )
 
+            is ScanViewModel.Phase.Reviewing -> ReviewContent(
+                shots = p.shots,
+                canAddMore = p.shots < ScanViewModel.MAX_SHOTS,
+                onAddAnother = ::launchCamera,
+                onUse = vm::useShots,
+                onStartOver = ::startOver,
+                onClose = onClose,
+            )
+
             is ScanViewModel.Phase.Working -> CenterStatus(
                 icon = { CircularProgressIndicator(color = Accent, strokeWidth = 2.dp, modifier = Modifier.size(36.dp)) },
-                title = "Reading the label…",
+                title = "Reading the labels…",
                 body = "On-device only. Nothing leaves your phone.",
                 onClose = onClose,
             )
@@ -147,7 +160,7 @@ fun ScanScreen(
                 title = "Nothing to add yet",
                 body = p.reason,
                 onClose = onClose,
-                primary = "Retake" to ::launchCamera,
+                primary = "Retake" to ::startOver,
             )
 
             is ScanViewModel.Phase.Confirm -> ConfirmContent(
@@ -156,7 +169,7 @@ fun ScanScreen(
                 barcode = p.barcode,
                 groups = groups,
                 onClose = onClose,
-                onRetake = ::launchCamera,
+                onRetake = ::startOver,
                 onSave = vm::save,
             )
         }
@@ -241,6 +254,103 @@ private fun TopBar(title: String, onClose: () -> Unit, trailing: (@Composable ()
         Text(title, style = MaterialTheme.typography.titleMedium, color = TextHigh)
         Spacer(Modifier.weight(1f))
         trailing?.invoke()
+    }
+}
+
+/* ----------------------------- Review shots ----------------------------- */
+
+@Composable
+private fun ReviewContent(
+    shots: Int,
+    canAddMore: Boolean,
+    onAddAnother: () -> Unit,
+    onUse: () -> Unit,
+    onStartOver: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val labels = listOf("Front", "Back", "Extra")
+    Column(Modifier.fillMaxSize()) {
+        TopBar(title = "Review shots", onClose = onClose)
+        Column(
+            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+                .navigationBarsPadding().padding(horizontal = 20.dp),
+        ) {
+            Text("Capture front and back", style = MaterialTheme.typography.headlineSmall, color = TextHigh)
+            Text(
+                "Two or three angles read the label far better — the front for the name, the back for dose and ingredients.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMid,
+            )
+            Spacer(Modifier.height(20.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                for (i in 0 until ScanViewModel.MAX_SHOTS) {
+                    val kind = when {
+                        i < shots -> ShotKind.FILLED
+                        i == shots && canAddMore -> ShotKind.ADD
+                        else -> ShotKind.EMPTY
+                    }
+                    ShotTile(
+                        modifier = Modifier.weight(1f),
+                        label = labels.getOrElse(i) { "Shot" },
+                        kind = kind,
+                        onClick = if (kind == ShotKind.ADD) onAddAnother else null,
+                    )
+                }
+            }
+            Spacer(Modifier.height(28.dp))
+            FilledButton(
+                label = if (shots >= 2) "Use $shots photos" else "Use this photo",
+                accent = Accent,
+                enabled = shots >= 1,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onUse,
+            )
+            if (shots == 1) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Tip: add the back too — that's where dose and ingredients are.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextLow,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                TextButtonGhost("Start over", color = TextLow, onClick = onStartOver)
+            }
+        }
+    }
+}
+
+private enum class ShotKind { FILLED, ADD, EMPTY }
+
+@Composable
+private fun ShotTile(modifier: Modifier, label: String, kind: ShotKind, onClick: (() -> Unit)?) {
+    val base = modifier.height(96.dp).clip(RoundedCornerShape(14.dp))
+    val withClick = if (onClick != null) base.androidxClickable(onClick) else base
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = withClick.background(
+            when (kind) {
+                ShotKind.FILLED -> Accent.copy(alpha = 0.16f)
+                ShotKind.ADD -> Surface2
+                ShotKind.EMPTY -> Surface2.copy(alpha = 0.4f)
+            },
+        ),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            when (kind) {
+                ShotKind.FILLED -> {
+                    Text("✓", style = MaterialTheme.typography.titleLarge, color = Accent)
+                    Text(label, style = MaterialTheme.typography.labelMedium, color = TextHigh)
+                }
+                ShotKind.ADD -> {
+                    Icon(Icons.Rounded.PhotoCamera, contentDescription = "Add photo", tint = Accent, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text("Add", style = MaterialTheme.typography.labelMedium, color = Accent)
+                }
+                ShotKind.EMPTY -> Text(label, style = MaterialTheme.typography.labelMedium, color = TextLow)
+            }
+        }
     }
 }
 
