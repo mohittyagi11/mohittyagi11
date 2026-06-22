@@ -1,6 +1,7 @@
 package com.quietdose.di
 
 import android.content.Context
+import com.quietdose.brain.Agent
 import com.quietdose.brain.Brain
 import com.quietdose.brain.BrainProvider
 import com.quietdose.data.DoseRepository
@@ -35,6 +36,9 @@ object ServiceLocator {
 
     /** The on-device brain (heuristic by default; on-device LLM if a model is present). */
     fun brain(context: Context): Brain = BrainProvider.get(context)
+
+    /** The agentic layer: the one loaded model driving many skills. */
+    fun agent(context: Context): Agent = Agent(BrainProvider.engine(context))
 
     /** The pluggable day-data sources (supplements + Health Connect + skincare + usage). */
     fun daySources(context: Context): DaySourceRegistry =

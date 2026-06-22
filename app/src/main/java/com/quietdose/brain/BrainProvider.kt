@@ -13,6 +13,7 @@ import android.content.Context
 object BrainProvider {
 
     @Volatile private var instance: Brain? = null
+    @Volatile private var engineRef: LlmEngine? = null
 
     /** The app-scoped [Brain]. Safe to call from any thread. */
     fun get(context: Context): Brain =
@@ -20,18 +21,31 @@ object BrainProvider {
             instance ?: build(context.applicationContext).also { instance = it }
         }
 
+    /**
+     * The single on-device engine, shared by the [Brain] and the [Agent] so the
+     * model is loaded once and reused for every skill. Always returns an engine;
+     * [LlmEngine.isReady] is false until a model file is present.
+     */
+    fun engine(context: Context): LlmEngine =
+        engineRef ?: synchronized(this) {
+            engineRef ?: MediaPipeLlmEngine(context.applicationContext).also { engineRef = it }
+        }
+
     private fun build(appContext: Context): Brain =
         if (MediaPipeLlmEngine.modelPresent(appContext)) {
-            LlmBrain(MediaPipeLlmEngine(appContext))
+            LlmBrain(engine(appContext))
         } else {
             HeuristicBrain()
         }
 
     /**
-     * Drop the cached instance so the next [get] re-checks for a model file.
-     * Useful after a user has just installed a `.task` model on-device.
+     * Drop the cached brain + engine so the next access re-checks for a model
+     * file. Useful after a user installs/removes a `.task` model on-device.
      */
     fun reset() {
-        synchronized(this) { instance = null }
+        synchronized(this) {
+            instance = null
+            engineRef = null
+        }
     }
 }
