@@ -51,16 +51,28 @@
             </intent-filter>
         </activity>
 
-        <!-- The unified add-item flow (typed / link / scan). Also the share target:
-             appears in the share sheet for links ("Add to Dose"). -->
+        <!-- The unified add-item flow (typed / link / scan). Launched internally and by the
+             share trampoline below; runs in its own task so the action bar is never hidden. -->
         <activity
             android:name=".ui.add.AddItemActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="Add to Dose"
             android:launchMode="singleTask"
             android:taskAffinity="${applicationId}.add"
-            android:autoRemoveFromRecents="true"
-            android:theme="@style/Theme.Dose">
+            android:theme="@style/Theme.Dose" />
+
+        <!-- The external "Add to Dose" share target. An invisible trampoline in its OWN task:
+             it hands the shared link to AddItemActivity in Dose's task (brought to the front),
+             so the add flow never opens buried inside the sharing app (e.g. Amazon). -->
+        <activity
+            android:name=".ui.add.ShareReceiverActivity"
+            android:exported="true"
+            android:label="Add to Dose"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />

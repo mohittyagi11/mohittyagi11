@@ -86,9 +86,13 @@ class AddItemActivity : ComponentActivity() {
         super.onNewIntent(intent); setIntent(intent); recreate()
     }
 
-    /** Land the user in Dose on their stack, not back in the sharing app. */
+    /** Land the user in Dose on their stack, not back in the sharing app. A shared add
+     *  lives in its own task on top of the sharing app, so finishing alone would reveal
+     *  Amazon — we explicitly bring Dose's main task to the front first. */
     private fun finishToApp() {
-        if (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_VIEW) {
+        val fromShare = intent.getBooleanExtra(EXTRA_FROM_SHARE, false) ||
+            intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_VIEW
+        if (fromShare) {
             runCatching {
                 startActivity(
                     Intent(this, MainActivity::class.java)
@@ -109,6 +113,9 @@ class AddItemActivity : ComponentActivity() {
         const val MODE_TYPED = "typed"
         const val MODE_LINK = "link"
         const val MODE_SCAN = "scan"
+        /** Set when launched from the external-share trampoline, so [finishToApp] returns
+         *  to Dose rather than the sharing app. */
+        const val EXTRA_FROM_SHARE = "from_share"
         private const val EXTRA_MODE = "mode"
         private const val EXTRA_URL = "url"
         private const val EXTRA_GROUP = "group"
@@ -116,8 +123,11 @@ class AddItemActivity : ComponentActivity() {
         fun typed(context: Context, groupId: Long): Intent =
             Intent(context, AddItemActivity::class.java).putExtra(EXTRA_MODE, MODE_TYPED).putExtra(EXTRA_GROUP, groupId)
 
-        fun link(context: Context, url: String): Intent =
-            Intent(context, AddItemActivity::class.java).putExtra(EXTRA_MODE, MODE_LINK).putExtra(EXTRA_URL, url)
+        fun link(context: Context, url: String, fromShare: Boolean = false): Intent =
+            Intent(context, AddItemActivity::class.java)
+                .putExtra(EXTRA_MODE, MODE_LINK)
+                .putExtra(EXTRA_URL, url)
+                .putExtra(EXTRA_FROM_SHARE, fromShare)
 
         fun scan(context: Context): Intent =
             Intent(context, AddItemActivity::class.java).putExtra(EXTRA_MODE, MODE_SCAN)
