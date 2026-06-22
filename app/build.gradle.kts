@@ -13,14 +13,31 @@ android {
         applicationId = "com.quietdose"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // Monotonic across CI builds so each published APK installs as an *update*
+        // (never an uninstall), preserving on-device data/history. Falls back to 1
+        // for local builds.
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+        versionName = "0.1." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
+    }
+
+    signingConfigs {
+        // A committed, fixed debug key so every CI build is signed identically.
+        // Without this, CI generates a random debug key per run, the signature
+        // changes, and Android refuses to update in place (forcing a data-wiping
+        // reinstall). Debug-key passwords are the well-known defaults — not secret.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
             isDebuggable = true
+            signingConfig = signingConfigs.getByName("debug")
         }
         release {
             isMinifyEnabled = false
