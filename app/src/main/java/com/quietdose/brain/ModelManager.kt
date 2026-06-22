@@ -212,8 +212,7 @@ object ModelManager {
      */
     private suspend fun materialize(part: File, target: File) {
         when (archiveKind(part)) {
-            ArchiveKind.GZIP_TAR ->
-                GZIPInputStream(part.inputStream().buffered()).use { gz -> extractTar(gz, target) }
+            ArchiveKind.GZIP_TAR -> extractTar(part, target)
             // A .task bundle is a zip — install it as-is, do not unpack it.
             ArchiveKind.ZIP, ArchiveKind.RAW -> installAsIs(part, target)
         }
@@ -242,33 +241,65 @@ object ModelManager {
         }
     }
 
-    /** True for a tar entry that is a loadable model bundle. */
-    private fun isModelEntry(name: String): Boolean {
-        val lower = name.lowercase()
-        return lower.endsWith(".task") || lower.endsWith(".litertlm")
+    /**
+     * Extract the model from a gzip-tar [part] into [target]. We pick the
+     * **largest regular file** in the archive — the model is always by far the
+     * biggest entry — rather than guessing its name/extension (Kaggle's layout
+     * and filenames vary). Two passes over the on-disk archive: scan to find the
+     * largest entry, then extract exactly that one. Leaves [target] absent if the
+     * archive holds no regular file.
+     */
+    private suspend fun extractTar(part: File, target: File) {
+        val biggest = scanLargestTarEntry(part) ?: return
+        gzipTar(part).use { stream ->
+            val header = ByteArray(512)
+            while (true) {
+                coroutineContext.ensureActive()
+                if (!readFully(stream, header)) return
+                if (header.all { it.toInt() == 0 }) return // end-of-archive padding
+                val name = tarName(header)
+                val size = parseOctal(header, 124, 12)
+                if (isRegularFile(header) && name == biggest) {
+                    target.outputStream().use { out -> copyExact(stream, out, size) }
+                    return
+                }
+                skipExact(stream, roundUp512(size)) // skip data to next 512-block
+            }
+        }
     }
 
-    /**
-     * Minimal USTAR reader: walk 512-byte headers, and when we reach a model
-     * entry, stream exactly its declared size into [target]. Enough for the
-     * single-file model archives Kaggle serves; not a general-purpose tar tool.
-     */
-    private suspend fun extractTar(input: InputStream, target: File) {
-        val header = ByteArray(512)
-        val stream = BufferedInputStream(input)
-        while (true) {
-            coroutineContext.ensureActive()
-            if (!readFully(stream, header)) return
-            if (header.all { it.toInt() == 0 }) return // end-of-archive padding
-            val name = String(header, 0, 100, Charsets.UTF_8).trimEnd('\u0000', ' ')
-            val size = parseOctal(header, 124, 12)
-            if (name.isNotEmpty() && isModelEntry(name)) {
-                target.outputStream().use { out -> copyExact(stream, out, size) }
-                return
+    /** First pass: the name of the largest regular file in the tar, or null. */
+    private suspend fun scanLargestTarEntry(part: File): String? {
+        gzipTar(part).use { stream ->
+            val header = ByteArray(512)
+            var bestName: String? = null
+            var bestSize = -1L
+            while (true) {
+                coroutineContext.ensureActive()
+                if (!readFully(stream, header)) break
+                if (header.all { it.toInt() == 0 }) break
+                val name = tarName(header)
+                val size = parseOctal(header, 124, 12)
+                if (isRegularFile(header) && name.isNotEmpty() && size > bestSize) {
+                    bestSize = size
+                    bestName = name
+                }
+                skipExact(stream, roundUp512(size))
             }
-            // Skip this entry's data, rounded up to the 512-byte block boundary.
-            skipExact(stream, roundUp512(size))
+            return bestName
         }
+    }
+
+    private fun gzipTar(part: File): BufferedInputStream =
+        BufferedInputStream(GZIPInputStream(part.inputStream().buffered()))
+
+    private fun tarName(header: ByteArray): String =
+        String(header, 0, 100, Charsets.UTF_8).trimEnd('\u0000', ' ')
+
+    /** USTAR typeflag at offset 156: '0' or NUL is a regular file. */
+    private fun isRegularFile(header: ByteArray): Boolean {
+        val t = header[156].toInt()
+        return t == '0'.code || t == 0
     }
 
     // ---- small stream helpers -------------------------------------------
@@ -364,13 +395,23 @@ object ModelManager {
                 return@withContext Result.failure(IllegalStateException("The selected file was empty."))
             }
 
-            // Allow importing an archive too (extract the .task), not just a raw file.
+            // Allow importing an archive too (a .tar.gz gets unpacked), not just a
+            // raw .task — which is itself a zip and is installed whole.
+            val wasArchive = archiveKind(part) == ArchiveKind.GZIP_TAR
             target.delete()
             materialize(part, target)
             part.delete()
             if (!target.exists() || target.length() <= 0L) {
                 target.delete()
-                return@withContext Result.failure(IllegalStateException("Couldn't install the imported file."))
+                return@withContext Result.failure(
+                    IllegalStateException(
+                        if (wasArchive) {
+                            "That .tar.gz didn't contain a model file. Open the archive and import the .task directly."
+                        } else {
+                            "Couldn't install the imported file."
+                        },
+                    ),
+                )
             }
 
             BrainProvider.reset()

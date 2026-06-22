@@ -115,7 +115,11 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
             val result = ModelManager.importFrom(context, uri)
             busy = false
             refreshInstalled()
-            note = if (result.isSuccess) "Model installed." else "Import failed."
+            note = if (result.isSuccess) {
+                "Model installed. Tap “Test model” to confirm it runs."
+            } else {
+                result.exceptionOrNull()?.message ?: "Import failed."
+            }
         }
     }
 
