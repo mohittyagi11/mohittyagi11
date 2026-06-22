@@ -20,6 +20,9 @@ sealed interface ReportBlock {
         /** Per-parameter ratings the verdict is built from — label → 0..100. Rendered as
          *  calm labelled bars under the overall score (e.g. Fit, Quality, Safety, Trust). */
         val dimensions: List<Pair<String, Int>> = emptyList(),
+        /** The product's primary benefits in 1–2 words each (e.g. "Hydration", "Anti-ageing")
+         *  — shown as small tags/orbs around the product glyph. */
+        val benefits: List<String> = emptyList(),
     ) : ReportBlock
 
     /** Distilled review intelligence — what people actually say, as keywords, not a URL wall. */
