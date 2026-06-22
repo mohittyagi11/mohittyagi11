@@ -1,5 +1,6 @@
 package com.quietdose.ui.stack
 
+import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -46,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -56,7 +58,7 @@ import androidx.compose.ui.window.Dialog
 import com.quietdose.ui.analysis.AnalysisScreen
 import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.scan.ScanScreen
-import com.quietdose.ui.share.ShareConfirmScreen
+import com.quietdose.ui.share.ShareReceiverActivity
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.GroupStyle
 import com.quietdose.ui.theme.Surface1
@@ -81,6 +83,7 @@ private enum class StackMode { Groups, Items }
 @Composable
 fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val expanded = remember { mutableStateMapOf<Long, Boolean>() }
     var editing by remember { mutableStateOf<Editing?>(null) }
     var scanning by remember { mutableStateOf(false) }
@@ -89,7 +92,6 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
     var query by remember { mutableStateOf("") }
     var showAddChooser by remember { mutableStateOf(false) }
     var showLinkInput by remember { mutableStateOf(false) }
-    var sharedUrl by remember { mutableStateOf<String?>(null) }
 
     // Flat catalogue, computed in composable scope (not inside the LazyColumn lambda).
     val catalogRows = remember(state.groups) {
@@ -198,12 +200,21 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
     }
     if (showLinkInput) {
         LinkInputDialog(
-            onSubmit = { url -> showLinkInput = false; sharedUrl = url },
+            onSubmit = { url ->
+                showLinkInput = false
+                // Open the dedicated full-screen Activity (not an in-content overlay that
+                // hides behind the bottom nav). Same path as sharing a link to Dose.
+                runCatching {
+                    context.startActivity(
+                        Intent(context, ShareReceiverActivity::class.java)
+                            .setAction(Intent.ACTION_SEND)
+                            .setType("text/plain")
+                            .putExtra(Intent.EXTRA_TEXT, url),
+                    )
+                }
+            },
             onDismiss = { showLinkInput = false },
         )
-    }
-    sharedUrl?.let { url ->
-        ShareConfirmScreen(url = url, onClose = { sharedUrl = null }, onSaved = { sharedUrl = null })
     }
 
     if (scanning) {

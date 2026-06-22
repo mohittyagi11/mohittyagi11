@@ -1,5 +1,6 @@
 package com.quietdose.brain
 
+import android.app.ActivityManager
 import android.content.Context
 import android.util.Log
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
@@ -95,6 +96,16 @@ class MediaPipeLlmEngine(
             return null
         }
         if (loadFailed) return null
+        // Guard the multi-GB native allocation: if the device doesn't have enough
+        // free memory, DON'T attempt the load — a native OOM here is uncatchable and
+        // takes the whole process down (the scan "reading labels" crash and the
+        // analysis "back to Amazon" crash). Degrade to the deterministic brain instead.
+        if (!hasMemoryFor(modelFile.length())) {
+            loadFailed = true
+            errorMessage = "Not enough free memory to run the model right now."
+            Log.w(TAG, "Skipping model load: insufficient free memory for ${modelFile.length()} bytes")
+            return null
+        }
         return synchronized(this) {
             engine ?: runCatching {
                 val options = LlmInferenceOptions.builder()
@@ -113,6 +124,25 @@ class MediaPipeLlmEngine(
             }
         }
     }
+
+    /**
+     * Is there plausibly enough free memory to load a model of [modelBytes]? A
+     * `.task` int4 model needs roughly its on-disk size resident, plus working
+     * room. We require free memory above that with headroom and refuse on a
+     * low-memory system. Heuristic, but it turns a fatal native OOM into a calm
+     * fallback. Never throws.
+     */
+    private fun hasMemoryFor(modelBytes: Long): Boolean = runCatching {
+        if (modelBytes <= 0L) return@runCatching true
+        val am = appContext.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            ?: return@runCatching true
+        val mi = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+        if (mi.lowMemory) return@runCatching false
+        // Need the model resident plus ~25% working headroom, and stay clear of the
+        // system's low-memory threshold.
+        val needed = (modelBytes * 1.25).toLong() + mi.threshold
+        mi.availMem > needed
+    }.getOrDefault(true)
 
     companion object {
         private const val TAG = "MediaPipeLlmEngine"
