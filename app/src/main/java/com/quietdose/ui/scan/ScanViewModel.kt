@@ -137,23 +137,34 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
 
-                // Draft deterministically from OCR. We deliberately do NOT run the
-                // on-device model here — loading the multi-GB model during scan was a
-                // prime native-OOM crash point. The model runs once, later, in the
-                // Analysis step, which is the single place it's needed.
-                val name = fused.prominentLine ?: fused.lines.firstOrNull() ?: fused.barcode ?: ""
-                _phase.value = Phase.Confirm(
-                    DraftItem(
-                        name = name,
-                        type = LabelFusion.guessType(fused),
-                        doseAmount = fused.dose?.first ?: 1.0,
-                        doseUnit = fused.dose?.second ?: DoseUnit.UNIT,
-                    ),
-                    fromModel = false,
-                    barcode = fused.barcode,
-                    sourceText = fused.combinedText,
-                    shotCount = shots.size,
-                )
+                // Use the on-device model to read the label into a real draft (name,
+                // brand, form, dose) — it's far better than raw OCR. Safe now: the
+                // memory-aware loader skips the load only when memory is too low, and
+                // once loaded it's simply queried. Falls back to OCR if unavailable.
+                val drafted = runCatching {
+                    ServiceLocator.agent(app).identifyProduct(fused.combinedText)
+                }.getOrNull()
+
+                if (drafted != null) {
+                    _phase.value = Phase.Confirm(
+                        drafted, fromModel = true, barcode = fused.barcode,
+                        sourceText = fused.combinedText, shotCount = shots.size,
+                    )
+                } else {
+                    val name = fused.prominentLine ?: fused.lines.firstOrNull() ?: fused.barcode ?: ""
+                    _phase.value = Phase.Confirm(
+                        DraftItem(
+                            name = name,
+                            type = LabelFusion.guessType(fused),
+                            doseAmount = fused.dose?.first ?: 1.0,
+                            doseUnit = fused.dose?.second ?: DoseUnit.UNIT,
+                        ),
+                        fromModel = false,
+                        barcode = fused.barcode,
+                        sourceText = fused.combinedText,
+                        shotCount = shots.size,
+                    )
+                }
             } catch (t: Throwable) {
                 _phase.value = Phase.Empty("Something went wrong reading the photos. Try again.")
             }
