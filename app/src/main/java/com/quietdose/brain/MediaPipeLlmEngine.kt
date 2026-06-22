@@ -5,6 +5,8 @@ import android.util.Log
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.google.mediapipe.tasks.genai.llminference.LlmInference.LlmInferenceOptions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -38,6 +40,14 @@ class MediaPipeLlmEngine(
     @Volatile private var loadFailed: Boolean = false
     @Volatile private var errorMessage: String? = null
 
+    /**
+     * A MediaPipe LLM session can run only ONE generation at a time — two
+     * concurrent `generateResponse` calls (e.g. the Insights tab kicking off a
+     * caption and stack-suggestions together) crash the native runtime. Serialize
+     * all inference through this lock so callers queue instead of colliding.
+     */
+    private val inferenceLock = Mutex()
+
     /** The reason the most recent load/inference failed, for the self-test. */
     override fun lastError(): String? = errorMessage
 
@@ -64,14 +74,16 @@ class MediaPipeLlmEngine(
     override fun isReady(): Boolean = !loadFailed && (engine != null || modelFile.exists())
 
     override suspend fun complete(prompt: String): String = withContext(Dispatchers.Default) {
-        val session = ensureLoaded() ?: return@withContext ""
-        runCatching { session.generateResponse(prompt) }
-            .getOrElse {
-                Log.w(TAG, "Inference failed", it)
-                errorMessage = "Inference failed: ${it.message ?: it.javaClass.simpleName}"
-                ""
-            }
-            .trim()
+        inferenceLock.withLock {
+            val session = ensureLoaded() ?: return@withLock ""
+            runCatching { session.generateResponse(prompt) }
+                .getOrElse {
+                    Log.w(TAG, "Inference failed", it)
+                    errorMessage = "Inference failed: ${it.message ?: it.javaClass.simpleName}"
+                    ""
+                }
+                .trim()
+        }
     }
 
     /** Build the session once, off the main thread; null if unavailable. */
