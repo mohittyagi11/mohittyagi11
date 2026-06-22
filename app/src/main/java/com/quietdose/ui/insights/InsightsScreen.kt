@@ -18,14 +18,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.quietdose.brain.LlmBrain
 import com.quietdose.di.ServiceLocator
 import com.quietdose.ui.home.HomeViewModel
 import com.quietdose.ui.theme.TextHigh
@@ -38,7 +42,15 @@ fun InsightsScreen(modifier: Modifier = Modifier, vm: HomeViewModel = viewModel(
     val state by vm.state.collectAsStateWithLifecycle()
     val events = state.dayEvents
     val context = LocalContext.current
-    val spec = remember(events) { ServiceLocator.brain(context).design(events) }
+    // Heuristic spec immediately; if an on-device model is loaded, let it
+    // re-write the title/caption (one async call) so you can see it working.
+    var spec by remember(events) { mutableStateOf(ServiceLocator.brain(context).design(events)) }
+    LaunchedEffect(events) {
+        val b = ServiceLocator.brain(context)
+        if (b is LlmBrain && b.isModelReady() && events.isNotEmpty()) {
+            runCatching { spec = b.designAsync(events) }
+        }
+    }
 
     Column(
         modifier = modifier

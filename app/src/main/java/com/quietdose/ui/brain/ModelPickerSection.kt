@@ -41,9 +41,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.quietdose.brain.DeviceCapability
+import com.quietdose.brain.LlmBrain
 import com.quietdose.brain.ModelAuth
 import com.quietdose.brain.ModelManager
 import com.quietdose.brain.OnDeviceModel
+import com.quietdose.di.ServiceLocator
 import kotlinx.coroutines.flow.first
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.Done
@@ -246,6 +248,36 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                     }.onFailure { note = "Couldn't open the file picker." }
                 },
             )
+
+            // Test whether the installed model actually loads + infers.
+            if (installed != null) {
+                Spacer(Modifier.height(8.dp))
+                GhostButton(
+                    label = if (busy) "Working…" else "Test model",
+                    enabled = !busy,
+                    color = Accent,
+                    onClick = {
+                        busy = true
+                        note = "Testing the model…"
+                        scope.launch {
+                            val brain = ServiceLocator.brain(context)
+                            note = if (brain is LlmBrain && brain.isModelReady()) {
+                                val reply = runCatching { brain.probe("Reply with one short word.") }
+                                    .getOrDefault("")
+                                if (reply.isBlank()) {
+                                    "Model is installed but produced no output — this .task may not be " +
+                                        "supported by the on-device runtime. Try Gemma 3 1B (int4)."
+                                } else {
+                                    "Working ✓ — the model replied: “$reply”"
+                                }
+                            } else {
+                                "No loadable model — running on the built-in heuristic."
+                            }
+                            busy = false
+                        }
+                    },
+                )
+            }
 
             // Heavier than this device (collapsed)
             if (tooLarge.isNotEmpty()) {

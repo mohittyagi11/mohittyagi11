@@ -33,6 +33,19 @@ class LlmBrain(
 
     override fun design(events: List<DayEvent>): VizSpec = fallback.design(events)
 
+    /** True when a model file is loaded and inference can run. */
+    fun isModelReady(): Boolean = engine.isReady()
+
+    /**
+     * Run a tiny prompt through the engine to prove it loads and infers. Returns
+     * the model's reply, or "" if no model is ready or it produced nothing
+     * (e.g. an unsupported .task for this runtime). For the Settings self-test.
+     */
+    suspend fun probe(prompt: String): String {
+        if (!engine.isReady()) return ""
+        return runCatching { engine.complete(prompt) }.getOrDefault("").trim()
+    }
+
     /**
      * Model-written one-liner, with a heuristic fallback. Safe to call from any
      * coroutine; inference runs off the main thread inside the engine.
