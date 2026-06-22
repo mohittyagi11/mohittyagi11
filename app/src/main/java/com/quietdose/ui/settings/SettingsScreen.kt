@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import com.quietdose.ui.brain.ModelPickerSection
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -80,7 +81,7 @@ fun SettingsScreen(
         item { PermissionsSection(vm = vm, status = permissions) }
         item { HomeWakeSection(vm = vm, settings = settings) }
         item { DataSourcesSection(vm = vm, sources = sources) }
-        item { BrainSection(vm = vm, modelLoaded = modelLoaded, busy = busy) }
+        item { ModelPickerSection() }
         item { Spacer(Modifier.height(24.dp)) }
     }
 }

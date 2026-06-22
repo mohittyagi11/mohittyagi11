@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Survive reboots: re-arm all triggers. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Download an on-device model file (a file fetch, not a cloud LLM call). -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Day-data sources: Health Connect (read-only, on-device). -->
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
