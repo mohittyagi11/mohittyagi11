@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.quietdose.brain.analysis.KindDetector
 import com.quietdose.brain.skills.DraftItem
 import com.quietdose.brain.vision.LabelFusion
 import com.quietdose.brain.vision.LabelScanner
@@ -152,12 +153,15 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 } else {
                     val name = fused.prominentLine ?: fused.lines.firstOrNull() ?: fused.barcode ?: ""
+                    // Only carry the OCR'd amount for INGESTED items — for skincare/devices
+                    // the only number on a label is the bottle volume, not a per-use dose.
+                    val dose = if (KindDetector.detect(name, fused.combinedText).isIngested) fused.dose else null
                     _phase.value = Phase.Confirm(
                         DraftItem(
                             name = name,
                             type = LabelFusion.guessType(fused),
-                            doseAmount = fused.dose?.first ?: 1.0,
-                            doseUnit = fused.dose?.second ?: DoseUnit.UNIT,
+                            doseAmount = dose?.first ?: 1.0,
+                            doseUnit = dose?.second ?: DoseUnit.UNIT,
                         ),
                         fromModel = false,
                         barcode = fused.barcode,

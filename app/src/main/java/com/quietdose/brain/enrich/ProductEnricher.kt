@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.quietdose.brain.BrainProvider
 import com.quietdose.brain.analysis.IngredientCatalog
+import com.quietdose.brain.analysis.KindDetector
 import com.quietdose.brain.analysis.ModelCapability
 import com.quietdose.brain.analysis.ProductSignals
 import com.quietdose.brain.skills.DraftItem
@@ -88,12 +89,19 @@ object ProductEnricher {
         var doseUnit = DoseUnit.UNIT
 
         detectForm(title.orEmpty() + " " + html.take(4000))?.let { type = it }
-        // The dose lives in the description/panel, not just the title — scan the
-        // broader text so e.g. "Selenium 200 mcg" is read instead of defaulting to 1.
-        detectDose(ingredientsText ?: title.orEmpty())?.let { (amt, unit) -> doseAmount = amt; doseUnit = unit }
+        // Dose detection is only meaningful for INGESTED items (a supplement's mg/mcg/IU).
+        // For applied items (skincare/haircare/devices) the only number on the page is the
+        // BOTTLE volume (e.g. "100 ml") — reading that as a per-use amount is exactly the
+        // "each use = 100 ml" bug. Leave their amount to the analysis recommendation instead.
+        val kind = KindDetector.detect(cleanedTitle ?: title.orEmpty(), ingredientsText)
+        if (kind.isIngested) {
+            // The dose lives in the description/panel, not just the title — scan the
+            // broader text so e.g. "Selenium 200 mcg" is read instead of defaulting to 1.
+            detectDose(ingredientsText ?: title.orEmpty())?.let { (amt, unit) -> doseAmount = amt; doseUnit = unit }
+        }
 
         // Optional on-device refinement — feed the broader page text so the model
-        // can also read the dose, not just the name.
+        // can also read the dose, not just the name. (Dose override stays ingested-only.)
         val modelInput = ingredientsText ?: combined
         if (ModelCapability.engineReady(context) && !modelInput.isNullOrBlank()) {
             runCatching {
@@ -101,7 +109,7 @@ object ProductEnricher {
                 if (drafted != null) {
                     if (name.isNullOrBlank()) name = drafted.name
                     if (type == ItemType.CAPSULE) type = drafted.type
-                    if (doseUnit == DoseUnit.UNIT && drafted.doseUnit != DoseUnit.UNIT) {
+                    if (kind.isIngested && doseUnit == DoseUnit.UNIT && drafted.doseUnit != DoseUnit.UNIT) {
                         doseAmount = drafted.doseAmount; doseUnit = drafted.doseUnit
                     }
                 }

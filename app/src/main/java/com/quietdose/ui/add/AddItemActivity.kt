@@ -62,15 +62,12 @@ class AddItemActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        // Share targets get launched *inside the sender's task* (e.g. Amazon), so the
-        // add flow appears buried under their window. If we detect that, re-launch
-        // ourselves into Dose's own task and bring it to the front, then bow out of
-        // the sender's stack. After that we're the task root and skip this.
-        if (isExternalShare() && !isTaskRoot) {
-            relaunchInOwnTask()
-            return
-        }
-
+        // A share from another app (e.g. Amazon) used to appear buried inside the
+        // sender's task. We fix that purely declaratively: AddItemActivity has its
+        // OWN taskAffinity (see the manifest), so a singleTask launch lands in Dose's
+        // own task, foregrounded — no fragile relaunch dance, and the share's
+        // link/scan flow runs normally. (A relaunch loop here previously ate the
+        // shared link before it could resolve.)
         val mode = intent.getStringExtra(EXTRA_MODE)
             ?: if (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_VIEW) MODE_LINK else MODE_TYPED
         val url = intent.getStringExtra(EXTRA_URL) ?: sharedUrl(intent)
@@ -87,30 +84,6 @@ class AddItemActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent); setIntent(intent); recreate()
-    }
-
-    /** True when we were opened from another app's share/open, not from inside Dose. */
-    private fun isExternalShare(): Boolean =
-        intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_VIEW
-
-    /**
-     * Tear ourselves out of the sender's task and start fresh as Dose's own task,
-     * in the foreground. NEW_TASK pairs with our `taskAffinity` (singleTask) to land
-     * in — and bring to the front — Dose's own stack; CLEAR_TOP + SINGLE_TOP means a
-     * second share reuses one clean instance instead of stacking copies. We forward
-     * the original action/data/extras so the relaunch resolves the same share.
-     */
-    private fun relaunchInOwnTask() {
-        val relaunch = Intent(intent)
-            .setClass(this, AddItemActivity::class.java)
-            .addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
-            )
-        runCatching { startActivity(relaunch) }
-        // Drop the copy that's wedged inside the sender's task, recents and all.
-        finishAndRemoveTask()
     }
 
     /** Land the user in Dose on their stack, not back in the sharing app. */
