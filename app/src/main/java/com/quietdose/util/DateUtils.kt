@@ -5,7 +5,6 @@ import com.quietdose.data.model.FrequencyType
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
-import kotlin.math.floorMod
 
 /**
  * Day math. The "day" an intake belongs to rolls over at [rolloverHour] rather
@@ -31,7 +30,9 @@ object DateUtils {
         FrequencyType.AS_NEEDED -> false
         FrequencyType.EVERY_N_DAYS -> {
             val n = item.frequencyInterval.coerceAtLeast(1)
-            floorMod(epochDay - item.frequencyAnchorEpochDay, n.toLong()) == 0L
+            // Kotlin's Long.mod is floored (sign of divisor), so this is correct
+            // for days before the anchor too — the cadence self-heals.
+            (epochDay - item.frequencyAnchorEpochDay).mod(n.toLong()) == 0L
         }
         FrequencyType.WEEKLY -> {
             // bit 0 = Monday … bit 6 = Sunday
