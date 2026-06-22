@@ -45,7 +45,7 @@ import com.quietdose.data.entity.ItemEntity
 import com.quietdose.data.model.DoseUnit
 import com.quietdose.data.model.FrequencyType
 import com.quietdose.data.model.ItemType
-import com.quietdose.ui.icons.ItemIcon
+import com.quietdose.ui.analysis.ProductGlyph
 import com.quietdose.ui.stack.ChipGroup
 import com.quietdose.ui.stack.EditorSection
 import com.quietdose.ui.stack.FilledButton
@@ -123,8 +123,17 @@ fun AddConfirm(
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(56.dp).clip(CircleShape).background(accent.copy(alpha = 0.14f)),
-                ) { ItemIcon(type = type, tint = accent, modifier = Modifier.size(40.dp)) }
+                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(Surface1),
+                ) {
+                    // The dynamic on-device lookalike — derived from name/brand/form.
+                    ProductGlyph(
+                        name = name,
+                        brand = brand.ifBlank { null },
+                        category = category.ifBlank { null },
+                        type = type,
+                        modifier = Modifier.size(48.dp),
+                    )
+                }
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(name.ifBlank { "New item" }, style = MaterialTheme.typography.titleLarge, color = TextHigh)

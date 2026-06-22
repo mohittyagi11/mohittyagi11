@@ -78,9 +78,21 @@ object ProductEnricher {
             ?: meta(html, "og:description")
             ?: meta(html, "description")
         val combined = listOfNotNull(cleanedTitle, description?.take(300)).joinToString(". ")
+        // The page's "how to use / directions" section — the missing piece that lets the
+        // model work out a sane per-use amount instead of reading the bottle volume.
+        val directions = extractDirections(html)
+        val imageUrl = meta(html, "og:image")
+        // The pack's net volume/count ("100 ml", "50 g") — captured SEPARATELY from any
+        // dose; it must NEVER be fed as a per-use amount (that's the "each use = 100 ml" bug).
+        val packSize = detectPackSize(title.orEmpty() + " " + html.take(6000))
         // The real source text the analyzer + model reason over — keep a generous chunk
-        // (not a 1200-char sliver), since this is what was starving the SLM.
-        val ingredientsText = listOfNotNull(cleanedTitle, description?.take(4000)).joinToString(". ").ifBlank { null }
+        // (not a 1200-char sliver), since this is what was starving the SLM. Fold the
+        // directions in too, so the model sees how the product is actually applied/taken.
+        val ingredientsText = listOfNotNull(
+            cleanedTitle,
+            description?.take(4000),
+            directions?.let { "Directions: $it" },
+        ).joinToString(". ").ifBlank { null }
 
         // Structured, validated extraction is the spine; the model only refines the name.
         var name = cleanedTitle
@@ -149,6 +161,9 @@ object ProductEnricher {
                 ratingCount = ratingCount,
                 servings = servings,
                 ingredientsText = ingredientsText,
+                directionsText = directions,
+                packSize = packSize,
+                imageUrl = imageUrl,
                 sourceTitle = title,
                 url = url,
             ),
@@ -323,6 +338,54 @@ object ProductEnricher {
         val m = Regex("(\\d{2,3})\\s*(capsules|tablets|softgels|gummies|servings|veg(?:etarian)? caps|count|pcs)", RegexOption.IGNORE_CASE)
             .find(text) ?: return null
         return m.groupValues[1].toIntOrNull()?.takeIf { it in 5..1000 }
+    }
+
+    /**
+     * Pull the "Directions to use / How to use / How to apply" section out of the page.
+     * Regex around the common headings, grab a few hundred chars of what follows, then
+     * strip tags and decode entities with the same approach the rest of the parser uses.
+     * Best-effort: returns null when no recognizable directions block is present.
+     */
+    private fun extractDirections(html: String): String? {
+        val heads = listOf(
+            "directions to use", "directions for use", "directions",
+            "how to use", "how to apply", "how to take", "usage", "method of use", "application",
+        )
+        for (h in heads) {
+            // Heading text → take the chunk that follows it (skipping the closing tag).
+            val m = Regex(
+                Regex.escape(h) + "\\s*</?[^>]*>?(.{20,600}?)(?:</(?:p|div|section|li|ul|td)>|<h[1-6])",
+                setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+            ).find(html) ?: continue
+            val text = stripTags(m.groupValues[1])
+            if (text.length >= 15) return text.take(400)
+        }
+        return null
+    }
+
+    /** Strip HTML tags + decode entities, collapsing whitespace — for free-text sections. */
+    private fun stripTags(s: String): String =
+        decode(s.replace(Regex("<[^>]+>"), " ")).replace(Regex("\\s+"), " ").trim()
+
+    /**
+     * The pack's net volume/count as printed (e.g. "100 ml", "50 g", "60 capsules") — the
+     * BOTTLE size, captured for display only. Deliberately separate from [detectDose]: this
+     * is never fed back as a per-use amount.
+     */
+    private fun detectPackSize(text: String): String? {
+        val m = Regex(
+            "(\\d{1,4}(?:\\.\\d+)?)\\s*(ml|millilitre|milliliter|l|litre|liter|g|gram|kg|oz|fl\\.?\\s*oz|capsules|tablets|softgels|gummies|count|pcs|sheets)\\b",
+            RegexOption.IGNORE_CASE,
+        ).find(text) ?: return null
+        val num = m.groupValues[1]
+        val unit = m.groupValues[2].lowercase().replace(Regex("\\s+"), " ").trim()
+        val pretty = when (unit) {
+            "millilitre", "milliliter" -> "ml"
+            "litre", "liter" -> "l"
+            "gram" -> "g"
+            else -> unit
+        }
+        return "$num $pretty"
     }
 
     /** Last-resort brand extraction from common marketplace markup (e.g. Amazon byline). */

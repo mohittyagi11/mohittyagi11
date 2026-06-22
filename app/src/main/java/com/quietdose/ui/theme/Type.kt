@@ -74,3 +74,17 @@ val DoseTypography = Typography(
         letterSpacing = 0.6.sp,
     ),
 )
+
+/**
+ * The tabular-feeling number that sits at the right of a labelled rating bar — a
+ * touch heavier than body so the score reads at a glance, tight line-height so it
+ * aligns with the slim track. Kept as a standalone token (not a Material slot) so
+ * the rating rows can share one consistent figure style.
+ */
+val DimensionFigure: TextStyle = TextStyle(
+    fontFamily = Sans,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 13.sp,
+    lineHeight = 16.sp,
+    letterSpacing = 0.2.sp,
+)

@@ -38,6 +38,25 @@ val GoodTint = Color(0x1A6FCF97)       // ~10% green wash
 val CautionTint = Color(0x1FD9A65C)    // ~12% amber wash
 val AccentTint = Color(0x147C9CFF)     // ~8% periwinkle wash
 
+// Mood ambience — the analysing screen breathes a faint wash behind the glyph,
+// keyed to the model's mood. Kept near-black so it's atmosphere, never colour.
+// (Used as a low-alpha glow/background tint; pair with Ink underneath.)
+val MoodCalm = Color(0xFF7C9CFF)       // periwinkle — settled, neutral
+val MoodCurious = Color(0xFF8FB7C9)    // soft cyan — leaning in
+val MoodFavorable = Color(0xFF6FCF97)  // calm green — liking it
+val MoodCautious = Color(0xFFD9A65C)   // warm amber — taking care
+val MoodSkeptical = Color(0xFFC58A78)  // clay — holding back
+val MoodReflective = Color(0xFF9B8CE0) // indigo — weighing it
+
+// Product-glyph category bases — a stable, calm tint per container family that
+// the per-product hash blends toward, so a serum reads cool and a balm warm
+// before the name even nudges the hue. Desaturated to sit on the dark canvas.
+val GlyphSkincare = Color(0xFF8FB7E0)  // cool blue — serums, essences, toners
+val GlyphHaircare = Color(0xFF9B8CE0)  // soft violet — oils, scalp care
+val GlyphDevice = Color(0xFF8FB89A)    // sage — tools, devices
+val GlyphSupplement = Color(0xFFE0B877) // warm gold — pills, powders
+val GlyphNeutral = Color(0xFF9AA0B4)   // fallback grey-blue
+
 // Per-group tints — deliberately desaturated so colour codes the day without
 // shouting on the near-black canvas. One hue per routine.
 val TintMorning = Color(0xFFE0B877) // warm gold — on waking

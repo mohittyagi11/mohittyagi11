@@ -185,7 +185,8 @@ object StackAnalyzer {
         val total = aspectBlocks.size.coerceAtLeast(1)
         aspectBlocks = aspectBlocks.mapIndexed { i, block ->
             emit(block.aspect.title, chapterCommentary(block), moodFor(block), 0.35f + 0.5f * (i.toFloat() / total))
-            if (engineUp && tier == ModelTier.CAPABLE && block.state != AspectState.NOT_ASSESSED) {
+            // REVIEWS is rendered via the distilled Reviews block, so don't spend a model call enriching it.
+            if (engineUp && tier == ModelTier.CAPABLE && block.state != AspectState.NOT_ASSESSED && block.aspect != AnalysisAspect.REVIEWS) {
                 val enriched = runCatching {
                     BrainProvider.engine(app).complete(aspectPrompt(name, matched, block, goal, concern, sourceMaterial)).trim()
                 }.getOrNull()?.let { sanitize(it) }
@@ -247,13 +248,25 @@ object StackAnalyzer {
             pairings = dependencies,
         )
 
+        // Per-parameter dimensions for the verdict, sourced from the aspect scores so the
+        // bars and the chapters tell the same story. Skip any dimension we couldn't score.
+        val dimensions = supplementDimensions(aspectBlocks)
+
+        // Distilled review intelligence — what people report, not a wall of URLs. Built from
+        // the same fetched web results; replaces the old REVIEWS aspect chapter below.
+        val reviews = if (engineUp) ReviewDigestSkill.digest(BrainProvider.engine(app), name, webResults)
+        else ReviewDigestSkill.fallback(webResults)
+
         // --- Compose the dynamic page: big picture first, then facts, chapters, trail ---
         val blocks = buildList<ReportBlock> {
-            add(ReportBlock.Verdict(verdict, rationale, overallScore, verdictTags, byModel))
+            add(ReportBlock.Verdict(verdict, rationale, overallScore, verdictTags, byModel, dimensions))
             buildFactsBlock(matched, product)?.let { add(it) }
             buildIngredientsBlock(ingredients)?.let { add(it) }
             buildDoseMeter(matched, recDose, recUnit)?.let { add(it) }
-            addAll(aspectBlocks)
+            // Aspects in order, but swap the REVIEWS chapter for the distilled Reviews block.
+            aspectBlocks.forEach { block ->
+                if (block.aspect == AnalysisAspect.REVIEWS) add(reviews) else add(block)
+            }
             if (grounded.isNotEmpty()) add(ReportBlock.Reasoning(grounded.distinct().take(8), byModel))
         }
 
@@ -498,6 +511,29 @@ object StackAnalyzer {
         val num = weighted.sumOf { it.first * it.second }
         val den = weighted.sumOf { it.first }
         return Math.round(num.toDouble() / den).toInt()
+    }
+
+    /**
+     * The five verdict dimensions for the supplement path, lifted straight from the
+     * already-computed per-aspect scores so the bars and the chapters agree. Fixed labels
+     * shared with the profile path: Fit, Quality, Safety, Routine, Trust. A dimension is
+     * omitted when its source score is null (nothing to honestly show).
+     */
+    private fun supplementDimensions(blocks: List<ReportBlock.Aspect>): List<Pair<String, Int>> {
+        fun score(a: AnalysisAspect) = blocks.firstOrNull { it.aspect == a }?.score
+        val trustSource = score(AnalysisAspect.TRUST_SOURCE)
+        val reviews = score(AnalysisAspect.REVIEWS)
+        val trust = when {
+            trustSource != null && reviews != null -> (trustSource + reviews) / 2
+            else -> trustSource ?: reviews
+        }
+        return buildList {
+            score(AnalysisAspect.FIT_CONDITION)?.let { add("Fit" to it) }
+            score(AnalysisAspect.QUALITY)?.let { add("Quality" to it) }
+            score(AnalysisAspect.SAFETY)?.let { add("Safety" to it) }
+            score(AnalysisAspect.STACK)?.let { add("Routine" to it) }
+            trust?.let { add("Trust" to it) }
+        }
     }
 
     /** Naive but honest goal-alignment: keyword overlap with benefits/category/name. */
@@ -761,7 +797,7 @@ object StackAnalyzer {
         emit("Settling in", "Taking a first look at ${name.ifBlank { "this" }}…", Mood.CALM, 0.06f)
         emit("Listening to the web", "Seeing what people actually say about it…", Mood.CURIOUS, 0.2f)
         val webResults = runCatching { researchWeb(name, product?.brand) }.getOrDefault(emptyList())
-        val sourceMaterial = buildSourceMaterial(product?.ingredientsText, webResults)
+        val sourceMaterial = buildSourceMaterial(product?.ingredientsText, webResults, product?.directionsText)
 
         emit("Working out what it is", "Reading it as ${kind.label.lowercase()}, not a pill…", Mood.CALM, 0.45f)
         val routineNames = currentStack.map { it.name }
@@ -820,8 +856,20 @@ object StackAnalyzer {
             }
         }
 
+        // Where it sits in the routine — the placement answer (NOT supplement timing).
+        val routineStep = profile.routineStep.trim().ifBlank {
+            if (kind.isIngested) "" else "Note whether it's an AM or PM step and where it sits in your routine."
+        }
+
+        // Distilled review intelligence (replaces the old "Trust & reviews" chapter).
+        val reviews = if (engineUp) ReviewDigestSkill.digest(BrainProvider.engine(app), name, webResults)
+        else ReviewDigestSkill.fallback(webResults)
+
+        // The five verdict dimensions, derived honestly and deterministically from the profile.
+        val dimensions = profileDimensions(profile, kind, goal, stackClashes.isNotEmpty(), currentStack.isNotEmpty(), reviews.state)
+
         val blocks = buildList<ReportBlock> {
-            add(ReportBlock.Verdict(verdictLabel, rationale, profile.confidence, listOf(profile.kind.label, profile.categoryLabel).filter { it.isNotBlank() }.distinct(), byModel))
+            add(ReportBlock.Verdict(verdictLabel, rationale, profile.confidence, listOf(profile.kind.label, profile.categoryLabel).filter { it.isNotBlank() }.distinct(), byModel, dimensions))
             buildProfileFacts(profile, product)?.let { add(it) }
 
             // Good for & who it's for.
@@ -836,9 +884,10 @@ object StackAnalyzer {
                 add(ReportBlock.Chapter(absorbTitle, profile.absorption, emptyList(), AspectState.MIXED))
             }
 
-            // How & when to use — with the auto-recommended amount up front.
+            // How & when to use — routine placement + the auto-recommended amount up front.
             run {
                 val lines = buildList {
+                    if (routineStep.isNotBlank()) add(AnalysisLine("Where it fits — $routineStep", Severity.GOOD))
                     amountText?.let { add(AnalysisLine("Suggested amount — $it", Severity.GOOD)) }
                 }
                 add(ReportBlock.Chapter("How & when to use", usageText, lines, AspectState.MIXED))
@@ -862,12 +911,8 @@ object StackAnalyzer {
                 add(ReportBlock.Chapter("Plays with your routine", null, lines, AspectState.CAUTION))
             }
 
-            // Trust & reviews — what the web says.
-            if (webResults.isNotEmpty()) {
-                val lines = webResults.take(5).map { AnalysisLine("${it.domain}: ${(it.snippet.ifBlank { it.title }).take(160)}") } +
-                    AnalysisLine("From the open web — weigh the source, treat as leads.", Severity.CAUTION)
-                add(ReportBlock.Chapter("Trust & reviews", null, lines, AspectState.MIXED))
-            }
+            // Trust & reviews — distilled into what people report, not a wall of URLs.
+            if (webResults.isNotEmpty()) add(reviews)
 
             // Check yourself.
             if (profile.verify.isNotEmpty()) {
@@ -897,6 +942,60 @@ object StackAnalyzer {
         )
     }
 
+    /**
+     * The five verdict dimensions for the non-supplement (profile) path — the SAME labels
+     * as the supplement path: Fit, Quality, Safety, Routine, Trust. Derived honestly and
+     * deterministically from the profile so the bars are explainable:
+     *   - Fit:     goal alignment (when a goal is given) tempered by fill confidence.
+     *   - Quality: whether absorption/how-it-works is known + curated-vs-guessed confidence.
+     *   - Safety:  fewer safety flags → higher.
+     *   - Routine: drops when it clashes with the user's current stack.
+     *   - Trust:   fill confidence nudged by review sentiment.
+     */
+    private fun profileDimensions(
+        profile: CategoryProfile,
+        kind: ItemKind,
+        goal: String?,
+        clashesWithStack: Boolean,
+        hasStack: Boolean,
+        reviewState: AspectState,
+    ): List<Pair<String, Int>> {
+        fun clamp(v: Int) = v.coerceIn(0, 100)
+        val conf = profile.confidence.coerceIn(0, 100)
+
+        // Fit — goal alignment against goodFor/categoryLabel/whatItIs, blended with confidence.
+        val fit = if (goal.isNullOrBlank()) null else {
+            val hay = (profile.goodFor + profile.categoryLabel + profile.whatItIs).joinToString(" ").lowercase()
+            val tokens = goal.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length >= 4 }
+            val aligned = tokens.any { hay.contains(it) }
+            clamp(if (aligned) 70 + conf / 5 else 45 + conf / 5)
+        }
+        // Quality — known absorption + a sane confidence floor.
+        val quality = clamp((if (profile.absorption.isNotBlank()) 70 else 50) + conf / 4)
+        // Safety — fewer flagged items is safer; no flags reads as gently clear.
+        val safety = clamp(90 - 12 * profile.safety.size)
+        // Routine — clean unless it clashes with something they already use.
+        val routine = when {
+            clashesWithStack -> 45
+            profile.dontCombine.isNotEmpty() && hasStack -> 70
+            else -> 85
+        }
+        // Trust — confidence nudged by what reviewers report.
+        val trust = clamp(conf + when (reviewState) {
+            AspectState.GOOD -> 10
+            AspectState.CAUTION -> -10
+            else -> 0
+        })
+
+        return buildList {
+            fit?.let { add("Fit" to it) }
+            add("Quality" to quality)
+            add("Safety" to safety)
+            add("Routine" to routine)
+            add("Trust" to trust)
+        }
+    }
+
     /** Map the SLM's free-text unit ("drops", "pump", "pea-size") to a tracked [DoseUnit].
      *  Descriptive words we can't measure (pump, dab, pea-size) become a countable UNIT;
      *  the human wording is preserved in the "How & when to use" chapter. */
@@ -920,6 +1019,9 @@ object StackAnalyzer {
         val rows = buildList {
             add("Type" to typeLabel)
             brand?.takeIf { it.isNotBlank() }?.let { add("Brand" to it) }
+            // Pack size is the bottle's net volume/count — a fact for the shelf, never a per-use dose.
+            product?.packSize?.takeIf { it.isNotBlank() }?.let { add("Pack size" to it) }
+            profile.routineStep.trim().takeIf { it.isNotBlank() }?.let { add("Routine step" to it) }
             product?.priceText?.let { add("Price" to it) }
             product?.ratingValue?.let { r -> add("Rating" to "$r/5${product.ratingCount?.let { " ($it)" } ?: ""}") }
         }
@@ -944,6 +1046,7 @@ object StackAnalyzer {
         if (profile.goodFor.isNotEmpty()) appendLine("Good for: ${profile.goodFor.joinToString(", ")}")
         if (profile.fitsWho.isNotEmpty()) appendLine("Suits: ${profile.fitsWho.joinToString(", ")}")
         if (profile.usage.isNotBlank()) appendLine("Usage: ${profile.usage}")
+        if (profile.routineStep.isNotBlank()) appendLine("Routine step: ${profile.routineStep}")
         profile.recommendedAmount?.let { appendLine("Amount per use: ${fmt(it)} ${profile.recommendedUnit ?: ""}".trim()) }
         if (profile.absorption.isNotBlank()) appendLine("Absorption: ${profile.absorption}")
         if (profile.safety.isNotEmpty()) appendLine("Safety: ${profile.safety.joinToString("; ")}")
@@ -959,12 +1062,19 @@ object StackAnalyzer {
         appendLine("Reply with only the synthesis.")
     }
 
-    /** Combines the product's own text (label/description or OCR) and web reviews into
-     *  the raw material the model reasons over — capped to stay prompt-friendly. */
-    private fun buildSourceMaterial(productText: String?, web: List<WebSearch.WebResult>): String = buildString {
+    /** Combines the product's own text (label/description or OCR), its directions-to-use
+     *  section and web reviews into the raw material the model reasons over — capped to
+     *  stay prompt-friendly. Directions are surfaced so the model can derive a per-use
+     *  amount and routine placement instead of misreading the pack volume. */
+    private fun buildSourceMaterial(productText: String?, web: List<WebSearch.WebResult>, directions: String? = null): String = buildString {
         productText?.takeIf { it.isNotBlank() }?.let {
             appendLine("PRODUCT TEXT (its own label/description — marketing, treat as claims):")
             appendLine(it.take(2500))
+            appendLine()
+        }
+        directions?.takeIf { it.isNotBlank() }?.let {
+            appendLine("DIRECTIONS TO USE (from the page — read the per-use amount and routine step from HERE, never the pack volume):")
+            appendLine(it.take(600))
             appendLine()
         }
         if (web.isNotEmpty()) {

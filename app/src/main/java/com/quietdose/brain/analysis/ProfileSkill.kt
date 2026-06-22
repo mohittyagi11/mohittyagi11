@@ -47,6 +47,7 @@ object ProfileSkill {
         goodFor = curated.goodFor.ifEmpty { model.goodFor },
         fitsWho = curated.fitsWho.ifEmpty { model.fitsWho },
         usage = curated.usage.ifBlank { model.usage },
+        routineStep = curated.routineStep.ifBlank { model.routineStep },
         recommendedAmount = curated.recommendedAmount ?: model.recommendedAmount,
         recommendedUnit = curated.recommendedUnit ?: model.recommendedUnit,
         absorption = curated.absorption.ifBlank { model.absorption },
@@ -74,12 +75,14 @@ object ProfileSkill {
         appendLine()
         appendLine("Keys:")
         appendLine("  kind: one of SUPPLEMENT, SKINCARE, HAIRCARE, DEVICE, FOOD, OTHER")
+        appendLine("  brand: the maker/brand name if the material states it, else \"\"")
         appendLine("  categoryLabel: the product TYPE, NOT the brand — e.g. \"Hydrating toner\", \"Vitamin C serum\", \"LED mask\"")
         appendLine("  whatItIs: one plain sentence")
         appendLine("  goodFor: array of short phrases — what it genuinely helps with")
         appendLine("  fitsWho: array — who it suits (skin/hair types, situations) and who should skip it")
         appendLine("  usage: how AND when — AM/PM, where in the routine, frequency, apply vs take")
-        appendLine("  recommendedAmount + recommendedUnit: the amount per use, e.g. 2 + \"drops\", 1 + \"pump\", 0.5 + \"ml\". The 'how much' answer — use a sensible amount for this product type; omit only if truly unknowable.")
+        appendLine("  routineStep: where it sits in a skincare/haircare routine, e.g. \"After toner, before serum; AM and PM\" or \"Last step, AM\". This is routine PLACEMENT, NOT supplement timing (never fasted/with-food). Empty when it doesn't apply (devices, food).")
+        appendLine("  recommendedAmount + recommendedUnit: the amount PER USE, read from the directions — e.g. 2 + \"drops\", 1 + \"pump\", 0.5 + \"ml\". The 'how much' answer. NEVER use the pack/bottle volume (e.g. \"100 ml\") as the per-use amount. Use a sensible amount for this product type; omit only if truly unknowable.")
         appendLine("  absorption: how it works / how well it sinks in — the 'quality' lens, scoped to the category")
         appendLine("  safety: array — irritation, allergens, pregnancy, who should avoid")
         appendLine("  dontCombine: array — what NOT to layer/combine it with (e.g. retinol + AHA), especially against the user's current routine below")

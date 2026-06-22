@@ -1,5 +1,6 @@
 package com.quietdose.ui.analysis
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -54,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -69,8 +71,10 @@ import com.quietdose.brain.analysis.AnalysisProgress
 import com.quietdose.brain.analysis.AnalysisReport
 import com.quietdose.brain.analysis.AspectState
 import com.quietdose.brain.analysis.IngredientCatalog
+import com.quietdose.brain.analysis.KindDetector
 import com.quietdose.brain.analysis.ModelCapability
 import com.quietdose.brain.analysis.ModelTier
+import com.quietdose.brain.analysis.Mood
 import com.quietdose.brain.analysis.ProductSignals
 import com.quietdose.brain.analysis.ReportBlock
 import com.quietdose.brain.analysis.Severity
@@ -81,7 +85,6 @@ import com.quietdose.data.entity.ItemEntity
 import com.quietdose.data.model.DoseUnit
 import com.quietdose.data.model.IngredientCodec
 import com.quietdose.di.ServiceLocator
-import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.stack.ChipGroup
 import com.quietdose.ui.stack.ChoiceChip
 import com.quietdose.ui.stack.FilledButton
@@ -94,9 +97,16 @@ import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.AccentTint
 import com.quietdose.ui.theme.Caution
 import com.quietdose.ui.theme.CautionTint
+import com.quietdose.ui.theme.DimensionFigure
 import com.quietdose.ui.theme.Done
 import com.quietdose.ui.theme.GoodTint
 import com.quietdose.ui.theme.Ink
+import com.quietdose.ui.theme.MoodCalm
+import com.quietdose.ui.theme.MoodCautious
+import com.quietdose.ui.theme.MoodCurious
+import com.quietdose.ui.theme.MoodFavorable
+import com.quietdose.ui.theme.MoodReflective
+import com.quietdose.ui.theme.MoodSkeptical
 import com.quietdose.ui.theme.Outline
 import com.quietdose.ui.theme.Surface1
 import com.quietdose.ui.theme.Surface2
@@ -265,29 +275,76 @@ private fun IntentStep(
 
 /* ------------------------------ Analyzing ------------------------------ */
 
+/** Map the model's mood to a calm ambient tint behind the glyph. */
+private fun moodColor(mood: Mood?): Color = when (mood) {
+    Mood.CALM, null -> MoodCalm
+    Mood.CURIOUS -> MoodCurious
+    Mood.FAVORABLE -> MoodFavorable
+    Mood.CAUTIOUS -> MoodCautious
+    Mood.SKEPTICAL -> MoodSkeptical
+    Mood.REFLECTIVE -> MoodReflective
+}
+
+/**
+ * Working-it-out, not a mechanical blob: the product's own [ProductGlyph] sits in
+ * a soft, slowly-breathing halo whose colour eases toward the model's current
+ * mood — so the screen visibly "leans" favourable / cautious as the read resolves.
+ */
 @Composable
 private fun AnalyzingStep(item: ItemEntity, thoughts: List<AnalysisProgress>) {
     val current = thoughts.lastOrNull()
     val progress by animateFloatAsState(current?.fraction ?: 0.05f, tween(500), label = "prog")
+    val mood by animateColorAsState(moodColor(current?.mood), tween(900), label = "mood")
     val t = rememberInfiniteTransition(label = "an")
-    val a by t.animateFloat(0.5f, 1f, infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Reverse), label = "pulse")
+    // A gentle, slow breath — the halo grows and fades, never strobes.
+    val breath by t.animateFloat(0.85f, 1.06f, infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Reverse), label = "breath")
+    val glow by t.animateFloat(0.10f, 0.20f, infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Reverse), label = "glow")
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Spacer(Modifier.height(8.dp))
         ItemHero(item)
-        Spacer(Modifier.height(40.dp))
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(72.dp).clip(CircleShape).background(Accent.copy(alpha = 0.12f)).graphicsLayer { alpha = a },
-        ) {
-            Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = Accent, modifier = Modifier.size(32.dp))
+        Spacer(Modifier.height(48.dp))
+        // The breathing mood halo + the product lookalike resolving inside it.
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(180.dp)) {
+            Box(
+                Modifier.size(180.dp).graphicsLayer { scaleX = breath; scaleY = breath }
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(mood.copy(alpha = glow), Color.Transparent),
+                        ),
+                        CircleShape,
+                    ),
+            )
+            ProductGlyph(
+                name = item.name,
+                brand = item.brand,
+                category = item.category,
+                type = item.type,
+                modifier = Modifier.size(96.dp),
+            )
         }
-        Spacer(Modifier.height(24.dp))
-        Text(current?.label ?: "Analyzing", style = MaterialTheme.typography.titleMedium, color = TextHigh)
+        Spacer(Modifier.height(32.dp))
+        Text(
+            current?.label ?: "Analyzing",
+            style = MaterialTheme.typography.titleMedium,
+            color = TextHigh,
+        )
         Spacer(Modifier.height(6.dp))
-        Text(current?.commentary ?: "Reading the details…", style = MaterialTheme.typography.bodyLarge, color = TextMid)
-        Spacer(Modifier.height(24.dp))
-        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Accent, trackColor = Outline)
+        Text(
+            current?.commentary ?: "Reading the details…",
+            style = MaterialTheme.typography.bodyLarge,
+            color = TextMid,
+        )
+        Spacer(Modifier.height(28.dp))
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth(),
+            color = mood,
+            trackColor = Outline,
+        )
     }
 }
 
@@ -308,6 +365,15 @@ private fun ReportStep(
     var doseText by remember { mutableStateOf(trimDose(rec.doseAmount)) }
     var doseUnit by remember { mutableStateOf(rec.doseUnit) }
     var flags by remember { mutableIntStateOf(rec.flags) }
+
+    // A toner/serum/device must not be judged like a pill: applied items get
+    // routine placement (AM / PM / both), not fasted/with-food supplement flags.
+    val ingested = remember(item.name, item.category) {
+        KindDetector.detect(item.name, item.category).isIngested
+    }
+    var routine by remember { mutableStateOf(RoutineSlot.AM) }
+    // The brain's own routine guidance, if a chapter surfaced it (e.g. "after cleansing").
+    val routineHint = remember(report) { routineHintFrom(report) }
 
     val low = rec.typicalLow
     val high = rec.typicalHigh
@@ -391,14 +457,32 @@ private fun ReportStep(
 
             Spacer(Modifier.height(10.dp))
 
-            // Timing tags
+            // Timing — supplements carry intake flags (fasted / with food …); applied
+            // items (skincare, devices) instead land in the AM / PM routine.
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface1).padding(16.dp)) {
                 Column {
-                    Text("Timing", style = MaterialTheme.typography.titleMedium, color = TextHigh)
-                    Spacer(Modifier.height(10.dp))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FlagChoices.forEach { (bit, text) ->
-                            ChoiceChip(text, flags and bit != 0, Accent) { flags = flags xor bit }
+                    if (ingested) {
+                        Text("Timing", style = MaterialTheme.typography.titleMedium, color = TextHigh)
+                        Spacer(Modifier.height(10.dp))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FlagChoices.forEach { (bit, text) ->
+                                ChoiceChip(text, flags and bit != 0, Accent) { flags = flags xor bit }
+                            }
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Routine", style = MaterialTheme.typography.titleMedium, color = TextHigh, modifier = Modifier.weight(1f))
+                            Text("when in the day", style = MaterialTheme.typography.labelSmall, color = TextLow)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            RoutineSlot.entries.forEach { slot ->
+                                ChoiceChip(slot.label, slot == routine, Accent) { routine = slot }
+                            }
+                        }
+                        routineHint?.let {
+                            Spacer(Modifier.height(10.dp))
+                            Text(it, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp), color = TextMid)
                         }
                     }
                 }
@@ -423,13 +507,24 @@ private fun ReportStep(
                 // Fill in what the catalog knows but the source omitted — category
                 // (and the canonical name) so brand/category aren't lost on a link add.
                 val matched = report.matchedIngredientKey?.let { IngredientCatalog.byKey(it) }
+                // Applied items have no timing column — fold the chosen routine slot
+                // into the note in plain words; supplements keep their intake flags.
+                val finalNote = if (ingested) {
+                    item.note
+                } else {
+                    listOf("Use: ${routine.label.lowercase()}", item.note?.trim().orEmpty())
+                        .filter { it.isNotBlank() }
+                        .joinToString(" · ")
+                        .ifBlank { null }
+                }
                 onAdd(
                     item.copy(
                         groupId = groupId,
                         category = item.category?.ifBlank { null } ?: matched?.category,
                         doseAmount = doseText.toDoubleOrNull() ?: item.doseAmount,
                         doseUnit = doseUnit,
-                        flags = flags,
+                        flags = if (ingested) flags else item.flags,
+                        note = finalNote,
                         ingredients = IngredientCodec.encode(report.ingredients) ?: item.ingredients,
                     ),
                 )
@@ -460,14 +555,7 @@ private fun BlockView(block: ReportBlock) {
         is ReportBlock.Meter -> MeterBlock(block)
         is ReportBlock.Aspect -> ChapterView(block.aspect.title, block.summary, block.lines, block.state)
         is ReportBlock.Chapter -> ChapterView(block.title, block.summary, block.lines, block.state)
-        is ReportBlock.Reviews -> ChapterView(
-            "What people say",
-            block.takeaway,
-            block.loved.map { AnalysisLine("Loved — $it", Severity.GOOD) } +
-                block.watch.map { AnalysisLine("Watch — $it", Severity.CAUTION) } +
-                (block.sources.takeIf { it.isNotEmpty() }?.let { listOf(AnalysisLine("From ${it.joinToString(", ")}", Severity.NEUTRAL)) } ?: emptyList()),
-            block.state,
-        )
+        is ReportBlock.Reviews -> ReviewsView(block)
         is ReportBlock.Reasoning -> ReasoningBlock(block)
     }
 }
@@ -531,6 +619,17 @@ private fun VerdictBlock(b: ReportBlock.Verdict) {
             color = TextMid,
             modifier = Modifier.widthIn(max = 560.dp),
         )
+        // Per-parameter ratings the overall score is built from — calm labelled
+        // bars (label · slim 0..100 track · number), only when the brain supplies them.
+        if (b.dimensions.isNotEmpty()) {
+            Spacer(Modifier.height(18.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                b.dimensions.forEach { (label, value) -> DimensionBar(label, value) }
+            }
+        }
+        // A gentle one-line legend so the dot/state colours read consistently.
+        Spacer(Modifier.height(16.dp))
+        SeverityLegend()
         if (b.tags.isNotEmpty()) {
             Spacer(Modifier.height(18.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -579,6 +678,63 @@ private fun ScoreRing(score: Int) {
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             color = TextHigh,
         )
+    }
+}
+
+/** The fill colour for a 0..100 rating — Done high, Accent mid, Caution low. */
+private fun bandColor(score: Int): Color = when {
+    score >= 75 -> Done
+    score >= 50 -> Accent
+    else -> Caution
+}
+
+/**
+ * One labelled rating row: the parameter on the left, a slim 0..100 track in the
+ * middle (the MeterBlock idiom — Outline track, banded fill), the number on the
+ * right. Tight and scannable; many of these stack under the overall ring.
+ */
+@Composable
+private fun DimensionBar(label: String, score: Int) {
+    val v = score.coerceIn(0, 100)
+    val color = bandColor(v)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = TextMid,
+            modifier = Modifier.width(74.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Box(
+            Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(Outline),
+        ) {
+            Box(
+                Modifier.fillMaxWidth((v / 100f).coerceIn(0.02f, 1f)).fillMaxHeight()
+                    .clip(RoundedCornerShape(3.dp)).background(color),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Text("$v", style = DimensionFigure, color = TextHigh, modifier = Modifier.width(24.dp))
+    }
+}
+
+/** A faint, single-line key so the severity dots/states read the same everywhere. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SeverityLegend() {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LegendDot("Good", severityColor(Severity.GOOD))
+        LegendDot("Mind it", severityColor(Severity.CAUTION))
+        LegendDot("Neutral", severityColor(Severity.NEUTRAL))
+    }
+}
+
+@Composable
+private fun LegendDot(text: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(6.dp))
+        Text(text, style = MaterialTheme.typography.labelSmall, color = TextLow)
     }
 }
 
@@ -631,6 +787,69 @@ private fun StateChip(state: AspectState) {
     }
     Box(Modifier.clip(RoundedCornerShape(99.dp)).background(tint).padding(horizontal = 10.dp, vertical = 4.dp)) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+    }
+}
+
+/* --- Reviews: distilled keyword chips, not a wall of URLs --- */
+
+/**
+ * What people actually say, made calm: a one-line takeaway, then recurring praise
+ * as soft positive chips and watch-outs as gentle amber chips, with the domains
+ * the read drew from reduced to a quiet footnote. Mirrors [ReportBlock.Reviews]:
+ * takeaway · loved · watch · sources · state.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReviewsView(b: ReportBlock.Reviews) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Eyebrow("What people say", color = TextMid)
+            Spacer(Modifier.weight(1f))
+            StateChip(b.state)
+        }
+        b.takeaway.takeIf { it.isNotBlank() }?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                it,
+                style = MaterialTheme.typography.titleMedium.copy(lineHeight = 24.sp),
+                color = TextHigh,
+                modifier = Modifier.widthIn(max = 560.dp),
+            )
+        }
+        if (b.loved.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            Eyebrow("Loved", color = Done)
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                b.loved.forEach { ReviewChip(it, Done, GoodTint) }
+            }
+        }
+        if (b.watch.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            Eyebrow("Watch", color = Caution)
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                b.watch.forEach { ReviewChip(it, Caution, CautionTint) }
+            }
+        }
+        if (b.sources.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "from ${b.sources.joinToString(", ")}",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.sp),
+                color = TextLow,
+            )
+        }
+    }
+}
+
+/** A soft sentiment chip — a faint tint behind a single keyword. */
+@Composable
+private fun ReviewChip(text: String, color: Color, tint: Color) {
+    Box(
+        Modifier.clip(RoundedCornerShape(99.dp)).background(tint).padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(text, style = MaterialTheme.typography.labelMedium, color = color)
     }
 }
 
@@ -717,9 +936,17 @@ private fun ItemHero(item: ItemEntity) {
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.size(56.dp).clip(CircleShape).background(Accent.copy(alpha = 0.14f)),
+            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(Surface1),
         ) {
-            ItemIcon(type = item.type, tint = Accent, modifier = Modifier.size(40.dp))
+            // The dynamic, on-device lookalike — a stylised stand-in for the real
+            // product, derived from its name/brand/form. No bitmap, no network.
+            ProductGlyph(
+                name = item.name,
+                brand = item.brand,
+                category = item.category,
+                type = item.type,
+                modifier = Modifier.size(48.dp),
+            )
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
@@ -757,3 +984,28 @@ private fun severityColor(s: Severity): Color = when (s) {
 }
 
 private fun trimDose(v: Double): String = if (v % 1.0 == 0.0) v.toLong().toString() else (Math.round(v * 10.0) / 10.0).toString()
+
+/** Where an applied item lands in the day — the calm alternative to intake flags. */
+private enum class RoutineSlot(val label: String) {
+    AM("AM"),
+    PM("PM"),
+    BOTH("AM & PM"),
+}
+
+/**
+ * The brain's own "how & when to use" prose, if a chapter surfaced it — shown as a
+ * quiet read under the routine picker. We don't invent it; we just relay the
+ * summary of a use/routine chapter when the composed page contains one.
+ */
+private fun routineHintFrom(report: AnalysisReport): String? {
+    val cue = listOf("use", "when", "routine", "apply", "step")
+    return report.blocks.firstNotNullOfOrNull { block ->
+        when (block) {
+            is ReportBlock.Chapter ->
+                block.summary?.takeIf { s -> s.isNotBlank() && cue.any { block.title.contains(it, true) } }
+            is ReportBlock.Aspect ->
+                block.summary?.takeIf { s -> s.isNotBlank() && cue.any { block.aspect.title.contains(it, true) } }
+            else -> null
+        }
+    }
+}
