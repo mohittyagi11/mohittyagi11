@@ -108,13 +108,13 @@ object ModelCatalog {
             minRamMb = 6144,
             backend = "CPU",
             fileName = MediaPipeLlmEngine.DEFAULT_MODEL_NAME,
-            // Gemma 3n .task bundles are distributed via Kaggle / gated HF repos.
-            directUrl = null,
+            // The litert-preview repo hosts a real MediaPipe .task bundle directly.
+            directUrl = "https://huggingface.co/google/gemma-3n-E2B-it-litert-preview/resolve/main/gemma-3n-E2B-it-int4.task",
             sourcePageUrl = "https://huggingface.co/google/gemma-3n-E2B-it-litert-preview",
             license = "Gemma Terms of Use (gated)",
-            notes = "Efficient 3n architecture (E2B ≈ 2B effective params). Distributed in the newer " +
-                "LiteRT .litertlm format, which this MediaPipe build may not load — prefer the 1B " +
-                ".task. Open the page to check the format before relying on it.",
+            notes = "Efficient 3n architecture (E2B ≈ 2B effective params). Real .task bundle on " +
+                "Hugging Face. Gated: accept the licence on the page once, add a token, then " +
+                "Download. Needs ~6 GB RAM.",
             kaggleUrl = null,
             kagglePageUrl = null,
         ),
@@ -126,12 +126,11 @@ object ModelCatalog {
             minRamMb = 8192,
             backend = "CPU",
             fileName = MediaPipeLlmEngine.DEFAULT_MODEL_NAME,
-            directUrl = null,
+            directUrl = "https://huggingface.co/google/gemma-3n-E4B-it-litert-preview/resolve/main/gemma-3n-E4B-it-int4.task",
             sourcePageUrl = "https://huggingface.co/google/gemma-3n-E4B-it-litert-preview",
             license = "Gemma Terms of Use (gated)",
-            notes = "Larger 3n (E4B ≈ 4B effective). Flagship-class RAM only, and in the newer " +
-                "LiteRT .litertlm format this MediaPipe build may not load — prefer the 1B .task. " +
-                "Open the page to check the format first.",
+            notes = "Larger 3n (E4B ≈ 4B effective). Real .task bundle on Hugging Face. Flagship-class " +
+                "RAM only (~8 GB). Gated: accept the licence on the page once, add a token, then Download.",
             kaggleUrl = null,
             kagglePageUrl = null,
         ),
