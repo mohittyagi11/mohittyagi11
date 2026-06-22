@@ -58,6 +58,9 @@ object StackAnalyzer {
             grounded += "Source: $who (${if (source.skeptical) "treat as a lead" else "credible"})"
         }
         if (!goal.isNullOrBlank()) reasonLines += AnalysisLine("Your goal — ${goal.trim()}")
+        if (!concern.isNullOrBlank()) {
+            reasonLines += AnalysisLine("Your worry — ${concern.trim()}. Kept in view below.", Severity.NEUTRAL)
+        }
         if (reasonLines.isNotEmpty()) sections += AnalysisSection("Your reason", reasonLines)
 
         // 2) What it's good for.
@@ -74,12 +77,9 @@ object StackAnalyzer {
         }
         sections += AnalysisSection("What it's good for", goodLines)
 
-        // 3) Fit with your stack — redundancy, synergy, conflicts, dose sanity, timing.
+        // 3) Fit with your stack — synergy, pairings to add, dose-unit sanity.
+        //    (Redundancy & absorption conflicts live in the structured safety review.)
         val fitLines = mutableListOf<AnalysisLine>()
-        if (alreadyHave) {
-            val m = "You already have ${matched!!.displayName} — adding it again may double the dose"
-            fitLines += AnalysisLine(m, Severity.CAUTION); cautions += m
-        }
         if (matched != null) {
             stackIng.forEach { (ing, _) ->
                 if (matched.pairsWith.contains(ing.key) || ing.pairsWith.contains(matched.key)) {
@@ -92,49 +92,33 @@ object StackAnalyzer {
                     fitLines += AnalysisLine("Often paired with ${dep.displayName} — consider adding it")
                 }
             }
-            stackIng.forEach { (ing, _) ->
-                if (matched.avoidWith.contains(ing.key) || ing.avoidWith.contains(matched.key)) {
-                    val m = "Separate in time from ${ing.displayName} — they compete for absorption"
-                    fitLines += AnalysisLine(m, Severity.CAUTION); cautions += m
-                    grounded += "${matched.displayName} vs ${ing.displayName}: separate timing"
-                }
-            }
             if (currentDoseUnit != matched.doseUnit && currentDoseAmount > 0) {
                 val m = "You entered ${fmt(currentDoseAmount)} ${currentDoseUnit.name.lowercase()}, but ${matched.displayName} is usually ${matched.doseUnit.name.lowercase()} (${doseRange(matched)}) — check the unit"
-                fitLines += AnalysisLine(m, Severity.CAUTION); cautions += "Dose unit looks off"
+                fitLines += AnalysisLine(m, Severity.CAUTION)
                 grounded += m
             }
-            timingLine(matched)?.let { fitLines += it }
             if (fitLines.none { it.severity == Severity.CAUTION } && stackIng.isNotEmpty()) {
-                fitLines += AnalysisLine("No interaction flags with your current stack", Severity.GOOD)
+                fitLines += AnalysisLine("Sits alongside your current stack cleanly", Severity.GOOD)
             }
         }
         if (fitLines.isEmpty()) {
             fitLines += AnalysisLine(if (stackIng.isEmpty()) "Your stack is empty — this would be the first." else "Nothing notable against your current stack.")
         }
+        cautions += fitLines.filter { it.severity == Severity.CAUTION }.map { it.text }
         sections += AnalysisSection("Fit with your stack", fitLines)
 
-        // 4) Worth knowing — criticism, what to verify (weak sources), your concern.
-        val knowLines = mutableListOf<AnalysisLine>()
-        matched?.cautions?.forEach { knowLines += AnalysisLine(it, Severity.CAUTION) }
-        if (source != null && source.skeptical) {
-            source.verify.forEach { knowLines += AnalysisLine("Verify — $it", Severity.NEUTRAL) }
-        }
-        if (!concern.isNullOrBlank()) {
-            knowLines += AnalysisLine("Your worry — ${concern.trim()}. Keep it in view as you decide.", Severity.NEUTRAL)
-        }
-        if (matched != null) {
-            knowLines += AnalysisLine(
-                when (matched.tier) {
-                    1 -> "Evidence is mature and broadly consistent."
-                    2 -> "Evidence is supportive but still maturing."
-                    else -> "Evidence is emerging — promising, not settled."
-                },
-                severityForTier(matched.tier),
-            )
-        }
-        if (knowLines.isEmpty()) knowLines += AnalysisLine("Nothing major flagged.")
-        sections += AnalysisSection("Worth knowing", knowLines)
+        // 4) Complete safety review — the SafetyCategory taxonomy, walked in order.
+        val recDoseForSafety = if (matched != null) {
+            roundDose((matched.typicalDoseLow + matched.typicalDoseHigh) / 2.0)
+        } else currentDoseAmount
+        val (safety, safetyClear) = buildSafetyReview(
+            matched, currentDoseAmount, currentDoseUnit, recDoseForSafety, stackIng, alreadyHave, source,
+        )
+        cautions += safety.filter { it.severity == Severity.CAUTION }.map { it.text }
+        grounded += safety.filter { it.severity == Severity.CAUTION }.map { "Safety/${it.category.title}: ${it.text}" }
+        // De-duplicate so the synthesis and verdict don't double-count.
+        val cautionsDistinct = cautions.distinct()
+        cautions.clear(); cautions.addAll(cautionsDistinct)
 
         // Verdict + rationale.
         val verdict = when {
@@ -150,7 +134,7 @@ object StackAnalyzer {
         if (tier.isModel && ModelCapability.engineReady(app)) {
             val enriched = runCatching {
                 BrainProvider.engine(app).complete(
-                    synthesisPrompt(name, matched, goal, source, concern, stackIng.map { it.first.displayName }, dependencies, cautions, tier),
+                    synthesisPrompt(name, matched, goal, source, concern, stackIng.map { it.first.displayName }, dependencies, safety, safetyClear, tier),
                 ).trim()
             }.getOrNull()
             val cleaned = enriched?.let { sanitize(it) }
@@ -203,7 +187,9 @@ object StackAnalyzer {
                 dependencies = dependencies,
                 cautions = cautions,
             ),
-            grounded = grounded,
+            safety = safety,
+            safetyReviewedClear = safetyClear,
+            grounded = grounded.distinct(),
             byModel = byModel,
         )
     }
@@ -252,7 +238,7 @@ object StackAnalyzer {
         else -> Math.round(d * 10.0) / 10.0
     }
 
-    private fun timingLine(i: Ingredient): AnalysisLine? {
+    private fun timingText(i: Ingredient): String? {
         val f = i.timingFlags
         val parts = buildList {
             if (f and ItemFlags.FAT_SOLUBLE != 0 || f and ItemFlags.WITH_FOOD != 0) add("with a meal")
@@ -260,8 +246,126 @@ object StackAnalyzer {
             if (f and ItemFlags.AVOID_CAFFEINE != 0) add("away from tea/coffee")
             if (f and ItemFlags.AVOID_CALCIUM != 0) add("away from calcium")
         }
-        return if (parts.isEmpty()) null else AnalysisLine("Best taken ${parts.joinToString(", ")}")
+        return if (parts.isEmpty()) null else "Best taken ${parts.joinToString(", ")}"
     }
+
+    private fun evidenceMaturity(tier: Int): String = when (tier) {
+        1 -> "Evidence is mature and broadly consistent."
+        2 -> "Evidence is supportive but still maturing."
+        else -> "Evidence is emerging — promising, not settled."
+    }
+
+    /**
+     * Walk the full [SafetyCategory] taxonomy in order, filling each category from
+     * the validated facts. Returns the findings plus the categories that were
+     * genuinely reviewed and came back clear — so the report shows both what's
+     * flagged and what was checked. This is the structured logic tree the model
+     * then reasons within (it never adds categories or invents findings).
+     */
+    private fun buildSafetyReview(
+        matched: Ingredient?,
+        enteredDose: Double,
+        enteredUnit: DoseUnit,
+        recommendedDose: Double,
+        stackIng: List<Pair<Ingredient, ItemEntity>>,
+        alreadyHave: Boolean,
+        source: SourceKind?,
+    ): Pair<List<SafetyFinding>, List<SafetyCategory>> {
+        val findings = mutableListOf<SafetyFinding>()
+        val reviewed = linkedSetOf<SafetyCategory>()
+        val flagged = mutableSetOf<SafetyCategory>()
+        fun flag(cat: SafetyCategory, text: String, sev: Severity) {
+            findings += SafetyFinding(cat, text, sev); reviewed += cat
+            if (sev == Severity.CAUTION) flagged += cat
+        }
+        fun reviewedClear(cat: SafetyCategory) { reviewed += cat }
+
+        // DOSE_CEILING — only when we have a firm upper limit encoded.
+        if (matched?.upperLimitDose != null) {
+            val ul = matched.upperLimitDose
+            val unit = matched.doseUnit.name.lowercase()
+            val entered = if (enteredUnit == matched.doseUnit && enteredDose > 0) enteredDose else null
+            when {
+                entered != null && entered > ul ->
+                    flag(SafetyCategory.DOSE_CEILING, "Your ${fmt(entered)} $unit is over the usual upper limit of ${fmt(ul)} $unit — lower it unless a clinician set it.", Severity.CAUTION)
+                entered != null && entered > ul * 0.8 ->
+                    flag(SafetyCategory.DOSE_CEILING, "Your dose is close to the upper limit (${fmt(ul)} $unit) — stay under it.", Severity.CAUTION)
+                recommendedDose > ul ->
+                    flag(SafetyCategory.DOSE_CEILING, "Keep the daily total under the upper limit of ${fmt(ul)} $unit.", Severity.NEUTRAL)
+                else -> reviewedClear(SafetyCategory.DOSE_CEILING)
+            }
+        }
+
+        // DRUG_INTERACTIONS
+        if (matched?.drugInteractions?.isNotEmpty() == true) {
+            flag(SafetyCategory.DRUG_INTERACTIONS, "Can interact with ${matched.drugInteractions.joinToString(", ")}. If you take any, check with whoever prescribes them.", Severity.CAUTION)
+        } else if (matched != null) {
+            reviewedClear(SafetyCategory.DRUG_INTERACTIONS)
+        }
+
+        // STACK_OVERLAP — exact duplicate, absorption competition, same-purpose overlap.
+        if (matched != null) {
+            if (alreadyHave) {
+                flag(SafetyCategory.STACK_OVERLAP, "You already have ${matched.displayName} — adding it again may double the dose.", Severity.CAUTION)
+            }
+            stackIng.forEach { (ing, _) ->
+                if (ing.key != matched.key && (matched.avoidWith.contains(ing.key) || ing.avoidWith.contains(matched.key))) {
+                    flag(SafetyCategory.STACK_OVERLAP, "Competes with ${ing.displayName} for absorption — take them a couple of hours apart.", Severity.CAUTION)
+                }
+            }
+            val samePurpose = stackIng.filter { it.first.key != matched.key && it.first.category == matched.category }
+            if (samePurpose.isNotEmpty() && matched.category in OVERLAP_SENSITIVE) {
+                flag(SafetyCategory.STACK_OVERLAP, "Overlaps with ${samePurpose.joinToString(", ") { it.first.displayName }} for ${matched.category.lowercase()} — the combined effect can be stronger than expected.", Severity.NEUTRAL)
+            }
+            if (SafetyCategory.STACK_OVERLAP !in reviewed) reviewedClear(SafetyCategory.STACK_OVERLAP)
+        }
+
+        // CONTRAINDICATIONS
+        if (matched?.contraindications?.isNotEmpty() == true) {
+            matched.contraindications.forEach { flag(SafetyCategory.CONTRAINDICATIONS, it, Severity.CAUTION) }
+        } else if (matched != null) {
+            reviewedClear(SafetyCategory.CONTRAINDICATIONS)
+        }
+
+        // SIDE_EFFECTS
+        if (matched?.sideEffects?.isNotEmpty() == true) {
+            flag(SafetyCategory.SIDE_EFFECTS, "Usually mild: ${matched.sideEffects.joinToString(", ")}.", Severity.NEUTRAL)
+        } else if (matched != null) {
+            reviewedClear(SafetyCategory.SIDE_EFFECTS)
+        }
+
+        // TIMING
+        matched?.let { ing ->
+            val t = timingText(ing)
+            if (t != null) flag(SafetyCategory.TIMING, t, Severity.NEUTRAL) else reviewedClear(SafetyCategory.TIMING)
+        }
+
+        // QUALITY_FORM & DURATION — routed from curated cautions by intent.
+        matched?.cautions?.forEach { c ->
+            val isDuration = listOf("cycl", "indefinit", "occasional", "short").any { c.contains(it, ignoreCase = true) }
+            flag(if (isDuration) SafetyCategory.DURATION else SafetyCategory.QUALITY_FORM, c, Severity.NEUTRAL)
+        }
+
+        // EVIDENCE — always informational when matched.
+        matched?.let { flag(SafetyCategory.EVIDENCE, evidenceMaturity(it.tier), severityForTier(it.tier)) }
+
+        // SOURCE
+        if (source != null) {
+            if (source.skeptical) {
+                flag(SafetyCategory.SOURCE, source.trust, Severity.CAUTION)
+                source.verify.forEach { flag(SafetyCategory.SOURCE, "Verify — $it", Severity.NEUTRAL) }
+            } else {
+                flag(SafetyCategory.SOURCE, source.trust, Severity.GOOD)
+            }
+        }
+
+        val clear = reviewed.filter { it !in flagged }
+        // Keep findings in taxonomy order for a stable, structured read.
+        val ordered = findings.sortedBy { it.category.ordinal }
+        return ordered to clear
+    }
+
+    private val OVERLAP_SENSITIVE = setOf("Sleep")
 
     private fun placementText(i: Ingredient): String? {
         val f = i.timingFlags
@@ -299,25 +403,36 @@ object StackAnalyzer {
         concern: String?,
         stack: List<String>,
         deps: List<String>,
-        cautions: List<String>,
+        safety: List<SafetyFinding>,
+        safetyClear: List<SafetyCategory>,
         tier: ModelTier,
     ): String = buildString {
         appendLine("You are a calm, precise, slightly skeptical supplement advisor. Using ONLY the grounded facts below,")
         appendLine("write a short, natural synthesis (${if (tier == ModelTier.CAPABLE) "2-3 sentences" else "1-2 sentences"}) — conversational, no bullet labels.")
-        appendLine("Speak to their goal and where they heard it; if the source is weak (influencer/brand/ad), gently say to verify the claim and dose.")
-        appendLine("Do NOT invent doses or interactions; only use what's given. No medical claims.")
+        appendLine("Reason WITHIN the fixed safety framework below — do not introduce new categories, doses, or interactions.")
+        appendLine("Lead with their goal and the source's credibility; if a safety category is flagged, weave the most important one in plainly. No medical claims.")
         appendLine()
         appendLine("Item: $name${matched?.let { " (${it.displayName})" } ?: ""}")
         if (!goal.isNullOrBlank()) appendLine("Their goal: $goal")
         if (source != null) appendLine("Heard from: ${source.label} (${if (source.skeptical) "weak source — verify" else "credible"})")
         if (!concern.isNullOrBlank()) appendLine("Their worry: $concern")
         if (matched != null) {
-            appendLine("Facts: ${matched.benefits.joinToString("; ")}. Evidence: ${matched.evidenceNote} (${tierWord(matched.tier)}).")
-            if (matched.cautions.isNotEmpty()) appendLine("Criticism: ${matched.cautions.joinToString("; ")}")
+            appendLine("Benefits: ${matched.benefits.joinToString("; ")}.")
         }
         appendLine("Current stack: ${if (stack.isEmpty()) "empty" else stack.joinToString(", ")}")
         if (deps.isNotEmpty()) appendLine("Suggested pairings: ${deps.joinToString(", ")}")
-        if (cautions.isNotEmpty()) appendLine("Watch-outs: ${cautions.joinToString("; ")}")
+        appendLine()
+        appendLine("SAFETY FRAMEWORK (the only dimensions you may reason over):")
+        SafetyCategory.entries.forEach { cat ->
+            val hits = safety.filter { it.category == cat }
+            val state = when {
+                hits.any { it.severity == Severity.CAUTION } -> "FLAGGED: " + hits.joinToString(" | ") { it.text }
+                hits.isNotEmpty() -> "noted: " + hits.joinToString(" | ") { it.text }
+                cat in safetyClear -> "checked, clear"
+                else -> "not assessed"
+            }
+            appendLine("- ${cat.title}: $state")
+        }
         appendLine()
         appendLine("Reply with only the synthesis text.")
     }

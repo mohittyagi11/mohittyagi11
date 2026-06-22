@@ -39,8 +39,19 @@ data class Ingredient(
 
     /** One calm, hedged line about the evidence. Curated, not scraped; never advice. */
     val evidenceNote: String = "",
-    /** Honest criticism / who should be careful — surfaced, not hidden. */
+    /** Honest criticism / quality & duration notes — surfaced, not hidden. */
     val cautions: List<String> = emptyList(),
+
+    // --- Structured safety facts (feed the SafetyCategory logic tree) -------
+    /** Tolerable upper intake level for a healthy adult, in [doseUnit]. null = no firm ceiling encoded. */
+    val upperLimitDose: Double? = null,
+    /** Medicines/classes it can interact with — surfaced as "check with whoever prescribes it". */
+    val drugInteractions: List<String> = emptyList(),
+    /** Conditions or life stages where caution is warranted (pregnancy, kidney/liver, thyroid, bleeding…). */
+    val contraindications: List<String> = emptyList(),
+    /** Common, expected side effects at a normal dose. */
+    val sideEffects: List<String> = emptyList(),
+
     /** 1 = strong/established evidence; 2 = supportive; 3 = emerging/early. */
     val tier: Int = 2,
 )

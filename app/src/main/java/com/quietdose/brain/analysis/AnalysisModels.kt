@@ -50,6 +50,10 @@ data class AnalysisReport(
     val sections: List<AnalysisSection>,
     val synthesis: Synthesis,
     val recommendation: Recommendation,
+    /** Structured safety review — findings keyed to [SafetyCategory] (the spine). */
+    val safety: List<SafetyFinding>,
+    /** Categories that were reviewed and came back clear (shown for honesty/structure). */
+    val safetyReviewedClear: List<SafetyCategory>,
     val grounded: List<String>,
     val byModel: Boolean,
 )

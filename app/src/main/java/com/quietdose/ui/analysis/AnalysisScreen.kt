@@ -58,6 +58,8 @@ import com.quietdose.brain.analysis.AnalysisSection
 import com.quietdose.brain.analysis.IngredientCatalog
 import com.quietdose.brain.analysis.ModelCapability
 import com.quietdose.brain.analysis.ModelTier
+import com.quietdose.brain.analysis.SafetyCategory
+import com.quietdose.brain.analysis.SafetyFinding
 import com.quietdose.brain.analysis.Severity
 import com.quietdose.brain.analysis.SourceKind
 import com.quietdose.brain.analysis.StackAnalyzer
@@ -326,6 +328,12 @@ private fun ReportStep(
             Spacer(Modifier.height(10.dp))
             report.sections.forEach { SectionCard(it); Spacer(Modifier.height(10.dp)) }
 
+            // Structured safety review — the full taxonomy, flagged + checked-clear.
+            if (report.safety.isNotEmpty() || report.safetyReviewedClear.isNotEmpty()) {
+                SafetyCard(report.safety, report.safetyReviewedClear)
+                Spacer(Modifier.height(10.dp))
+            }
+
             // --- Configure: where / dose / timing / pairings ---
             Spacer(Modifier.height(6.dp))
             Text("PLACE IT", style = MaterialTheme.typography.labelSmall, color = TextLow)
@@ -456,6 +464,39 @@ private fun SectionCard(section: AnalysisSection) {
                 Box(Modifier.padding(top = 6.dp).size(7.dp).clip(CircleShape).background(severityColor(line.severity)))
                 Spacer(Modifier.width(10.dp))
                 Text(line.text, style = MaterialTheme.typography.bodyMedium, color = TextMid)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SafetyCard(safety: List<SafetyFinding>, reviewedClear: List<SafetyCategory>) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface1).padding(16.dp)) {
+        Text("SAFETY REVIEW", style = MaterialTheme.typography.labelSmall, color = TextLow)
+        Spacer(Modifier.height(10.dp))
+        // Findings grouped under their category title, in taxonomy order.
+        val byCat = safety.groupBy { it.category }
+        byCat.keys.sortedBy { it.ordinal }.forEach { cat ->
+            Text(cat.title, style = MaterialTheme.typography.labelMedium, color = TextHigh)
+            Spacer(Modifier.height(2.dp))
+            byCat.getValue(cat).forEach { f ->
+                Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 3.dp)) {
+                    Box(Modifier.padding(top = 6.dp).size(7.dp).clip(CircleShape).background(severityColor(f.severity)))
+                    Spacer(Modifier.width(10.dp))
+                    Text(f.text, style = MaterialTheme.typography.bodyMedium, color = TextMid)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        if (reviewedClear.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.Top) {
+                Icon(Icons.Rounded.Check, contentDescription = null, tint = Done, modifier = Modifier.size(14.dp).padding(top = 2.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Checked & clear — ${reviewedClear.sortedBy { it.ordinal }.joinToString(", ") { it.title.lowercase() }}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextLow,
+                )
             }
         }
     }
