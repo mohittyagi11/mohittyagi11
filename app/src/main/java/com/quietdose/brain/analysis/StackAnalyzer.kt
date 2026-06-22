@@ -2,8 +2,11 @@ package com.quietdose.brain.analysis
 
 import android.content.Context
 import com.quietdose.brain.BrainProvider
+import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
+import com.quietdose.data.model.DoseUnit
 import com.quietdose.data.model.ItemFlags
+import com.quietdose.data.model.TriggerType
 
 /**
  * The incremental brain for "should this join the stack, and how?". It grounds
@@ -24,6 +27,9 @@ object StackAnalyzer {
         name: String,
         category: String?,
         currentStack: List<ItemEntity>,
+        groups: List<GroupEntity>,
+        currentDoseAmount: Double,
+        currentDoseUnit: DoseUnit,
         intent: String?,
     ): AnalysisReport {
         val app = context.applicationContext
@@ -140,9 +146,29 @@ object StackAnalyzer {
             ContextStore.add(app, itemKey, entries)
         }
 
+        // --- Adjustable recommendation (where / dose / timing / pairings) ---
+        val recDose = if (matched != null) {
+            roundDose((matched.typicalDoseLow + matched.typicalDoseHigh) / 2.0)
+        } else {
+            currentDoseAmount
+        }
+        val recUnit = matched?.doseUnit ?: currentDoseUnit
+        val (recGroupId, groupReason) = pickGroup(groups, matched)
+        val recommendation = Recommendation(
+            groupId = recGroupId,
+            groupReason = groupReason,
+            doseAmount = recDose,
+            doseUnit = recUnit,
+            typicalLow = matched?.typicalDoseLow,
+            typicalHigh = matched?.typicalDoseHigh,
+            flags = matched?.timingFlags ?: 0,
+            pairings = dependencies,
+        )
+
         return AnalysisReport(
             title = matched?.displayName ?: name,
             matchedIngredientKey = matched?.key,
+            recommendation = recommendation,
             sections = listOf(
                 AnalysisSection("Context", contextLines),
                 AnalysisSection("Fit with your stack", fitLines.ifEmpty { listOf(AnalysisLine("Your stack is empty — this would be the first.")) }),
@@ -176,6 +202,31 @@ object StackAnalyzer {
 
     private fun severityForTier(tier: Int) = when (tier) {
         1 -> Severity.GOOD; 2 -> Severity.NEUTRAL; else -> Severity.CAUTION
+    }
+
+    /** Best-fit existing group for the item's timing, with a short reason. */
+    private fun pickGroup(groups: List<GroupEntity>, matched: Ingredient?): Pair<Long?, String?> {
+        if (groups.isEmpty()) return null to null
+        val flags = matched?.timingFlags ?: 0
+        fun firstWith(vararg t: TriggerType) = groups.firstOrNull { it.trigger in t }
+        val (chosen, reason) = when {
+            flags and ItemFlags.EMPTY_STOMACH != 0 || flags and ItemFlags.FASTED != 0 ->
+                firstWith(TriggerType.WAKE) to "fasted → morning"
+            matched?.category == "Sleep" ->
+                firstWith(TriggerType.BEFORE_SLEEP) to "evening → before sleep"
+            flags and ItemFlags.WITH_FOOD != 0 || flags and ItemFlags.FAT_SOLUBLE != 0 ->
+                firstWith(TriggerType.ARRIVE_HOME, TriggerType.TIME_WINDOW) to "with food → mealtime"
+            else -> null to null
+        }
+        return (chosen?.id ?: groups.first().id) to reason
+    }
+
+    /** Round to a tidy dose value for the suggested midpoint. */
+    private fun roundDose(d: Double): Double = when {
+        d >= 100 -> (Math.round(d / 50.0) * 50).toDouble()
+        d >= 10 -> (Math.round(d / 5.0) * 5).toDouble()
+        d % 1.0 == 0.0 -> d
+        else -> Math.round(d * 10.0) / 10.0
     }
 
     private fun timingLine(i: Ingredient): AnalysisLine? {

@@ -122,8 +122,8 @@ fun ShareConfirmScreen(url: String?, onClose: () -> Unit, onSaved: () -> Unit) {
     pendingItem?.let { item ->
         AnalysisScreen(
             item = item,
-            onAdd = {
-                scope.launch { repo.upsertItem(item) }
+            onAdd = { configured ->
+                scope.launch { repo.upsertItem(configured) }
                 onSaved()
             },
             onDismiss = { pendingItem = null },

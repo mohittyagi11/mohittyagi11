@@ -185,7 +185,7 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
     pendingAnalysis?.let { item ->
         AnalysisScreen(
             item = item,
-            onAdd = { vm.addItem(item); pendingAnalysis = null },
+            onAdd = { configured -> vm.addItem(configured); pendingAnalysis = null },
             onDismiss = { pendingAnalysis = null },
         )
     }

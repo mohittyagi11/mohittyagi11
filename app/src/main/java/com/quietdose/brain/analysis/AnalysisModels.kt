@@ -24,6 +24,22 @@ data class Synthesis(
 )
 
 /**
+ * A concrete, *adjustable* recommendation for how to add the item: where it
+ * lands, the dose (on a meaningful scale), timing flags, and pairings to add.
+ * The UI pre-fills these and lets the user drag/tweak before committing.
+ */
+data class Recommendation(
+    val groupId: Long?,           // best-fit existing group, or null
+    val groupReason: String?,     // why that group (e.g. "fasted → morning")
+    val doseAmount: Double,
+    val doseUnit: com.quietdose.data.model.DoseUnit,
+    val typicalLow: Double?,      // for the dose scale's "typical" band
+    val typicalHigh: Double?,
+    val flags: Int,               // ItemFlags timing bitmask
+    val pairings: List<String>,   // ingredient display names to consider adding
+)
+
+/**
  * The full contextual analysis of a candidate item against the current stack.
  * [grounded] lists the validated facts used (so the read is transparent), and
  * [byModel] says whether the on-device model enriched the narration.
@@ -33,6 +49,7 @@ data class AnalysisReport(
     val matchedIngredientKey: String?,
     val sections: List<AnalysisSection>,
     val synthesis: Synthesis,
+    val recommendation: Recommendation,
     val grounded: List<String>,
     val byModel: Boolean,
 )
