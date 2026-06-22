@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.quietdose"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.quietdose"
