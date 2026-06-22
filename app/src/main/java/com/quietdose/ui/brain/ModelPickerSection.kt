@@ -433,9 +433,9 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
                                                     "Installed but produced no output — this .task may not be " +
                                                         "supported by the on-device runtime. Try Gemma 3 1B int4."
                                                 err.contains("zip", ignoreCase = true) ->
-                                                    "This file isn't a loadable model — a raw .tflite won't work. " +
-                                                        "Use a .task or .litertlm (e.g. Gemma 3 1B int4 .task)."
-                                                else -> "Couldn't run this model — $err  Try a Gemma 3 1B int4 .task or .litertlm."
+                                                    "This file isn't a .task bundle — a raw .tflite/.litertlm won't " +
+                                                        "load here. Use a .task (Gemma 3 1B int4 .task)."
+                                                else -> "Couldn't run this model — $err  Try a Gemma 3 1B int4 .task."
                                             }
                                         }
                                     }
@@ -697,13 +697,13 @@ private fun TokenField(
     }
 }
 
-/** Post-install note, tailored to the detected format. */
+/** Post-install note: warn immediately if the file isn't a loadable .task bundle. */
 private fun installedNote(context: android.content.Context): String =
     if (ModelManager.installedLooksLoadable(context) == false) {
-        "Installed a non-.task model (likely a .litertlm). Tap “Test model” — this runtime loads " +
-            "both .task and .litertlm; a raw .tflite won't."
+        "Installed, but this isn't a .task bundle — a raw .tflite/.litertlm won't load here. " +
+            "Use a .task (e.g. Gemma 3 1B int4 .task)."
     } else {
-        "Installed a .task bundle. Tap “Test model” to confirm it runs."
+        "Model installed. Tap “Test model” to confirm it runs."
     }
 
 /** Open an external URL in the browser; failures are silently ignored. */
