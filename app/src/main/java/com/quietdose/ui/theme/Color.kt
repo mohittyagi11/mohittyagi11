@@ -57,6 +57,24 @@ val GlyphDevice = Color(0xFF8FB89A)    // sage — tools, devices
 val GlyphSupplement = Color(0xFFE0B877) // warm gold — pills, powders
 val GlyphNeutral = Color(0xFF9AA0B4)   // fallback grey-blue
 
+// Glyph palette sampled from the REAL packaging photo — we blend the sampled
+// colours toward these dark anchors so the product reads true-to-life yet stays
+// premium on the near-black canvas (never a loud, raw photo colour).
+val GlyphSurfaceSink = Color(0xFF15151B) // the calm dark the sampled body blends toward
+val GlyphCapSink = Color(0xFF0E0E13)     // a touch darker, for the cap
+
+// Benefit orbit dots — a small, calm spectrum cycled around the glyph so each
+// primary benefit gets its own quiet tint (dot colour ↔ chip in the legend).
+// Desaturated to sit beside the product without shouting.
+val BenefitOrbit = listOf(
+    Color(0xFF8FB7E0), // cool blue
+    Color(0xFF6FCF97), // green
+    Color(0xFFE0B877), // gold
+    Color(0xFF9B8CE0), // violet
+    Color(0xFF8FB89A), // sage
+    Color(0xFFC58A78), // clay
+)
+
 // Per-group tints — deliberately desaturated so colour codes the day without
 // shouting on the near-black canvas. One hue per routine.
 val TintMorning = Color(0xFFE0B877) // warm gold — on waking

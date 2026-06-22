@@ -48,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -80,6 +81,7 @@ import com.quietdose.brain.analysis.ReportBlock
 import com.quietdose.brain.analysis.Severity
 import com.quietdose.brain.analysis.SourceKind
 import com.quietdose.brain.analysis.StackAnalyzer
+import com.quietdose.brain.enrich.ImagePalette
 import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
 import com.quietdose.data.model.DoseUnit
@@ -148,6 +150,13 @@ fun AnalysisScreen(
     val thoughts = remember { mutableStateListOf<AnalysisProgress>() }
     val tier = remember { ModelCapability.tier(context) }
 
+    // Sample the glyph palette from the REAL packaging photo once, off the main
+    // thread. Null while loading or on any failure — the glyph then falls back to
+    // its category palette, so this never blocks or breaks the screen.
+    val sampled by produceState<ImagePalette.PaletteResult?>(initialValue = null, product?.imageUrl) {
+        value = ImagePalette.dominant(product?.imageUrl)
+    }
+
     LaunchedEffect(phase) {
         if (phase == Phase.ANALYZING) {
             thoughts.clear()
@@ -181,11 +190,11 @@ fun AnalysisScreen(
                     onConcern = { concern = it },
                     onContinue = { phase = Phase.ANALYZING },
                 )
-                Phase.ANALYZING -> AnalyzingStep(item = item, thoughts = thoughts)
+                Phase.ANALYZING -> AnalyzingStep(item = item, thoughts = thoughts, sampled = sampled)
                 Phase.REPORT -> {
                     val r = report
                     if (r == null) ErrorStep(item, onAdd, onDismiss)
-                    else ReportStep(item = item, report = r, groups = groups, onAdd = onAdd, onDismiss = onDismiss)
+                    else ReportStep(item = item, report = r, groups = groups, sampled = sampled, onAdd = onAdd, onDismiss = onDismiss)
                 }
             }
         }
@@ -291,7 +300,11 @@ private fun moodColor(mood: Mood?): Color = when (mood) {
  * mood — so the screen visibly "leans" favourable / cautious as the read resolves.
  */
 @Composable
-private fun AnalyzingStep(item: ItemEntity, thoughts: List<AnalysisProgress>) {
+private fun AnalyzingStep(
+    item: ItemEntity,
+    thoughts: List<AnalysisProgress>,
+    sampled: ImagePalette.PaletteResult? = null,
+) {
     val current = thoughts.lastOrNull()
     val progress by animateFloatAsState(current?.fraction ?: 0.05f, tween(500), label = "prog")
     val mood by animateColorAsState(moodColor(current?.mood), tween(900), label = "mood")
@@ -305,7 +318,7 @@ private fun AnalyzingStep(item: ItemEntity, thoughts: List<AnalysisProgress>) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(8.dp))
-        ItemHero(item)
+        ItemHero(item, sampled = sampled)
         Spacer(Modifier.height(48.dp))
         // The breathing mood halo + the product lookalike resolving inside it.
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(180.dp)) {
@@ -324,6 +337,7 @@ private fun AnalyzingStep(item: ItemEntity, thoughts: List<AnalysisProgress>) {
                 category = item.category,
                 type = item.type,
                 modifier = Modifier.size(96.dp),
+                sampled = sampled,
             )
         }
         Spacer(Modifier.height(32.dp))
@@ -356,10 +370,16 @@ private fun ReportStep(
     item: ItemEntity,
     report: AnalysisReport,
     groups: List<GroupEntity>,
+    sampled: ImagePalette.PaletteResult? = null,
     onAdd: (ItemEntity) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val rec = report.recommendation
+    // The product's primary benefits live on the Verdict block — they legend the
+    // glyph's orbit dots. Empty list when the brain supplied none (then no chips/dots).
+    val benefits = remember(report) {
+        report.blocks.firstNotNullOfOrNull { (it as? ReportBlock.Verdict)?.benefits }.orEmpty()
+    }
     // Editable config, pre-filled from the recommendation.
     var groupId by remember { mutableStateOf(rec.groupId ?: item.groupId) }
     var doseText by remember { mutableStateOf(trimDose(rec.doseAmount)) }
@@ -385,7 +405,7 @@ private fun ReportStep(
             Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
         ) {
             Spacer(Modifier.height(8.dp))
-            ItemHero(item)
+            ItemHero(item, sampled = sampled, benefits = benefits)
 
             Spacer(Modifier.height(20.dp))
             // Dynamic, brain-composed page: walk the template blocks in order.
@@ -928,32 +948,64 @@ private fun ReasoningBlock(b: ReportBlock.Reasoning) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ItemHero(item: ItemEntity) {
+private fun ItemHero(
+    item: ItemEntity,
+    sampled: ImagePalette.PaletteResult? = null,
+    benefits: List<String> = emptyList(),
+) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Surface2).padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(Surface1),
+            ) {
+                // The dynamic, on-device lookalike — a stylised stand-in for the real
+                // product. Palette sampled from the packaging photo when available;
+                // primary benefits ring it as tinted orbit dots.
+                ProductGlyph(
+                    name = item.name,
+                    brand = item.brand,
+                    category = item.category,
+                    type = item.type,
+                    modifier = Modifier.size(52.dp),
+                    sampled = sampled,
+                    benefits = benefits,
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(item.name.ifBlank { "New item" }, style = MaterialTheme.typography.titleLarge, color = TextHigh)
+                val sub = listOfNotNull(item.brand?.ifBlank { null }, item.category?.ifBlank { null }).joinToString(" · ")
+                if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodyMedium, color = TextMid)
+            }
+        }
+        // Benefit chips act as the legend for the glyph's orbit dots — chip N's
+        // tint matches orbit dot N, so colour ↔ benefit reads at a glance.
+        if (benefits.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                benefits.take(6).forEachIndexed { i, b -> BenefitChip(b, benefitColor(i)) }
+            }
+        }
+    }
+}
+
+/** A calm benefit chip — a small tinted dot (matching the glyph's orbit) + the word. */
+@Composable
+private fun BenefitChip(text: String, color: Color) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Surface2).padding(16.dp),
+        modifier = Modifier.clip(RoundedCornerShape(99.dp))
+            .background(Surface1)
+            .padding(start = 10.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(Surface1),
-        ) {
-            // The dynamic, on-device lookalike — a stylised stand-in for the real
-            // product, derived from its name/brand/form. No bitmap, no network.
-            ProductGlyph(
-                name = item.name,
-                brand = item.brand,
-                category = item.category,
-                type = item.type,
-                modifier = Modifier.size(48.dp),
-            )
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(item.name.ifBlank { "New item" }, style = MaterialTheme.typography.titleLarge, color = TextHigh)
-            val sub = listOfNotNull(item.brand?.ifBlank { null }, item.category?.ifBlank { null }).joinToString(" · ")
-            if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodyMedium, color = TextMid)
-        }
+        Box(Modifier.size(7.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(7.dp))
+        Text(text, style = MaterialTheme.typography.labelMedium, color = TextMid)
     }
 }
 

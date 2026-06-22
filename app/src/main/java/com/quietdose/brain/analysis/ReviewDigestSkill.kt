@@ -88,13 +88,16 @@ object ReviewDigestSkill {
         appendLine("Reply with only the JSON object.")
     }
 
-    /** Dig the JSON object out of whatever the model returned; never throw. */
+    /**
+     * Dig the JSON object out of whatever the model returned; never throw. Tolerant of
+     * ```json fences and of a TRUNCATED object cut off by the token budget — [JsonRepair]
+     * strips fences and balances the missing braces/brackets so a near-complete reply still
+     * yields a digest instead of dropping to the fallback.
+     */
     private fun parse(raw: String): Digest? {
-        val start = raw.indexOf('{')
-        val end = raw.lastIndexOf('}')
-        if (start < 0 || end <= start) return null
+        val candidate = JsonRepair.objectFrom(raw) ?: return null
         return runCatching {
-            val o = JSONObject(raw.substring(start, end + 1))
+            val o = JSONObject(candidate)
             Digest(
                 takeaway = o.optString("takeaway").trim(),
                 loved = o.optJSONArray("loved").toPhrases(),

@@ -22,12 +22,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.quietdose.brain.analysis.ItemKind
 import com.quietdose.brain.analysis.KindDetector
+import com.quietdose.brain.enrich.ImagePalette
 import com.quietdose.data.model.ItemType
+import com.quietdose.ui.theme.BenefitOrbit
+import com.quietdose.ui.theme.GlyphCapSink
 import com.quietdose.ui.theme.GlyphDevice
 import com.quietdose.ui.theme.GlyphHaircare
 import com.quietdose.ui.theme.GlyphNeutral
 import com.quietdose.ui.theme.GlyphSkincare
 import com.quietdose.ui.theme.GlyphSupplement
+import com.quietdose.ui.theme.GlyphSurfaceSink
+import com.quietdose.ui.theme.Ink
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * A procedural, on-device "lookalike" of a product — drawn, never generated.
@@ -129,6 +136,26 @@ private fun hueColor(h: Int): Color {
 
 private fun Color.desaturateToward(grey: Color, amount: Float): Color = lerp(this, grey, amount)
 
+/**
+ * Build a [GlyphPalette] from colours sampled off the REAL packaging photo. We
+ * blend the sampled body toward the calm dark surface so it stays premium (never
+ * a raw, blown-out photo colour), keep a slightly brighter sheen, and let the
+ * sampled accent drive the cap so the product reads true to life. The category
+ * fallback ([paletteFor]) is used when no photo was sampled.
+ */
+private fun paletteFromSample(primary: Color, accent: Color): GlyphPalette {
+    // Anchor toward the dark surface — premium, calm — while still reading as the
+    // packaging colour (keep ~62% of the true hue on the body).
+    val body = lerp(GlyphSurfaceSink, primary, 0.62f)
+    val cap = lerp(GlyphCapSink, accent, 0.58f)
+    return GlyphPalette(
+        body = body,
+        light = lerp(body, Color.White, 0.34f),
+        dark = lerp(body, Color.Black, 0.30f),
+        cap = cap,
+    )
+}
+
 /** Up to two initials from brand (preferred) or product name. */
 private fun initialsFor(name: String, brand: String?): String {
     val src = (brand?.takeIf { it.isNotBlank() } ?: name).trim()
@@ -141,11 +168,16 @@ private fun initialsFor(name: String, brand: String?): String {
 }
 
 /**
- * Draw the product lookalike. [name]/[brand]/[category] derive the palette and
- * initials; [type] + name derive the form. Calm rounded vector shapes, a cap, a
+ * Draw the product lookalike. [name]/[brand]/[category] derive the form + initials.
+ * The *palette* prefers [sampled] colours pulled from the real packaging photo
+ * (via [ImagePalette]); when absent it falls back to the category-derived hash so
+ * the glyph never blocks on the network. Calm rounded vector shapes, a cap, a
  * subtle sheen — the ItemIcon aesthetic, scaled up to a hero glyph.
  *
  * [showInitials] prints 1–2 letters on the body (off for tiny renders).
+ * [benefits] (the product's primary benefits) become small tinted **orbit dots**
+ * around the glyph circle — a quiet visual reference whose colours match the
+ * benefit chips' legend in the report.
  */
 @Composable
 fun ProductGlyph(
@@ -155,15 +187,55 @@ fun ProductGlyph(
     type: ItemType,
     modifier: Modifier = Modifier,
     showInitials: Boolean = true,
+    sampled: ImagePalette.PaletteResult? = null,
+    benefits: List<String> = emptyList(),
 ) {
     val kind = remember(name, category) { KindDetector.detect(name, category) }
     val form = remember(name, category, type) { inferContainerForm(name, category, type) }
-    val palette = remember(name, brand, kind) { paletteFor(name, brand, kind) }
+    val palette = remember(name, brand, kind, sampled) {
+        if (sampled != null) paletteFromSample(sampled.primary, sampled.accent)
+        else paletteFor(name, brand, kind)
+    }
     val initials = remember(name, brand) { if (showInitials) initialsFor(name, brand) else "" }
+    // Cap the orbit to keep it calm; colours come from the shared BenefitOrbit
+    // spectrum so dot N == chip N in the legend.
+    val orbitColors = remember(benefits) {
+        benefits.take(6).mapIndexed { i, _ -> BenefitOrbit[i % BenefitOrbit.size] }
+    }
     val measurer = rememberTextMeasurer()
 
     Canvas(modifier) {
+        if (orbitColors.isNotEmpty()) drawOrbitDots(orbitColors)
         drawGlyph(form, palette, initials, measurer)
+    }
+}
+
+/** The shared mapping benefit → orbit/chip colour, so the screen's chips match the dots. */
+fun benefitColor(index: Int): Color = BenefitOrbit[index % BenefitOrbit.size]
+
+/**
+ * Small tinted dots circling the glyph — one per primary benefit. Placed on a ring
+ * just outside the container, faint and evenly spaced, each with a soft halo so it
+ * reads as a calm "orb" rather than a sticker. Subtle by design.
+ */
+private fun DrawScope.drawOrbitDots(colors: List<Color>) {
+    if (colors.isEmpty()) return
+    val s = size.minDimension
+    val cx = size.width / 2f
+    val cy = size.height / 2f
+    val ringR = s * 0.46f          // just inside the canvas edge
+    val dotR = s * 0.045f
+    val start = -90.0              // first dot at top
+    val step = 360.0 / colors.size
+    colors.forEachIndexed { i, c ->
+        val ang = Math.toRadians(start + i * step)
+        val x = cx + (ringR * cos(ang)).toFloat()
+        val y = cy + (ringR * sin(ang)).toFloat()
+        // soft halo
+        drawCircle(c.copy(alpha = 0.18f), radius = dotR * 2.1f, center = Offset(x, y))
+        // a thin dark seat so the dot sits on the dark surface cleanly
+        drawCircle(Ink.copy(alpha = 0.55f), radius = dotR * 1.35f, center = Offset(x, y))
+        drawCircle(c.copy(alpha = 0.92f), radius = dotR, center = Offset(x, y))
     }
 }
 
@@ -224,44 +296,66 @@ private fun DrawScope.label(
 
 private fun DrawScope.drawDropperBottle(p: GlyphPalette, initials: String, m: TextMeasurer) {
     val s = size.minDimension
-    val bodyW = s * 0.50f
-    val bodyH = s * 0.52f
+    val bodyW = s * 0.46f
+    val bodyH = s * 0.46f
     val cx = size.width / 2f
-    val bodyTop = size.height * 0.40f
+    val bodyTop = size.height * 0.44f
     val bodyLeft = cx - bodyW / 2f
-    val r = s * 0.10f
+    val r = s * 0.08f
 
-    // amber glass body
+    // The pipette glass tube descending INTO the body — the signal that says
+    // "dropper", drawn first so the body overlaps its lower end.
+    drawLine(
+        p.light.copy(alpha = 0.55f),
+        Offset(cx, bodyTop - s * 0.30f),
+        Offset(cx, bodyTop + bodyH * 0.62f),
+        strokeWidth = s * 0.028f,
+        cap = StrokeCap.Round,
+    )
+
+    // glass body
     drawRoundRect(
         p.body,
         topLeft = Offset(bodyLeft, bodyTop),
         size = Size(bodyW, bodyH),
         cornerRadius = CornerRadius(r, r),
     )
-    // shoulder neck
-    val neckW = bodyW * 0.42f
+
+    // sloped shoulders into a narrow neck — reads as a serum bottle, not a box
+    val neckW = bodyW * 0.40f
+    val shoulder = Path().apply {
+        moveTo(bodyLeft + bodyW * 0.14f, bodyTop + r)
+        quadraticBezierTo(cx - neckW / 2f, bodyTop - s * 0.02f, cx - neckW / 2f, bodyTop - s * 0.06f)
+        lineTo(cx + neckW / 2f, bodyTop - s * 0.06f)
+        quadraticBezierTo(cx + neckW / 2f, bodyTop - s * 0.02f, bodyLeft + bodyW * 0.86f, bodyTop + r)
+        close()
+    }
+    drawPath(shoulder, p.body)
+    // neck collar
     drawRoundRect(
         p.dark,
-        topLeft = Offset(cx - neckW / 2f, bodyTop - s * 0.10f),
-        size = Size(neckW, s * 0.14f),
-        cornerRadius = CornerRadius(s * 0.02f, s * 0.02f),
+        topLeft = Offset(cx - neckW / 2f, bodyTop - s * 0.12f),
+        size = Size(neckW, s * 0.10f),
+        cornerRadius = CornerRadius(s * 0.015f, s * 0.015f),
     )
-    // dropper cap (rubber teat + collar)
-    val capW = bodyW * 0.60f
+
+    // dropper cap: a tall ribbed cap + the rubber bulb on top (the pipette squeeze)
+    val capW = bodyW * 0.52f
     drawRoundRect(
         p.cap,
-        topLeft = Offset(cx - capW / 2f, bodyTop - s * 0.24f),
-        size = Size(capW, s * 0.16f),
-        cornerRadius = CornerRadius(s * 0.04f, s * 0.04f),
+        topLeft = Offset(cx - capW / 2f, bodyTop - s * 0.28f),
+        size = Size(capW, s * 0.18f),
+        cornerRadius = CornerRadius(s * 0.03f, s * 0.03f),
     )
-    drawRoundRect(
-        p.light.copy(alpha = 0.85f),
-        topLeft = Offset(cx - capW * 0.18f, bodyTop - s * 0.32f),
-        size = Size(capW * 0.36f, s * 0.12f),
-        cornerRadius = CornerRadius(s * 0.05f, s * 0.05f),
+    // rubber bulb (rounded teat)
+    drawCircle(
+        lerp(p.cap, Color.White, 0.18f),
+        radius = capW * 0.34f,
+        center = Offset(cx, bodyTop - s * 0.32f),
     )
-    sheen(Rect(bodyLeft + bodyW * 0.12f, bodyTop + bodyH * 0.10f, bodyLeft + bodyW * 0.30f, bodyTop + bodyH * 0.85f), 0.18f)
-    label(initials, m, Offset(cx, bodyTop + bodyH * 0.56f), p.dark)
+
+    sheen(Rect(bodyLeft + bodyW * 0.12f, bodyTop + bodyH * 0.12f, bodyLeft + bodyW * 0.28f, bodyTop + bodyH * 0.86f), 0.18f)
+    label(initials, m, Offset(cx, bodyTop + bodyH * 0.60f), p.dark)
 }
 
 private fun DrawScope.drawPumpBottle(p: GlyphPalette, initials: String, m: TextMeasurer) {
@@ -310,24 +404,30 @@ private fun DrawScope.drawTube(p: GlyphPalette, initials: String, m: TextMeasure
     val bodyTop = size.height * 0.32f
     val bodyLeft = cx - bodyW / 2f
 
-    // tube: rounded top, crimped flat bottom
+    // tube: a narrow shouldered top tapering to a screw neck, wide soft body,
+    // crimped flat bottom — a clear sunscreen/cleanser squeeze tube.
+    val neckW = bodyW * 0.34f
     val path = Path().apply {
-        val r = bodyW / 2f
-        moveTo(bodyLeft, bodyTop + r)
-        quadraticBezierTo(bodyLeft, bodyTop, bodyLeft + r, bodyTop)
-        quadraticBezierTo(bodyLeft + bodyW, bodyTop, bodyLeft + bodyW, bodyTop + r)
+        // crimped flat base
+        moveTo(bodyLeft, bodyTop + bodyH)
+        lineTo(bodyLeft, bodyTop + s * 0.10f)
+        // left shoulder sloping up to the neck
+        quadraticBezierTo(bodyLeft, bodyTop, cx - neckW / 2f, bodyTop)
+        lineTo(cx + neckW / 2f, bodyTop)
+        // right shoulder back down
+        quadraticBezierTo(bodyLeft + bodyW, bodyTop, bodyLeft + bodyW, bodyTop + s * 0.10f)
         lineTo(bodyLeft + bodyW, bodyTop + bodyH)
-        lineTo(bodyLeft, bodyTop + bodyH)
         close()
     }
     drawPath(path, p.body)
     // crimp seam at the base
     drawRoundRect(p.dark, topLeft = Offset(bodyLeft, bodyTop + bodyH - s * 0.05f), size = Size(bodyW, s * 0.05f), cornerRadius = CornerRadius(s * 0.01f, s * 0.01f))
-    // cap at top
-    val capW = bodyW * 0.46f
-    drawRoundRect(p.cap, topLeft = Offset(cx - capW / 2f, bodyTop - s * 0.13f), size = Size(capW, s * 0.15f), cornerRadius = CornerRadius(s * 0.03f, s * 0.03f))
-    sheen(Rect(bodyLeft + bodyW * 0.14f, bodyTop + bodyH * 0.10f, bodyLeft + bodyW * 0.30f, bodyTop + bodyH * 0.80f), 0.18f)
-    label(initials, m, Offset(cx, bodyTop + bodyH * 0.50f), p.dark)
+    // screw neck + cap at top
+    drawRoundRect(p.dark, topLeft = Offset(cx - neckW / 2f, bodyTop - s * 0.05f), size = Size(neckW, s * 0.06f), cornerRadius = CornerRadius(s * 0.01f, s * 0.01f))
+    val capW = neckW * 1.12f
+    drawRoundRect(p.cap, topLeft = Offset(cx - capW / 2f, bodyTop - s * 0.17f), size = Size(capW, s * 0.13f), cornerRadius = CornerRadius(s * 0.025f, s * 0.025f))
+    sheen(Rect(bodyLeft + bodyW * 0.14f, bodyTop + bodyH * 0.14f, bodyLeft + bodyW * 0.30f, bodyTop + bodyH * 0.82f), 0.18f)
+    label(initials, m, Offset(cx, bodyTop + bodyH * 0.54f), p.dark)
 }
 
 private fun DrawScope.drawJar(p: GlyphPalette, initials: String, m: TextMeasurer) {
@@ -339,14 +439,19 @@ private fun DrawScope.drawJar(p: GlyphPalette, initials: String, m: TextMeasurer
     val bodyLeft = cx - bodyW / 2f
     val r = s * 0.08f
 
+    // squat glass base
     drawRoundRect(p.body, topLeft = Offset(bodyLeft, bodyTop), size = Size(bodyW, bodyH), cornerRadius = CornerRadius(r, r))
-    // wide lid
-    val lidW = bodyW * 1.02f
-    val lidH = s * 0.18f
-    drawRoundRect(p.cap, topLeft = Offset(cx - lidW / 2f, bodyTop - lidH * 0.7f), size = Size(lidW, lidH), cornerRadius = CornerRadius(s * 0.06f, s * 0.06f))
-    drawRoundRect(p.light.copy(alpha = 0.5f), topLeft = Offset(cx - lidW / 2f + s * 0.04f, bodyTop - lidH * 0.55f), size = Size(lidW * 0.30f, lidH * 0.4f), cornerRadius = CornerRadius(s * 0.03f, s * 0.03f))
-    sheen(Rect(bodyLeft + bodyW * 0.10f, bodyTop + bodyH * 0.18f, bodyLeft + bodyW * 0.26f, bodyTop + bodyH * 0.78f), 0.16f)
-    label(initials, m, Offset(cx, bodyTop + bodyH * 0.58f), p.dark)
+    // a thin neck band where the lid screws on — separates lid from jar so it
+    // doesn't read as a single block
+    drawRoundRect(p.dark.copy(alpha = 0.6f), topLeft = Offset(bodyLeft + bodyW * 0.04f, bodyTop), size = Size(bodyW * 0.92f, s * 0.04f), cornerRadius = CornerRadius(s * 0.02f, s * 0.02f))
+    // wide screw lid, overhanging the base — the unmistakable cream-jar silhouette
+    val lidW = bodyW * 1.06f
+    val lidH = s * 0.20f
+    drawRoundRect(p.cap, topLeft = Offset(cx - lidW / 2f, bodyTop - lidH * 0.78f), size = Size(lidW, lidH), cornerRadius = CornerRadius(s * 0.07f, s * 0.07f))
+    // lid sheen
+    drawRoundRect(p.light.copy(alpha = 0.5f), topLeft = Offset(cx - lidW / 2f + s * 0.04f, bodyTop - lidH * 0.6f), size = Size(lidW * 0.30f, lidH * 0.4f), cornerRadius = CornerRadius(s * 0.03f, s * 0.03f))
+    sheen(Rect(bodyLeft + bodyW * 0.10f, bodyTop + bodyH * 0.22f, bodyLeft + bodyW * 0.26f, bodyTop + bodyH * 0.80f), 0.16f)
+    label(initials, m, Offset(cx, bodyTop + bodyH * 0.60f), p.dark)
 }
 
 private fun DrawScope.drawSachet(p: GlyphPalette, initials: String, m: TextMeasurer) {

@@ -28,6 +28,9 @@ object BrainProvider {
      */
     fun engine(context: Context): LlmEngine =
         engineRef ?: synchronized(this) {
+            // Built with MediaPipeLlmEngine's default maxTokens (4096) — large enough for a
+            // long source-material prompt PLUS a full JSON fill. Do NOT pass a smaller budget
+            // here: a tight budget truncates the JSON and drops profiles to the fallback.
             engineRef ?: MediaPipeLlmEngine(context.applicationContext).also { engineRef = it }
         }
 

@@ -257,9 +257,12 @@ object StackAnalyzer {
         val reviews = if (engineUp) ReviewDigestSkill.digest(BrainProvider.engine(app), name, webResults)
         else ReviewDigestSkill.fallback(webResults)
 
+        // The product's primary benefits, 1–2 words each, from the matched ingredient.
+        val benefits = matched?.benefits.orEmpty().map { it.trim() }.filter { it.isNotBlank() }.distinct().take(4)
+
         // --- Compose the dynamic page: big picture first, then facts, chapters, trail ---
         val blocks = buildList<ReportBlock> {
-            add(ReportBlock.Verdict(verdict, rationale, overallScore, verdictTags, byModel, dimensions))
+            add(ReportBlock.Verdict(verdict, rationale, overallScore, verdictTags, byModel, dimensions, benefits))
             buildFactsBlock(matched, product)?.let { add(it) }
             buildIngredientsBlock(ingredients)?.let { add(it) }
             buildDoseMeter(matched, recDose, recUnit)?.let { add(it) }
@@ -508,6 +511,19 @@ object StackAnalyzer {
             b.score?.let { s -> (if (b.aspect == AnalysisAspect.SAFETY) 2 else 1) to s }
         }
         if (weighted.isEmpty()) return null
+        val num = weighted.sumOf { it.first * it.second }
+        val den = weighted.sumOf { it.first }
+        return Math.round(num.toDouble() / den).toInt()
+    }
+
+    /**
+     * Overall score for the profile (non-supplement) path = a safety-weighted mean of the
+     * dimension bars themselves, so the ring and the bars tell the same story. Safety counts
+     * double, mirroring [rollUpScore]. Null only when there are no dimensions to average.
+     */
+    private fun rollUpDimensions(dimensions: List<Pair<String, Int>>): Int? {
+        if (dimensions.isEmpty()) return null
+        val weighted = dimensions.map { (label, score) -> (if (label == "Safety") 2 else 1) to score }
         val num = weighted.sumOf { it.first * it.second }
         val den = weighted.sumOf { it.first }
         return Math.round(num.toDouble() / den).toInt()
@@ -804,10 +820,10 @@ object StackAnalyzer {
         // Curated ground truth FIRST — the validated KB is the trusted base (same as a
         // supplement leans on IngredientCatalog). The model only fills gaps / unknowns.
         val curated = CuratedProfiles.match(name, kind)
-        val profile = (if (engineUp) runCatching { ProfileSkill.fill(BrainProvider.engine(app), name, sourceMaterial, kind, routineNames) }.getOrNull() else null)
-            ?: curated
-            ?: ProfileSkill.fallback(name, kind)
-        var byModel = engineUp && curated == null && profile.confidence >= 30
+        val modelProfile = if (engineUp) runCatching { ProfileSkill.fill(BrainProvider.engine(app), name, sourceMaterial, kind, routineNames) }.getOrNull() else null
+        val profile = modelProfile ?: curated ?: ProfileSkill.fallback(name, kind)
+        // Only a genuine model fill (not curated, not the deterministic fallback) counts as byModel.
+        var byModel = modelProfile != null && curated == null && profile.confidence >= 30
 
         emit("The big picture", "Weighing it up the way you would…", Mood.REFLECTIVE, 0.85f)
         var rationale = profile.whatItIs.ifBlank { "A ${kind.label.lowercase()} you're tracking." }
@@ -866,10 +882,19 @@ object StackAnalyzer {
         else ReviewDigestSkill.fallback(webResults)
 
         // The five verdict dimensions, derived honestly and deterministically from the profile.
-        val dimensions = profileDimensions(profile, kind, goal, stackClashes.isNotEmpty(), currentStack.isNotEmpty(), reviews.state)
+        // Trust is decoupled from the fill's confidence (curated flag + reviews + rating drive it).
+        val dimensions = profileDimensions(
+            profile, kind, goal, stackClashes.isNotEmpty(), currentStack.isNotEmpty(),
+            reviews.state, isCurated = curated != null, ratingValue = product?.ratingValue, ratingCount = product?.ratingCount,
+        )
+        // Overall score = a safety-weighted roll-up of the very bars shown beneath it — the
+        // ring reflects the dimensions, NOT the fill confidence (which pinned unknowns to 25).
+        val overallScore = rollUpDimensions(dimensions)
+        // The product's primary benefits, 1–2 words each, from the profile's goodFor.
+        val benefits = profile.goodFor.map { it.trim() }.filter { it.isNotBlank() }.distinct().take(4)
 
         val blocks = buildList<ReportBlock> {
-            add(ReportBlock.Verdict(verdictLabel, rationale, profile.confidence, listOf(profile.kind.label, profile.categoryLabel).filter { it.isNotBlank() }.distinct(), byModel, dimensions))
+            add(ReportBlock.Verdict(verdictLabel, rationale, overallScore, listOf(profile.kind.label, profile.categoryLabel).filter { it.isNotBlank() }.distinct(), byModel, dimensions, benefits))
             buildProfileFacts(profile, product)?.let { add(it) }
 
             // Good for & who it's for.
@@ -950,7 +975,9 @@ object StackAnalyzer {
      *   - Quality: whether absorption/how-it-works is known + curated-vs-guessed confidence.
      *   - Safety:  fewer safety flags → higher.
      *   - Routine: drops when it clashes with the user's current stack.
-     *   - Trust:   fill confidence nudged by review sentiment.
+     *   - Trust:   DECOUPLED from the fill confidence — built from review sentiment, the
+     *              product's own rating, and whether the profile is curated (vs model-guessed).
+     *              Defaults to a neutral ~55–60 when nothing is known — never pinned to 25.
      */
     private fun profileDimensions(
         profile: CategoryProfile,
@@ -959,6 +986,9 @@ object StackAnalyzer {
         clashesWithStack: Boolean,
         hasStack: Boolean,
         reviewState: AspectState,
+        isCurated: Boolean,
+        ratingValue: Double?,
+        ratingCount: Int?,
     ): List<Pair<String, Int>> {
         fun clamp(v: Int) = v.coerceIn(0, 100)
         val conf = profile.confidence.coerceIn(0, 100)
@@ -980,12 +1010,28 @@ object StackAnalyzer {
             profile.dontCombine.isNotEmpty() && hasStack -> 70
             else -> 85
         }
-        // Trust — confidence nudged by what reviewers report.
-        val trust = clamp(conf + when (reviewState) {
-            AspectState.GOOD -> 10
-            AspectState.CAUTION -> -10
-            else -> 0
-        })
+        // Trust — DECOUPLED from the fill confidence. Start from a neutral base (curated facts
+        // are inherently more trustworthy than a model guess), then nudge by what reviewers
+        // report and by the product's own aggregate rating. Never floored at the fill's 25/45.
+        val trust = run {
+            var t = if (isCurated) 70 else 58 // neutral ~55–60 when nothing else is known
+            t += when (reviewState) {
+                AspectState.GOOD -> 12
+                AspectState.MIXED -> 0
+                AspectState.CAUTION -> -12
+                else -> 0 // NOT_ASSESSED / CLEAR — no review signal either way
+            }
+            if (ratingValue != null) {
+                val weighty = (ratingCount ?: 0) >= 25
+                t += when {
+                    ratingValue >= 4.3 -> if (weighty) 12 else 6
+                    ratingValue >= 3.8 -> if (weighty) 6 else 3
+                    ratingValue < 3.0 -> -10
+                    else -> 0
+                }
+            }
+            clamp(t)
+        }
 
         return buildList {
             fit?.let { add("Fit" to it) }

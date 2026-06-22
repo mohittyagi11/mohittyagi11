@@ -31,10 +31,12 @@ import java.io.File
 class MediaPipeLlmEngine(
     context: Context,
     private val modelName: String = DEFAULT_MODEL_NAME,
-    // MediaPipe's budget covers prompt + response. We now feed the model real source
-    // material (product text + reviews), so this must be large enough for that input
-    // plus a few sentences out — 256 would truncate/fail the richer prompts.
-    private val maxTokens: Int = 2048,
+    // MediaPipe's budget covers prompt + response TOGETHER. We now feed the model real
+    // source material (product text + directions + reviews) AND ask for a full JSON object
+    // back, so this must hold the long prompt PLUS a complete response. 2048 left too little
+    // headroom — the JSON fill was truncated mid-object and failed to parse, dropping the
+    // profile to the generic fallback. 4096 fits a rich prompt and a whole JSON reply.
+    private val maxTokens: Int = 4096,
 ) : LlmEngine {
 
     private val appContext = context.applicationContext
