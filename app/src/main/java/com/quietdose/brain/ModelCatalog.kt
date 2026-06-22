@@ -81,12 +81,12 @@ object ModelCatalog {
             minRamMb = 3072,
             backend = "CPU",
             fileName = MediaPipeLlmEngine.DEFAULT_MODEL_NAME,
-            directUrl = null,
+            directUrl = "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int8.task",
             sourcePageUrl = "https://huggingface.co/litert-community/Gemma3-1B-IT",
             license = "Gemma Terms of Use",
-            notes = "Higher-quality 8-bit variant of the 1B model. Same page as the " +
-                "int4 build; pick the int8 .task there. No verified stable direct " +
-                "link, so obtain from the page and import.",
+            notes = "Higher-quality 8-bit variant of the 1B model, same repo as int4. " +
+                "Gated: accept the licence on the page once and paste a Hugging Face " +
+                "token here, then Download. If the filename changed, import instead.",
         ),
         OnDeviceModel(
             id = "gemma3n-e2b-it-int4",

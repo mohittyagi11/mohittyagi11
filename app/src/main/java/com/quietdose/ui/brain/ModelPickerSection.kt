@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,12 +35,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.quietdose.brain.DeviceCapability
+import com.quietdose.brain.ModelAuth
 import com.quietdose.brain.ModelManager
 import com.quietdose.brain.OnDeviceModel
+import kotlinx.coroutines.flow.first
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.Done
 import com.quietdose.ui.theme.Outline
@@ -74,6 +80,10 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
     var downloadingId by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableStateOf(0f) }
     var heavierExpanded by remember { mutableStateOf(false) }
+
+    // Optional Hugging Face token for gated model downloads. Loaded once.
+    var hfToken by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { hfToken = ModelAuth.tokenFlow(context).first().orEmpty() }
 
     val totalRamMb = remember { DeviceCapability.totalRamMb(context) }
     val recommended = remember { DeviceCapability.recommended(context) }
@@ -112,12 +122,19 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
         downloadingId = model.id
         progress = 0f
         note = "Downloading ${model.displayName}…"
+        val token = hfToken.trim().ifEmpty { null }
         scope.launch {
-            val result = ModelManager.download(context, model) { p -> progress = p }
+            // Persist the token so it's remembered for next time.
+            runCatching { ModelAuth.setToken(context, token) }
+            val result = ModelManager.download(context, model, token) { p -> progress = p }
             busy = false
             downloadingId = null
             refreshInstalled()
-            note = if (result.isSuccess) "Model installed." else "Download failed — try \"Get model\" instead."
+            note = if (result.isSuccess) {
+                "Model installed."
+            } else {
+                result.exceptionOrNull()?.message ?: "Download failed — try \"Get model\" instead."
+            }
         }
     }
 
@@ -137,6 +154,52 @@ fun ModelPickerSection(modifier: Modifier = Modifier) {
 
             Spacer(Modifier.height(14.dp))
             DeviceStatusRow(totalRamMb = totalRamMb, installed = installed)
+
+            Spacer(Modifier.height(14.dp))
+            HairLine()
+            Spacer(Modifier.height(14.dp))
+
+            // Gated-model access: a Hugging Face token lets the in-app Download
+            // fetch license-gated files directly (accept the licence once on the
+            // page, then it just works — same as the curl command's auth header).
+            Text(
+                "Gated downloads",
+                style = MaterialTheme.typography.titleMedium,
+                color = TextHigh,
+                fontWeight = FontWeight.Medium,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Most models need a one-time licence acceptance on their page. Paste a Hugging Face token here and in-app Download works; the token stays on this device.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMid,
+            )
+            Spacer(Modifier.height(8.dp))
+            TokenField(value = hfToken, onValueChange = { hfToken = it })
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GhostButton(
+                    label = "Create token",
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse("https://huggingface.co/settings/tokens"))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    },
+                )
+                GhostButton(
+                    label = if (hfToken.isBlank()) "Save" else "Save token",
+                    enabled = !busy,
+                    onClick = {
+                        scope.launch {
+                            runCatching { ModelAuth.setToken(context, hfToken.trim().ifEmpty { null }) }
+                            note = if (hfToken.isBlank()) "Token cleared." else "Token saved."
+                        }
+                    },
+                )
+            }
 
             Spacer(Modifier.height(14.dp))
             HairLine()
@@ -423,6 +486,37 @@ private fun GhostButton(
             ) { onClick() }
             .padding(horizontal = 14.dp, vertical = 10.dp),
     )
+}
+
+@Composable
+private fun TokenField(value: String, onValueChange: (String) -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Surface2)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextHigh),
+            cursorBrush = SolidColor(Accent),
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            decorationBox = { inner ->
+                if (value.isEmpty()) {
+                    Text(
+                        "hf_… (Hugging Face token)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextLow,
+                    )
+                }
+                inner()
+            },
+        )
+    }
 }
 
 @Composable

@@ -38,6 +38,40 @@ object ModelManager {
     private fun partFile(context: Context): File =
         File(context.applicationContext.filesDir, MediaPipeLlmEngine.DEFAULT_MODEL_NAME + PART_SUFFIX)
 
+    /**
+     * Open [urlStr] following redirects manually, attaching the Hugging Face
+     * bearer [token] ONLY on requests to huggingface.co. HF's `resolve` endpoint
+     * 302-redirects to a signed CDN URL that needs no auth (and must not receive
+     * the token). Returns the connection at the first non-redirect response.
+     */
+    private fun openFollowingRedirects(urlStr: String, token: String?): HttpURLConnection {
+        var current = urlStr
+        var hops = 0
+        while (true) {
+            val c = (URL(current).openConnection() as HttpURLConnection).apply {
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                instanceFollowRedirects = false
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/octet-stream")
+                if (!token.isNullOrBlank() && (url.host ?: "").endsWith("huggingface.co")) {
+                    setRequestProperty("Authorization", "Bearer $token")
+                }
+            }
+            c.connect()
+            val code = c.responseCode
+            if (code in 300..399 && hops < 5) {
+                val location = c.getHeaderField("Location")
+                c.disconnect()
+                if (location.isNullOrBlank()) return c
+                current = URL(URL(current), location).toString() // resolve relative
+                hops++
+                continue
+            }
+            return c
+        }
+    }
+
     /** Info about whatever model file is currently installed, or null if none. */
     data class InstalledModel(val fileName: String, val sizeBytes: Long)
 
@@ -63,6 +97,7 @@ object ModelManager {
     suspend fun download(
         context: Context,
         model: OnDeviceModel,
+        token: String?,
         onProgress: (Float) -> Unit,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val url = model.directUrl
@@ -77,19 +112,19 @@ object ModelManager {
         try {
             part.delete()
 
-            connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                instanceFollowRedirects = true
-                requestMethod = "GET"
-                setRequestProperty("Accept", "application/octet-stream")
-            }
-            connection.connect()
+            // Follow redirects ourselves so the bearer token is sent ONLY to
+            // huggingface.co — the redirect target (a signed CDN URL) needs no
+            // auth and must not receive the token.
+            connection = openFollowingRedirects(url, token)
 
             val code = connection.responseCode
             if (code !in 200..299) {
                 return@withContext Result.failure(
-                    IllegalStateException("Download failed (HTTP $code). The file may be gated; try the source page."),
+                    IllegalStateException(
+                        "Download failed (HTTP $code). If the model is gated, accept its " +
+                            "licence on the page and paste a Hugging Face token, then retry — " +
+                            "or import the file.",
+                    ),
                 )
             }
 
