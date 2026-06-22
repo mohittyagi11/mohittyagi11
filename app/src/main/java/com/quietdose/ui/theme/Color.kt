@@ -63,6 +63,14 @@ val GlyphNeutral = Color(0xFF9AA0B4)   // fallback grey-blue
 val GlyphSurfaceSink = Color(0xFF15151B) // the calm dark the sampled body blends toward
 val GlyphCapSink = Color(0xFF0E0E13)     // a touch darker, for the cap
 
+// The visibility floor for a glyph body: when a sampled/derived body would sink
+// into Surface2 (#1C1C22) and vanish, we lift it toward this calm, premium slate
+// so a monogram + silhouette always read on the dark canvas (never neon).
+val GlyphBodyFloor = Color(0xFF3A3B46)   // lifted body target — clearly above the surface
+// A subtle ring/backing drawn behind the hero glyph for separation from its plate.
+val GlyphBacking = Color(0xFF202028)     // soft backing disc behind the glyph
+val GlyphRing = Color(0xFF34353F)        // hairline ring for crisp separation
+
 // Benefit orbit dots — a small, calm spectrum cycled around the glyph so each
 // primary benefit gets its own quiet tint (dot colour ↔ chip in the legend).
 // Desaturated to sit beside the product without shouting.

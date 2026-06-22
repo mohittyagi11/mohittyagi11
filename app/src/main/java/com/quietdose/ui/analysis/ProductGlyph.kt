@@ -26,14 +26,18 @@ import com.quietdose.brain.analysis.KindDetector
 import com.quietdose.brain.enrich.ImagePalette
 import com.quietdose.data.model.ItemType
 import com.quietdose.ui.theme.BenefitOrbit
+import com.quietdose.ui.theme.GlyphBacking
+import com.quietdose.ui.theme.GlyphBodyFloor
 import com.quietdose.ui.theme.GlyphCapSink
 import com.quietdose.ui.theme.GlyphDevice
 import com.quietdose.ui.theme.GlyphHaircare
 import com.quietdose.ui.theme.GlyphNeutral
+import com.quietdose.ui.theme.GlyphRing
 import com.quietdose.ui.theme.GlyphSkincare
 import com.quietdose.ui.theme.GlyphSupplement
 import com.quietdose.ui.theme.GlyphSurfaceSink
 import com.quietdose.ui.theme.Ink
+import com.quietdose.ui.theme.Surface2
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -109,7 +113,7 @@ private fun paletteFor(name: String, brand: String?, kind: ItemKind): GlyphPalet
     // stay cool. We blend in HSL-ish RGB space — restrained (max ~38% toward the
     // hashed accent) to keep it on-brand and calm.
     val hashed = hueColor(((seed ushr 8) and 0xFFFF))
-    val body = lerp(base, hashed, 0.30f).desaturateToward(GlyphNeutral, 0.18f)
+    val body = lerp(base, hashed, 0.30f).desaturateToward(GlyphNeutral, 0.18f).let(::ensureVisible)
     return GlyphPalette(
         body = body,
         light = lerp(body, Color.White, 0.38f),
@@ -137,6 +141,29 @@ private fun hueColor(h: Int): Color {
 
 private fun Color.desaturateToward(grey: Color, amount: Float): Color = lerp(this, grey, amount)
 
+/** Perceived luminance (0..1), Rec. 601 weighting — cheap and good enough to gate contrast. */
+private fun Color.luma(): Float = 0.299f * red + 0.587f * green + 0.114f * blue
+
+/**
+ * Guarantee the glyph body is clearly visible on [Surface2] (the plate it sits on).
+ * A DARK packaging colour blended toward the near-black surface can come out almost
+ * invisible — so if the body is too dim OR too close in luminance to the surface, we
+ * lift it toward [GlyphBodyFloor] (a calm, premium slate — not neon) by however much
+ * is needed to clear the floor and open a readable gap against the plate.
+ */
+private fun ensureVisible(body: Color): Color {
+    val floor = GlyphBodyFloor.luma()          // the minimum luminance we want
+    val surface = Surface2.luma()              // the plate the glyph sits on
+    val l = body.luma()
+    // How far below the floor we are (0 when already bright enough)…
+    val belowFloor = ((floor - l) / floor).coerceIn(0f, 1f)
+    // …and how little contrast we have against the surface plate.
+    val gap = kotlin.math.abs(l - surface)
+    val lowContrast = ((0.16f - gap) / 0.16f).coerceIn(0f, 1f)
+    val lift = maxOf(belowFloor, lowContrast)
+    return if (lift <= 0f) body else lerp(body, GlyphBodyFloor, lift)
+}
+
 /**
  * Build a [GlyphPalette] from colours sampled off the REAL packaging photo. We
  * blend the sampled body toward the calm dark surface so it stays premium (never
@@ -147,7 +174,10 @@ private fun Color.desaturateToward(grey: Color, amount: Float): Color = lerp(thi
 private fun paletteFromSample(primary: Color, accent: Color): GlyphPalette {
     // Anchor toward the dark surface — premium, calm — while still reading as the
     // packaging colour (keep ~62% of the true hue on the body).
-    val body = lerp(GlyphSurfaceSink, primary, 0.62f)
+    val sunk = lerp(GlyphSurfaceSink, primary, 0.62f)
+    // …then guarantee the body clears the visibility floor so DARK packaging never
+    // vanishes into Surface2. (No-op for already-bright bodies, so true-to-life stays.)
+    val body = ensureVisible(sunk)
     val cap = lerp(GlyphCapSink, accent, 0.58f)
     return GlyphPalette(
         body = body,
@@ -190,6 +220,7 @@ fun ProductGlyph(
     showInitials: Boolean = true,
     sampled: ImagePalette.PaletteResult? = null,
     benefits: List<String> = emptyList(),
+    showBacking: Boolean = false,
 ) {
     val kind = remember(name, category) { KindDetector.detect(name, category) }
     val form = remember(name, category, type) { inferContainerForm(name, category, type) }
@@ -206,9 +237,21 @@ fun ProductGlyph(
     val measurer = rememberTextMeasurer()
 
     Canvas(modifier) {
+        // A subtle backing disc + hairline ring sits the glyph cleanly apart from its
+        // plate, so even a calm body never blends into the surface behind it.
+        if (showBacking) drawBacking()
         if (orbs.isNotEmpty()) drawBenefitOrbs(orbs)
         drawGlyph(form, palette, initials, measurer)
     }
+}
+
+/** Soft backing disc + crisp hairline ring — quiet separation behind the hero glyph. */
+private fun DrawScope.drawBacking() {
+    val s = size.minDimension
+    val center = Offset(size.width / 2f, size.height / 2f)
+    val r = s * 0.46f
+    drawCircle(GlyphBacking, radius = r, center = center)
+    drawCircle(GlyphRing, radius = r, center = center, style = Stroke(width = s * 0.012f))
 }
 
 /** The shared mapping benefit → orbit/chip colour, so the screen's chips match the dots. */

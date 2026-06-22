@@ -885,6 +885,24 @@ object StackAnalyzer {
         val reviews = if (engineUp) ReviewDigestSkill.digest(BrainProvider.engine(app), name, webResults)
         else ReviewDigestSkill.fallback(webResults)
 
+        // The product's KEY actives — a focused SLM pass over the real text, grounded against
+        // the curated KB (or, with no model, a deterministic alias scan). Populates the persisted
+        // AnalysisReport.ingredients so they stick when the item is saved.
+        val ingredientLines = runCatching {
+            IngredientSkill.extract(BrainProvider.engine(app), name, sourceMaterial)
+        }.getOrDefault(emptyList())
+        ingredientLines.forEach { grounded += "Active: ${it.name}${if (it.role.isNotBlank()) " (${it.role})" else ""}" }
+        val itemIngredients = ingredientLines.map {
+            com.quietdose.data.model.ItemIngredient(key = IngredientSkill.keyFor(it.name), name = it.name)
+        }
+
+        // Marketing claims — extracted and weighed across mechanism + evidence + reports in one
+        // bounded pass, reusing any conclusion already persisted from a prior session.
+        val claimLines = runCatching {
+            ClaimVerifier.verify(app, BrainProvider.engine(app), name, sourceMaterial, webResults)
+        }.getOrDefault(emptyList())
+        claimLines.forEach { grounded += "Claim/${it.status.name.lowercase()}: ${it.claim}" }
+
         // The five verdict dimensions, derived honestly and deterministically from the profile.
         // Trust is decoupled from the fill's confidence (curated flag + reviews + rating drive it).
         val dimensions = profileDimensions(
@@ -907,6 +925,9 @@ object StackAnalyzer {
                     profile.fitsWho.map { AnalysisLine("Suits — $it", Severity.NEUTRAL) }
                 add(ReportBlock.Chapter("Good for & who it's for", null, lines, AspectState.GOOD))
             }
+
+            // Key actives — what's actually in it, each with a plain role + grounded note.
+            if (ingredientLines.isNotEmpty()) add(ReportBlock.Ingredients(ingredientLines))
 
             // Quality & (skin) absorption — the category-scoped "is it the real thing" lens.
             if (profile.absorption.isNotBlank()) {
@@ -943,6 +964,9 @@ object StackAnalyzer {
             // Trust & reviews — distilled into what people report, not a wall of URLs.
             if (webResults.isNotEmpty()) add(reviews)
 
+            // Marketing claims — each weighed across mechanism + evidence + reports, persisted.
+            if (claimLines.isNotEmpty()) add(ReportBlock.Claims(claimLines))
+
             // Check yourself.
             if (profile.verify.isNotEmpty()) {
                 add(ReportBlock.Chapter("Check yourself", null, profile.verify.map { AnalysisLine(it) }, AspectState.MIXED))
@@ -965,7 +989,7 @@ object StackAnalyzer {
             safety = emptyList(),
             safetyReviewedClear = emptyList(),
             blocks = blocks,
-            ingredients = emptyList(),
+            ingredients = itemIngredients,
             grounded = grounded.distinct(),
             byModel = byModel,
         )

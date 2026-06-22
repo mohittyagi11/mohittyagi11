@@ -36,12 +36,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,6 +67,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -71,8 +75,10 @@ import com.quietdose.brain.analysis.AnalysisLine
 import com.quietdose.brain.analysis.AnalysisProgress
 import com.quietdose.brain.analysis.AnalysisReport
 import com.quietdose.brain.analysis.AspectState
+import com.quietdose.brain.analysis.ClaimLine
 import com.quietdose.brain.analysis.ClaimStatus
 import com.quietdose.brain.analysis.IngredientCatalog
+import com.quietdose.brain.analysis.IngredientLine
 import com.quietdose.brain.analysis.RatingDim
 import com.quietdose.brain.analysis.KindDetector
 import com.quietdose.brain.analysis.ModelCapability
@@ -340,6 +346,7 @@ private fun AnalyzingStep(
                 type = item.type,
                 modifier = Modifier.size(96.dp),
                 sampled = sampled,
+                showBacking = true,
             )
         }
         Spacer(Modifier.height(32.dp))
@@ -402,6 +409,11 @@ private fun ReportStep(
     val sliderMax = (high?.times(2.0) ?: maxOf((doseText.toDoubleOrNull() ?: 1.0) * 3.0, 10.0)).toFloat()
     val doseValue = (doseText.toFloatOrNull() ?: 0f).coerceIn(0f, sliderMax)
 
+    // One piece of sheet state, hoisted here. A tapped score / claim / ingredient
+    // sets it (title + body) to open the reusable DetailSheet; null = closed.
+    var detail by remember { mutableStateOf<DetailContent?>(null) }
+    val onDetail: (String, String) -> Unit = { title, body -> detail = DetailContent(title, body) }
+
     Column(Modifier.fillMaxSize()) {
         Column(
             Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
@@ -413,7 +425,7 @@ private fun ReportStep(
             // Dynamic, brain-composed page: walk the template blocks in order.
             // The Verdict leads; quieter chapters follow with generous rhythm.
             report.blocks.forEachIndexed { i, block ->
-                BlockView(block)
+                BlockView(block, item = item, sampled = sampled, onDetail = onDetail)
                 if (i != report.blocks.lastIndex) Spacer(Modifier.height(18.dp))
             }
 
@@ -557,6 +569,47 @@ private fun ReportStep(
             }
         }
     }
+
+    // The single explainer sheet for the whole report — opened by any tapped
+    // score bar, ingredient or claim, dismissed back to null.
+    detail?.let { DetailSheet(it.title, it.body, onDismiss = { detail = null }) }
+}
+
+/** A tapped drill-down's payload: a short title and the grounded body it explains. */
+private data class DetailContent(val title: String, val body: String)
+
+/**
+ * Reusable explainer — a calm [ModalBottomSheet] (Surface1) holding a title + body.
+ * Mirrors the sheet idiom in [com.quietdose.ui.stack.ItemEditorSheet]. Every
+ * tappable report element (a score bar, an ingredient, a claim) opens this same
+ * sheet via the hoisted [onDetail] setter, so explanations stay one consistent surface.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DetailSheet(title: String, body: String, onDismiss: () -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Surface1,
+        dragHandle = {
+            Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.width(36.dp).height(4.dp).clip(CircleShape).background(Surface2))
+            }
+        },
+    ) {
+        Column(
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 28.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge, color = TextHigh)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                body.ifBlank { "No further detail available." },
+                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 25.sp),
+                color = TextMid,
+            )
+        }
+    }
 }
 
 @Composable
@@ -570,33 +623,21 @@ private fun BottomBar(content: @Composable androidx.compose.foundation.layout.Co
 /* --------------------- Dynamic template block renderers --------------------- */
 
 @Composable
-private fun BlockView(block: ReportBlock) {
+private fun BlockView(
+    block: ReportBlock,
+    item: ItemEntity,
+    sampled: ImagePalette.PaletteResult?,
+    onDetail: (String, String) -> Unit,
+) {
     when (block) {
-        is ReportBlock.Verdict -> VerdictBlock(block)
+        is ReportBlock.Verdict -> VerdictBlock(block, item = item, sampled = sampled, onDetail = onDetail)
         is ReportBlock.Facts -> FactsBlock(block)
         is ReportBlock.Meter -> MeterBlock(block)
         is ReportBlock.Aspect -> ChapterView(block.aspect.title, block.summary, block.lines, block.state)
         is ReportBlock.Chapter -> ChapterView(block.title, block.summary, block.lines, block.state)
         is ReportBlock.Reviews -> ReviewsView(block)
-        is ReportBlock.Ingredients -> ChapterView(
-            "What's in it",
-            null,
-            block.items.map { AnalysisLine(listOf(it.name, it.role, it.note).filter { s -> s.isNotBlank() }.joinToString(" · "), it.severity) },
-            AspectState.MIXED,
-        )
-        is ReportBlock.Claims -> ChapterView(
-            "Claims, checked",
-            null,
-            block.items.map {
-                val sev = when (it.status) {
-                    ClaimStatus.SUPPORTED -> Severity.GOOD
-                    ClaimStatus.OVERREACH -> Severity.CAUTION
-                    else -> Severity.NEUTRAL
-                }
-                AnalysisLine(listOf("“${it.claim}”", it.status.name.lowercase(), it.basis).filter { s -> s.isNotBlank() }.joinToString(" — "), sev)
-            },
-            AspectState.MIXED,
-        )
+        is ReportBlock.Ingredients -> IngredientsView(block, onDetail)
+        is ReportBlock.Claims -> ClaimsView(block, onDetail)
         is ReportBlock.Reasoning -> ReasoningBlock(block)
     }
 }
@@ -631,7 +672,12 @@ private fun GroundedLine(text: String, severity: Severity) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun VerdictBlock(b: ReportBlock.Verdict) {
+private fun VerdictBlock(
+    b: ReportBlock.Verdict,
+    item: ItemEntity,
+    sampled: ImagePalette.PaletteResult?,
+    onDetail: (String, String) -> Unit,
+) {
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
@@ -642,6 +688,17 @@ private fun VerdictBlock(b: ReportBlock.Verdict) {
         Eyebrow("The verdict", color = Accent)
         Spacer(Modifier.height(14.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // A small product thumbnail anchors the verdict to the thing being judged.
+            ProductGlyph(
+                name = item.name,
+                brand = item.brand,
+                category = item.category,
+                type = item.type,
+                modifier = Modifier.size(40.dp),
+                sampled = sampled,
+                showBacking = true,
+            )
+            Spacer(Modifier.width(14.dp))
             Text(
                 b.verdict,
                 style = MaterialTheme.typography.headlineLarge,
@@ -654,18 +711,31 @@ private fun VerdictBlock(b: ReportBlock.Verdict) {
             }
         }
         Spacer(Modifier.height(14.dp))
+        // The rationale collapses to ~3 lines with a quiet Read more / Show less toggle,
+        // so the verdict stays scannable but the full reasoning is one tap away.
+        var expanded by remember { mutableStateOf(false) }
         Text(
             b.rationale,
             style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 25.sp),
             color = TextMid,
+            maxLines = if (expanded) Int.MAX_VALUE else 3,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.widthIn(max = 560.dp),
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (expanded) "Show less" else "Read more",
+            style = MaterialTheme.typography.labelMedium,
+            color = Accent,
+            modifier = Modifier.androidxClickable { expanded = !expanded },
         )
         // Per-parameter ratings the overall score is built from — calm labelled
         // bars (label · slim 0..100 track · number), only when the brain supplies them.
+        // Each is tappable for "how this was scored".
         if (b.dimensions.isNotEmpty()) {
             Spacer(Modifier.height(18.dp))
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                b.dimensions.forEach { DimensionBar(it) }
+                b.dimensions.forEach { DimensionBar(it, onDetail) }
             }
         }
         // A gentle one-line legend so the dot/state colours read consistently.
@@ -735,10 +805,16 @@ private fun bandColor(score: Int): Color = when {
  * right. Tight and scannable; many of these stack under the overall ring.
  */
 @Composable
-private fun DimensionBar(dim: RatingDim) {
+private fun DimensionBar(dim: RatingDim, onDetail: (String, String) -> Unit) {
     val v = dim.score.coerceIn(0, 100)
     val color = bandColor(v)
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        // Tap any rating to learn how it was scored — opens the explainer sheet.
+        modifier = Modifier.clip(RoundedCornerShape(8.dp))
+            .androidxClickable { onDetail("How ${dim.label} was scored", dim.why) }
+            .padding(vertical = 2.dp),
+    ) {
         Text(
             dim.label,
             style = MaterialTheme.typography.labelLarge,
@@ -825,6 +901,108 @@ private fun StateChip(state: AspectState) {
         AspectState.CAUTION -> Triple("Mind it", Caution, CautionTint)
         AspectState.CLEAR -> Triple("Clear", Done, GoodTint)
         AspectState.NOT_ASSESSED -> Triple("Not assessed", TextLow, Color.Transparent)
+    }
+    Box(Modifier.clip(RoundedCornerShape(99.dp)).background(tint).padding(horizontal = 10.dp, vertical = 4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+    }
+}
+
+/* --- Ingredients: "What's in it" — a tappable row per active --- */
+
+/**
+ * Each ingredient is a calm row: a severity dot, its name, a small role chip. Tapping
+ * the row opens the explainer sheet with that ingredient's grounded [IngredientLine.note].
+ */
+@Composable
+private fun IngredientsView(b: ReportBlock.Ingredients, onDetail: (String, String) -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Eyebrow("What's in it", color = TextMid)
+        if (b.items.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            b.items.forEach { IngredientRow(it, onDetail) }
+        }
+    }
+}
+
+@Composable
+private fun IngredientRow(line: IngredientLine, onDetail: (String, String) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .androidxClickable { onDetail(line.name, line.note) }
+            .padding(vertical = 8.dp),
+    ) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(severityColor(line.severity)))
+        Spacer(Modifier.width(12.dp))
+        Text(
+            line.name,
+            style = MaterialTheme.typography.bodyLarge,
+            color = TextHigh,
+            modifier = Modifier.weight(1f),
+        )
+        if (line.role.isNotBlank()) {
+            Spacer(Modifier.width(8.dp))
+            RoleChip(line.role)
+        }
+    }
+}
+
+/** A faint role pill — "Humectant", "Active" … — quiet next to the ingredient name. */
+@Composable
+private fun RoleChip(text: String) {
+    Box(
+        Modifier.clip(RoundedCornerShape(99.dp)).background(Surface2).padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(text, style = MaterialTheme.typography.labelSmall, color = TextMid)
+    }
+}
+
+/* --- Claims: "Claims, checked" — a tappable row per claim with a status chip --- */
+
+/**
+ * Each marketing claim is a row: a status chip (its honesty), then the claim text.
+ * Tapping opens the explainer sheet with the [ClaimLine.basis] — why it earned that status.
+ */
+@Composable
+private fun ClaimsView(b: ReportBlock.Claims, onDetail: (String, String) -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Eyebrow("Claims, checked", color = TextMid)
+        if (b.items.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            b.items.forEach { ClaimRow(it, onDetail) }
+        }
+    }
+}
+
+@Composable
+private fun ClaimRow(line: ClaimLine, onDetail: (String, String) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .androidxClickable { onDetail("“${line.claim}”", line.basis) }
+            .padding(vertical = 8.dp),
+    ) {
+        ClaimStatusChip(line.status)
+        Spacer(Modifier.width(12.dp))
+        Text(
+            line.claim,
+            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
+            color = TextMid,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** A calm status pill keyed to how the claim held up. */
+@Composable
+private fun ClaimStatusChip(status: ClaimStatus) {
+    val (label, color, tint) = when (status) {
+        ClaimStatus.SUPPORTED -> Triple("Supported", Done, GoodTint)
+        ClaimStatus.PLAUSIBLE -> Triple("Plausible", Accent, AccentTint)
+        ClaimStatus.UNVERIFIED -> Triple("Unverified", TextMid, Surface2)
+        ClaimStatus.OVERREACH -> Triple("Overreach", Caution, CautionTint)
     }
     Box(Modifier.clip(RoundedCornerShape(99.dp)).background(tint).padding(horizontal = 10.dp, vertical = 4.dp)) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = color)
@@ -982,25 +1160,31 @@ private fun ItemHero(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(Surface1),
+                modifier = Modifier.size(68.dp).clip(RoundedCornerShape(18.dp)).background(Surface1),
             ) {
                 // The dynamic, on-device lookalike — a stylised stand-in for the real
                 // product. Palette sampled from the packaging photo when available;
-                // primary benefits ring it as tinted orbit dots.
+                // primary benefits ring it as tinted orbit dots. A backing ring +
+                // guaranteed-contrast body keep the monogram legible on dark packaging.
                 ProductGlyph(
                     name = item.name,
                     brand = item.brand,
                     category = item.category,
                     type = item.type,
-                    modifier = Modifier.size(52.dp),
+                    modifier = Modifier.size(64.dp),
                     sampled = sampled,
                     benefits = benefits,
+                    showBacking = true,
                 )
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
+                // Brand + product name + type, read clearly so the hero is identifiable.
+                item.brand?.ifBlank { null }?.let {
+                    Text(it, style = MaterialTheme.typography.labelMedium, color = Accent)
+                }
                 Text(item.name.ifBlank { "New item" }, style = MaterialTheme.typography.titleLarge, color = TextHigh)
-                val sub = listOfNotNull(item.brand?.ifBlank { null }, item.category?.ifBlank { null }).joinToString(" · ")
+                val sub = listOfNotNull(item.category?.ifBlank { null }, item.type.label()).joinToString(" · ")
                 if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodyMedium, color = TextMid)
             }
         }
