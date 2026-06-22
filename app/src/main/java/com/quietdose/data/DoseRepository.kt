@@ -21,6 +21,7 @@ class DoseRepository(
     private val intakeDao: IntakeDao,
 ) {
     fun observeGroups(): Flow<List<GroupEntity>> = groupDao.observeEnabled()
+    fun observeAllItems(): Flow<List<ItemEntity>> = itemDao.observeEnabled()
     fun observeItems(groupId: Long): Flow<List<ItemEntity>> = itemDao.observeForGroup(groupId)
     fun observeLowStock(): Flow<List<ItemEntity>> = itemDao.observeLowStock()
     fun observeTakenToday(epochDay: Long): Flow<List<Long>> = intakeDao.observeTakenItemIds(epochDay)

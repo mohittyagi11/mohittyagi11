@@ -32,6 +32,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Logs a "Taken" tap straight from the notification, no UI. -->
+        <receiver
+            android:name=".receiver.TakenActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.quietdose.action.TAKEN" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>
