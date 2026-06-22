@@ -28,6 +28,16 @@ val AccentText = Color(0xFF0B0B0D) // text on accent
 val Done = Color(0xFF6FCF97)       // calm green for completion
 val WarnSoft = Color(0xFFE2B36B)   // low-stock amber, muted
 
+// Caution — a quiet, warm amber for "mind this", never alarming red.
+val Caution = Color(0xFFD9A65C)    // muted amber for caution cues
+
+// Analysis surfaces & severity tints — barely-there washes so severity is a
+// whisper (a small dot / faint tint), never a loud coloured row.
+val VerdictSurface = Color(0xFF15161D) // the verdict header card, a touch cooler
+val GoodTint = Color(0x1A6FCF97)       // ~10% green wash
+val CautionTint = Color(0x1FD9A65C)    // ~12% amber wash
+val AccentTint = Color(0x147C9CFF)     // ~8% periwinkle wash
+
 // Per-group tints — deliberately desaturated so colour codes the day without
 // shouting on the near-black canvas. One hue per routine.
 val TintMorning = Color(0xFFE0B877) // warm gold — on waking

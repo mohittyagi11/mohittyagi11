@@ -17,4 +17,19 @@ data class DraftItem(
     val doseUnit: DoseUnit = DoseUnit.UNIT,
     val flags: Int = 0,
     val note: String? = null,
+    /**
+     * When to use it, in plain words — for applied items (skincare/haircare/device)
+     * the question is "morning / evening", not an mg dose. Optional and defaulted so
+     * the supplement flow and every existing caller are untouched. The confirm screen
+     * pre-fills this and the user can change it.
+     */
+    val timing: UseTiming = UseTiming.ANYTIME,
 )
+
+/** When an applied item is used across the day. Plain language, no clock times. */
+enum class UseTiming(val label: String) {
+    MORNING("Morning"),
+    EVENING("Evening"),
+    BOTH("Morning & evening"),
+    ANYTIME("Anytime"),
+}

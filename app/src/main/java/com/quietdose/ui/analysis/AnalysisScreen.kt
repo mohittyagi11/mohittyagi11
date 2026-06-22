@@ -7,7 +7,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,12 +52,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.quietdose.brain.analysis.AnalysisLine
 import com.quietdose.brain.analysis.AnalysisProgress
 import com.quietdose.brain.analysis.AnalysisReport
 import com.quietdose.brain.analysis.AspectState
@@ -81,7 +91,11 @@ import com.quietdose.ui.stack.TextButtonGhost
 import com.quietdose.ui.stack.androidxClickable
 import com.quietdose.ui.stack.label
 import com.quietdose.ui.theme.Accent
+import com.quietdose.ui.theme.AccentTint
+import com.quietdose.ui.theme.Caution
+import com.quietdose.ui.theme.CautionTint
 import com.quietdose.ui.theme.Done
+import com.quietdose.ui.theme.GoodTint
 import com.quietdose.ui.theme.Ink
 import com.quietdose.ui.theme.Outline
 import com.quietdose.ui.theme.Surface1
@@ -89,6 +103,7 @@ import com.quietdose.ui.theme.Surface2
 import com.quietdose.ui.theme.TextHigh
 import com.quietdose.ui.theme.TextLow
 import com.quietdose.ui.theme.TextMid
+import com.quietdose.ui.theme.VerdictSurface
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 
@@ -306,17 +321,18 @@ private fun ReportStep(
             Spacer(Modifier.height(8.dp))
             ItemHero(item)
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
             // Dynamic, brain-composed page: walk the template blocks in order.
-            report.blocks.forEach { block ->
+            // The Verdict leads; quieter chapters follow with generous rhythm.
+            report.blocks.forEachIndexed { i, block ->
                 BlockView(block)
-                Spacer(Modifier.height(10.dp))
+                if (i != report.blocks.lastIndex) Spacer(Modifier.height(18.dp))
             }
 
             // --- Configure: where / dose / timing / pairings ---
-            Spacer(Modifier.height(6.dp))
-            Text("PLACE IT", style = MaterialTheme.typography.labelSmall, color = TextLow)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(28.dp))
+            Eyebrow("Place it")
+            Spacer(Modifier.height(10.dp))
 
             // Where
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface1).padding(16.dp)) {
@@ -442,162 +458,241 @@ private fun BlockView(block: ReportBlock) {
         is ReportBlock.Verdict -> VerdictBlock(block)
         is ReportBlock.Facts -> FactsBlock(block)
         is ReportBlock.Meter -> MeterBlock(block)
-        is ReportBlock.Aspect -> AspectBlock(block)
-        is ReportBlock.Chapter -> ChapterBlock(block)
+        is ReportBlock.Aspect -> ChapterView(block.aspect.title, block.summary, block.lines, block.state)
+        is ReportBlock.Chapter -> ChapterView(block.title, block.summary, block.lines, block.state)
         is ReportBlock.Reasoning -> ReasoningBlock(block)
     }
 }
 
+/* --- shared bits --- */
+
+/** A quiet, spaced-out eyebrow that introduces a section without a heavy card. */
 @Composable
-private fun ChapterBlock(b: ReportBlock.Chapter) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface1).padding(16.dp)) {
-        Text(b.title.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextLow)
-        b.summary?.takeIf { it.isNotBlank() }?.let {
-            Spacer(Modifier.height(8.dp))
-            Text(it, style = MaterialTheme.typography.bodyLarge, color = TextHigh)
-        }
-        if (b.lines.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            b.lines.forEach { line ->
-                Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 3.dp)) {
-                    Box(Modifier.padding(top = 6.dp).size(7.dp).clip(CircleShape).background(severityColor(line.severity)))
-                    Spacer(Modifier.width(10.dp))
-                    Text(line.text, style = MaterialTheme.typography.bodyMedium, color = TextMid)
-                }
-            }
-        }
+private fun Eyebrow(text: String, color: Color = TextLow) {
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.4.sp),
+        color = color,
+    )
+}
+
+/** A grounded point: a small severity dot followed by comfortable-measure text. */
+@Composable
+private fun GroundedLine(text: String, severity: Severity) {
+    Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 5.dp)) {
+        Box(Modifier.padding(top = 7.dp).size(6.dp).clip(CircleShape).background(severityColor(severity)))
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 21.sp),
+            color = TextMid,
+        )
     }
 }
+
+/* --- Verdict: the confident, calm header --- */
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun VerdictBlock(b: ReportBlock.Verdict) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Accent.copy(alpha = 0.10f)).padding(18.dp)) {
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(VerdictSurface)
+            .border(1.dp, Outline.copy(alpha = 0.7f), RoundedCornerShape(22.dp))
+            .padding(22.dp),
+    ) {
+        Eyebrow("The verdict", color = Accent)
+        Spacer(Modifier.height(14.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(b.verdict, style = MaterialTheme.typography.titleLarge, color = TextHigh, modifier = Modifier.weight(1f))
-            b.score?.let { ScoreBadge(it) }
+            Text(
+                b.verdict,
+                style = MaterialTheme.typography.headlineLarge,
+                color = TextHigh,
+                modifier = Modifier.weight(1f),
+            )
+            b.score?.let {
+                Spacer(Modifier.width(16.dp))
+                ScoreRing(it)
+            }
         }
-        Spacer(Modifier.height(8.dp))
-        Text(b.rationale, style = MaterialTheme.typography.bodyLarge, color = TextMid)
+        Spacer(Modifier.height(14.dp))
+        Text(
+            b.rationale,
+            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 25.sp),
+            color = TextMid,
+            modifier = Modifier.widthIn(max = 560.dp),
+        )
         if (b.tags.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Spacer(Modifier.height(18.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 b.tags.forEach { TagChip(it) }
             }
+        }
+        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = TextLow, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                if (b.byModel) "Reasoned on-device" else "From the on-device knowledge base",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextLow,
+            )
         }
     }
 }
 
+/** A quiet score ring — a thin arc and a number, not a loud meter. */
 @Composable
-private fun ScoreBadge(score: Int) {
-    val c = when { score >= 80 -> Done; score >= 60 -> Accent; else -> Accent }
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(c.copy(alpha = 0.16f)).padding(horizontal = 10.dp, vertical = 4.dp),
-    ) {
-        Text("$score", style = MaterialTheme.typography.titleMedium, color = c)
+private fun ScoreRing(score: Int) {
+    val color = when { score >= 80 -> Done; score >= 55 -> Accent; else -> Caution }
+    val fraction = (score.coerceIn(0, 100)) / 100f
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(54.dp)) {
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = 4.dp.toPx()
+            val inset = stroke / 2f
+            val arcSize = Size(size.width - stroke, size.height - stroke)
+            val topLeft = Offset(inset, inset)
+            drawArc(
+                color = Outline,
+                startAngle = -90f, sweepAngle = 360f, useCenter = false,
+                topLeft = topLeft, size = arcSize,
+                style = Stroke(width = stroke, cap = StrokeCap.Round),
+            )
+            drawArc(
+                color = color,
+                startAngle = -90f, sweepAngle = 360f * fraction, useCenter = false,
+                topLeft = topLeft, size = arcSize,
+                style = Stroke(width = stroke, cap = StrokeCap.Round),
+            )
+        }
+        Text(
+            "$score",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = TextHigh,
+        )
     }
 }
 
 @Composable
 private fun TagChip(text: String) {
-    Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Surface2).padding(horizontal = 10.dp, vertical = 5.dp)) {
+    Box(
+        Modifier.clip(RoundedCornerShape(99.dp))
+            .background(Surface2)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
         Text(text, style = MaterialTheme.typography.labelMedium, color = TextMid)
     }
 }
 
+/* --- Chapter: a clean section, eyebrow + standout summary + grounded lines --- */
+
 @Composable
-private fun AspectBlock(b: ReportBlock.Aspect) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface1).padding(16.dp)) {
+private fun ChapterView(title: String, summary: String?, lines: List<AnalysisLine>, state: AspectState) {
+    Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(b.aspect.title.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextLow, modifier = Modifier.weight(1f))
-            StateChip(b.state)
+            Eyebrow(title, color = TextMid)
+            Spacer(Modifier.weight(1f))
+            StateChip(state)
         }
-        b.summary?.takeIf { it.isNotBlank() }?.let {
-            Spacer(Modifier.height(8.dp))
-            Text(it, style = MaterialTheme.typography.bodyLarge, color = TextHigh)
+        summary?.takeIf { it.isNotBlank() }?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                it,
+                style = MaterialTheme.typography.titleMedium.copy(lineHeight = 24.sp),
+                color = TextHigh,
+                modifier = Modifier.widthIn(max = 560.dp),
+            )
         }
-        if (b.lines.isNotEmpty()) {
+        if (lines.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            b.lines.forEach { line ->
-                Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 3.dp)) {
-                    Box(Modifier.padding(top = 6.dp).size(7.dp).clip(CircleShape).background(severityColor(line.severity)))
-                    Spacer(Modifier.width(10.dp))
-                    Text(line.text, style = MaterialTheme.typography.bodyMedium, color = TextMid)
-                }
-            }
+            lines.forEach { GroundedLine(it.text, it.severity) }
         }
     }
 }
 
+/** A restrained state cue — a faint tint and one calm word, never a loud badge. */
 @Composable
 private fun StateChip(state: AspectState) {
-    val (label, color) = when (state) {
-        AspectState.GOOD -> "good" to Done
-        AspectState.MIXED -> "mixed" to Accent
-        AspectState.CAUTION -> "mind it" to Accent
-        AspectState.CLEAR -> "clear" to Done
-        AspectState.NOT_ASSESSED -> "n/a" to TextLow
+    val (label, color, tint) = when (state) {
+        AspectState.GOOD -> Triple("Good", Done, GoodTint)
+        AspectState.MIXED -> Triple("Mixed", Accent, AccentTint)
+        AspectState.CAUTION -> Triple("Mind it", Caution, CautionTint)
+        AspectState.CLEAR -> Triple("Clear", Done, GoodTint)
+        AspectState.NOT_ASSESSED -> Triple("Not assessed", TextLow, Color.Transparent)
     }
-    Box(Modifier.clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.16f)).padding(horizontal = 8.dp, vertical = 3.dp)) {
+    Box(Modifier.clip(RoundedCornerShape(99.dp)).background(tint).padding(horizontal = 10.dp, vertical = 4.dp)) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = color)
     }
 }
 
+/* --- Meter: a refined slim track --- */
+
 @Composable
 private fun MeterBlock(b: ReportBlock.Meter) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface1).padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(b.label, style = MaterialTheme.typography.titleMedium, color = TextHigh, modifier = Modifier.weight(1f))
-            Text(b.valueText, style = MaterialTheme.typography.titleMedium, color = Accent)
+    Column(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Eyebrow(b.label, color = TextMid)
+            Spacer(Modifier.weight(1f))
+            Text(b.valueText, style = MaterialTheme.typography.titleMedium, color = TextHigh)
         }
-        Spacer(Modifier.height(10.dp))
-        // Track with the typical band shaded and the dose filled to its position.
-        Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)).background(Outline)) {
+        Spacer(Modifier.height(12.dp))
+        // A thin track: the typical band gently shaded, the dose as a quiet fill.
+        Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Outline)) {
             if (b.bandLow != null && b.bandHigh != null && b.bandHigh > b.bandLow) {
                 Row(Modifier.fillMaxSize()) {
                     Spacer(Modifier.weight(b.bandLow.coerceIn(0.0001f, 1f)))
-                    Box(Modifier.weight((b.bandHigh - b.bandLow).coerceIn(0.01f, 1f)).fillMaxHeight().background(Done.copy(alpha = 0.22f)))
+                    Box(Modifier.weight((b.bandHigh - b.bandLow).coerceIn(0.01f, 1f)).fillMaxHeight().background(Done.copy(alpha = 0.28f)))
                     Spacer(Modifier.weight((1f - b.bandHigh).coerceIn(0.0001f, 1f)))
                 }
             }
-            Box(Modifier.fillMaxWidth(b.fraction.coerceIn(0.02f, 1f)).fillMaxHeight().clip(RoundedCornerShape(5.dp)).background(Accent.copy(alpha = 0.85f)))
+            Box(Modifier.fillMaxWidth(b.fraction.coerceIn(0.02f, 1f)).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(Accent))
         }
         b.caption?.let {
-            Spacer(Modifier.height(8.dp))
-            Text(it, style = MaterialTheme.typography.labelSmall, color = TextLow)
+            Spacer(Modifier.height(10.dp))
+            Text(it, style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.2.sp), color = TextLow)
         }
     }
 }
 
+/* --- Facts: a tidy two-column block --- */
+
 @Composable
 private fun FactsBlock(b: ReportBlock.Facts) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface1).padding(16.dp)) {
-        Text(b.title.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextLow)
-        Spacer(Modifier.height(8.dp))
-        b.rows.forEach { (k, v) ->
-            Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 3.dp)) {
-                Text(k, style = MaterialTheme.typography.bodyMedium, color = TextLow, modifier = Modifier.width(96.dp))
+    Column(Modifier.fillMaxWidth()) {
+        Eyebrow(b.title, color = TextMid)
+        Spacer(Modifier.height(12.dp))
+        b.rows.forEachIndexed { i, (k, v) ->
+            if (i != 0) Spacer(Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 5.dp)) {
+                Text(k, style = MaterialTheme.typography.bodyMedium, color = TextLow, modifier = Modifier.width(108.dp))
+                Spacer(Modifier.width(12.dp))
                 Text(v, style = MaterialTheme.typography.bodyMedium, color = TextHigh, modifier = Modifier.weight(1f))
             }
         }
     }
 }
 
+/* --- Reasoning: a quiet trailer, "how I worked this out" --- */
+
 @Composable
 private fun ReasoningBlock(b: ReportBlock.Reasoning) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface2).padding(16.dp)) {
-        Text("REASONING", style = MaterialTheme.typography.labelSmall, color = TextLow)
-        Spacer(Modifier.height(8.dp))
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Surface1.copy(alpha = 0.6f))
+            .padding(18.dp),
+    ) {
+        Eyebrow("How I worked this out", color = TextLow)
+        Spacer(Modifier.height(12.dp))
         b.items.forEach {
-            Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 3.dp)) {
-                Text("·  ", style = MaterialTheme.typography.bodyMedium, color = Accent)
-                Text(it, style = MaterialTheme.typography.bodyMedium, color = TextMid)
+            Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 4.dp)) {
+                Box(Modifier.padding(top = 7.dp).size(5.dp).clip(CircleShape).background(TextLow))
+                Spacer(Modifier.width(12.dp))
+                Text(it, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 21.sp), color = TextMid)
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(10.dp))
         Text(
             if (b.byModel) "Reasoned on-device, grounded in references." else "Derived from the on-device knowledge base.",
             style = MaterialTheme.typography.labelSmall,
@@ -649,8 +744,8 @@ private fun ErrorStep(item: ItemEntity, onAdd: (ItemEntity) -> Unit, onDismiss: 
 
 private fun severityColor(s: Severity): Color = when (s) {
     Severity.GOOD -> Done
-    Severity.NEUTRAL -> Outline
-    Severity.CAUTION -> Accent
+    Severity.NEUTRAL -> TextLow.copy(alpha = 0.55f) // a whisper — present, never loud
+    Severity.CAUTION -> Caution
 }
 
 private fun trimDose(v: Double): String = if (v % 1.0 == 0.0) v.toLong().toString() else (Math.round(v * 10.0) / 10.0).toString()

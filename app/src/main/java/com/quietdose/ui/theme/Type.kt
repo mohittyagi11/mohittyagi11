@@ -21,6 +21,13 @@ val DoseTypography = Typography(
         lineHeight = 38.sp,
         letterSpacing = (-0.5).sp,
     ),
+    headlineLarge = TextStyle(
+        fontFamily = Sans,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 27.sp,
+        lineHeight = 33.sp,
+        letterSpacing = (-0.4).sp,
+    ),
     headlineMedium = TextStyle(
         fontFamily = Sans,
         fontWeight = FontWeight.SemiBold,

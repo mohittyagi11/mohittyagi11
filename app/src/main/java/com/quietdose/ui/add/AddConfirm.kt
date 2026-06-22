@@ -36,10 +36,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.quietdose.brain.analysis.ItemKind
+import com.quietdose.brain.analysis.KindDetector
 import com.quietdose.brain.skills.DraftItem
+import com.quietdose.brain.skills.UseTiming
 import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
 import com.quietdose.data.model.DoseUnit
+import com.quietdose.data.model.FrequencyType
 import com.quietdose.data.model.ItemType
 import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.stack.ChipGroup
@@ -79,8 +83,15 @@ fun AddConfirm(
     var type by remember { mutableStateOf(draft.type) }
     var doseAmount by remember { mutableStateOf(trimAmount(draft.doseAmount)) }
     var doseUnit by remember { mutableStateOf(draft.doseUnit) }
+    var timing by remember { mutableStateOf(draft.timing) }
+    var frequency by remember { mutableStateOf(FrequencyType.DAILY) }
     var note by remember { mutableStateOf(draft.note ?: "") }
     var selectedGroupId by remember { mutableStateOf(initialGroupId ?: groups.firstOrNull()?.id) }
+
+    // Dose vs. application: a supplement has an mg dose; a toner/device has a
+    // per-use amount, a morning/evening rhythm and a frequency — different fields.
+    val kind = KindDetector.detect(name, category.ifBlank { null } ?: brand.ifBlank { null })
+    val ingested = kind.isIngested
     LaunchedEffect(groups) { if (selectedGroupId == null) selectedGroupId = groups.firstOrNull()?.id }
 
     val selectedGroup = groups.firstOrNull { it.id == selectedGroupId }
@@ -132,7 +143,9 @@ fun AddConfirm(
             EditorSection("Form") {
                 ChipGroup(options = ItemType.entries, selected = type, accent = accent, label = { it.label() }, onSelect = { type = it })
             }
-            EditorSection("Dose") {
+            // Supplements are dosed (mg/mcg/IU); applied items (skincare, haircare,
+            // devices) aren't — they have a per-use amount, a time of day and a rhythm.
+            EditorSection(if (ingested) "Dose" else "Each use") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StackTextField(
                         value = doseAmount,
@@ -146,7 +159,33 @@ fun AddConfirm(
                     Text(doseUnit.label(), style = MaterialTheme.typography.titleMedium, color = TextMid)
                 }
                 Spacer(Modifier.height(10.dp))
-                ChipGroup(options = DoseUnit.entries, selected = doseUnit, accent = accent, label = { it.label() }, onSelect = { doseUnit = it })
+                ChipGroup(
+                    options = if (ingested) DoseUnit.entries else APPLIED_UNITS,
+                    selected = doseUnit,
+                    accent = accent,
+                    label = { it.label() },
+                    onSelect = { doseUnit = it },
+                )
+            }
+            if (!ingested) {
+                EditorSection("When to use") {
+                    ChipGroup(
+                        options = UseTiming.entries,
+                        selected = timing,
+                        accent = accent,
+                        label = { it.label },
+                        onSelect = { timing = it },
+                    )
+                }
+                EditorSection("How often") {
+                    ChipGroup(
+                        options = FrequencyType.entries,
+                        selected = frequency,
+                        accent = accent,
+                        label = { it.label() },
+                        onSelect = { frequency = it },
+                    )
+                }
             }
             EditorSection("Add to") {
                 if (groups.isEmpty()) {
@@ -188,6 +227,17 @@ fun AddConfirm(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 val groupId = selectedGroupId ?: return@FilledButton
+                // Applied items carry their "when to use" in the note (the entity has no
+                // timing column) and set the chosen frequency directly; supplements are
+                // unchanged. Timing is folded in plain words so it reads naturally.
+                val finalNote = if (ingested || timing == UseTiming.ANYTIME) {
+                    note.trim().ifBlank { null }
+                } else {
+                    listOf("Use: ${timing.label.lowercase()}", note.trim())
+                        .filter { it.isNotBlank() }
+                        .joinToString(" · ")
+                        .ifBlank { null }
+                }
                 onConfirm(
                     ItemEntity(
                         groupId = groupId,
@@ -197,8 +247,9 @@ fun AddConfirm(
                         type = type,
                         doseAmount = doseAmount.toDoubleOrNull() ?: 1.0,
                         doseUnit = doseUnit,
+                        frequency = if (ingested) FrequencyType.DAILY else frequency,
                         flags = draft.flags,
-                        note = note.trim().ifBlank { null },
+                        note = finalNote,
                         purchaseUrl = purchaseUrl,
                         createdAtEpochMs = System.currentTimeMillis(),
                     ),
@@ -248,3 +299,9 @@ private fun provenanceSubtitle(p: AddProvenance): String = when (p) {
 }
 
 private fun trimAmount(v: Double): String = if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
+
+/**
+ * Per-use units that make sense for applied items (a toner is "2 drops" or "1 ml",
+ * a device is "1 use") — the mg/mcg/IU dosing scale is hidden for them.
+ */
+private val APPLIED_UNITS: List<DoseUnit> = listOf(DoseUnit.UNIT, DoseUnit.DROP, DoseUnit.ML, DoseUnit.G)

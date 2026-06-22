@@ -59,6 +59,8 @@
             android:label="Add to Dose"
             android:launchMode="singleTask"
             android:taskAffinity="${applicationId}"
+            android:excludeFromRecents="false"
+            android:autoRemoveFromRecents="true"
             android:theme="@style/Theme.Dose">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
