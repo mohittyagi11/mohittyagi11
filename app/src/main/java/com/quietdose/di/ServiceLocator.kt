@@ -7,6 +7,7 @@ import com.quietdose.data.DoseRepository
 import com.quietdose.data.db.DoseDatabase
 import com.quietdose.data.settings.SettingsStore
 import com.quietdose.data.source.DaySourceRegistry
+import com.quietdose.trigger.TriggerEngine
 
 /**
  * Lightweight manual DI. The dependency graph is small and the lifetimes are
@@ -40,4 +41,7 @@ object ServiceLocator {
         daySources ?: synchronized(this) {
             daySources ?: DaySourceRegistry(context.applicationContext).also { daySources = it }
         }
+
+    /** The real-world event-trigger engine (alarms, wake inference, geofence). */
+    fun triggers(): TriggerEngine = TriggerEngine
 }

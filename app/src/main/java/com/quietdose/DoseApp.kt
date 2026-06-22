@@ -29,8 +29,10 @@ class DoseApp : Application() {
         appScope.launch {
             val db = DoseDatabase.get(this@DoseApp)
             Seed.run(db.groupDao(), db.itemDao())
+            // Re-arm all event triggers (idempotent; degrades gracefully without
+            // permissions — at minimum the windowed alarms + wake fallback arm).
+            com.quietdose.trigger.TriggerEngine.reArmAll(this@DoseApp)
         }
-        // Increment 3+ will register notification channels and re-arm all triggers here.
     }
 
     companion object {

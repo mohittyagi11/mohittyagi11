@@ -70,5 +70,8 @@ dependencies {
     // Day-data sources: Health Connect (sleep/steps) read
     implementation(libs.androidx.health.connect)
 
+    // Event triggers: geofencing, activity recognition, Sleep API
+    implementation(libs.play.services.location)
+
     debugImplementation(libs.androidx.ui.tooling)
 }

@@ -15,6 +15,12 @@
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Wake inference: activity recognition + Google Sleep API. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- Geofencing: foreground + background location. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
     <!-- Health Connect provider visibility. -->
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
@@ -61,6 +67,25 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="com.quietdose.action.TAKEN" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Event triggers: windowed alarms + wake fallback + daily re-arm. -->
+        <receiver android:name=".trigger.AlarmReceiver" android:exported="false" />
+        <!-- Wake signals (explicit intents from our own scheduling). -->
+        <receiver android:name=".trigger.ActivityReceiver" android:exported="false" />
+        <receiver android:name=".trigger.SleepReceiver" android:exported="false" />
+        <!-- Home geofence ENTER/EXIT. -->
+        <receiver android:name=".trigger.GeofenceReceiver" android:exported="false" />
+        <!-- Re-arm everything after reboot. -->
+        <receiver
+            android:name=".trigger.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 
