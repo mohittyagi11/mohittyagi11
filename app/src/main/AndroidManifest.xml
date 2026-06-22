@@ -51,6 +51,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Share a product link into Dose (appears in the share sheet for links). -->
+        <activity
+            android:name=".ui.share.ShareReceiverActivity"
+            android:exported="true"
+            android:label="Add to Dose"
+            android:theme="@style/Theme.Dose">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <!-- Health Connect rationale on Android 14+. -->
         <activity-alias
             android:name="ViewPermissionUsageActivity"
