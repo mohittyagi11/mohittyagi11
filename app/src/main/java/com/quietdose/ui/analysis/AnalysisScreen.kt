@@ -134,11 +134,12 @@ fun AnalysisScreen(
                 }.getOrNull()
             }
             // Let the user *see* the stages move while it works.
-            step = 0; delay(450)
-            step = 1; delay(450)
-            step = 2; delay(450)
+            step = 0; delay(500)
+            step = 1; delay(800)
+            step = 2; delay(500)
+            step = 3; delay(500)
             report = job.await()
-            step = 3; delay(250)
+            step = 4; delay(250)
             phase = Phase.REPORT
         }
     }
@@ -255,7 +256,7 @@ private fun IntentStep(
 
 @Composable
 private fun AnalyzingStep(item: ItemEntity, step: Int) {
-    val steps = listOf("Grounding in references", "Checking your stack", "Weighing the evidence", "Synthesizing")
+    val steps = listOf("Grounding in references", "Searching the web", "Checking your stack", "Weighing the evidence", "Synthesizing")
     val target = ((step + 1).coerceIn(1, steps.size).toFloat() / steps.size)
     val progress by animateFloatAsState(targetValue = target, animationSpec = tween(500), label = "prog")
     val t = rememberInfiniteTransition(label = "an")

@@ -31,6 +31,10 @@ enum class AnalysisAspect(val title: String, val question: String) {
         "Trust & source",
         "How credible is where this came from — credentials, research and peer support?",
     ),
+    REVIEWS(
+        "What people say",
+        "What do real users and reviewers report on the web — praise, complaints, red flags?",
+    ),
     VALUE(
         "Price & value",
         "Is the price reasonable for the dose and quality you get?",

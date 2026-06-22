@@ -2,6 +2,7 @@ package com.quietdose.brain.analysis
 
 import android.content.Context
 import com.quietdose.brain.BrainProvider
+import com.quietdose.brain.web.WebSearch
 import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
 import com.quietdose.data.model.DoseUnit
@@ -38,6 +39,7 @@ object StackAnalyzer {
     ): AnalysisReport {
         val app = context.applicationContext
         val tier = ModelCapability.tier(app)
+        val engineUp = tier.isModel && ModelCapability.engineReady(app)
         val matched = IngredientCatalog.match(name)
         val grounded = mutableListOf<String>()
         val sections = mutableListOf<AnalysisSection>()
@@ -121,10 +123,22 @@ object StackAnalyzer {
         val cautionsDistinct = cautions.distinct()
         cautions.clear(); cautions.addAll(cautionsDistinct)
 
+        // --- Live web research: what people actually say (key-free, time-boxed) ---
+        val webResults = runCatching { researchWeb(name, product?.brand) }.getOrDefault(emptyList())
+        webResults.take(3).forEach { grounded += "Web/${it.domain}: ${it.title}" }
+
+        // Brand reputation — the model's own hedged read, clearly labelled (opt-in).
+        val brandTake: String? = if (engineUp && !product?.brand.isNullOrBlank()) {
+            runCatching {
+                BrainProvider.engine(app).complete(brandTakePrompt(product!!.brand!!, name)).trim()
+            }.getOrNull()?.let { sanitize(it) }
+        } else null
+
         // --- Aspect chapters: small grounded contexts, one per AnalysisAspect ---
         var aspectBlocks = buildAspectBlocks(
             matched, goodLines, fitLines, safety, safetyClear, source, goal, concern,
             currentDoseAmount, currentDoseUnit, dependencies, product, stackIng, alreadyHave,
+            webResults, brandTake,
         )
 
         // Verdict label is deterministic; the rationale + per-aspect prose come from the model.
@@ -138,7 +152,6 @@ object StackAnalyzer {
         val placement = matched?.let { placementText(it) }
         var rationale = buildRationale(matched, goal, dependencies, cautions)
         var byModel = false
-        val engineUp = tier.isModel && ModelCapability.engineReady(app)
         if (engineUp) {
             // Incremental: let a capable model fill each chapter's prose (small contexts)…
             if (tier == ModelTier.CAPABLE) {
@@ -476,6 +489,8 @@ object StackAnalyzer {
         product: ProductSignals?,
         stackIng: List<Pair<Ingredient, ItemEntity>>,
         alreadyHave: Boolean,
+        webResults: List<WebSearch.WebResult>,
+        brandTake: String?,
     ): List<ReportBlock.Aspect> {
         val out = mutableListOf<ReportBlock.Aspect>()
         fun add(aspect: AnalysisAspect, lines: List<AnalysisLine>, score: Int?, state: AspectState, summary: String) {
@@ -564,7 +579,23 @@ object StackAnalyzer {
                 lines += AnalysisLine("Peers rate it ${product.ratingValue}/5$cnt", if (product.ratingValue >= 4.0) Severity.GOOD else Severity.NEUTRAL)
                 if (product.ratingValue >= 4.3 && (product.ratingCount ?: 0) >= 50) score = (score + 6).coerceAtMost(95)
             } else lines += AnalysisLine("No peer rating captured — check reviews on the store page.", Severity.NEUTRAL)
+            brandTake?.let { lines += AnalysisLine("Model's take on ${product?.brand ?: "the brand"} — $it (opinion, not verified)", Severity.NEUTRAL) }
             add(AnalysisAspect.TRUST_SOURCE, lines, score, stateFor(score), "Weighs the source, the research and what peers say.")
+        }
+
+        // REVIEWS — what the live web says (fetched, hedged as unverified).
+        run {
+            if (webResults.isEmpty()) {
+                add(AnalysisAspect.REVIEWS, listOf(AnalysisLine("No web results pulled — add a link or check stores/Reddit yourself.")), null, AspectState.NOT_ASSESSED, "No web reviews fetched.")
+            } else {
+                val lines = mutableListOf<AnalysisLine>()
+                webResults.take(5).forEach { r ->
+                    val snip = r.snippet.take(160).ifBlank { r.title }
+                    lines += AnalysisLine("${r.domain}: $snip", Severity.NEUTRAL)
+                }
+                lines += AnalysisLine("From the open web — weigh the source; treat as leads, not proof.", Severity.CAUTION)
+                add(AnalysisAspect.REVIEWS, lines, null, AspectState.MIXED, "What reviewers and users are saying online.")
+            }
         }
 
         // VALUE
@@ -612,6 +643,27 @@ object StackAnalyzer {
         }
 
         return out
+    }
+
+    /** Two time-boxed web queries — general reviews + red flags — merged and de-duped. */
+    private suspend fun researchWeb(name: String, brand: String?): List<WebSearch.WebResult> {
+        if (name.isBlank()) return emptyList()
+        val base = listOfNotNull(brand?.takeIf { it.isNotBlank() }, name).joinToString(" ")
+        val primary = WebSearch.search("$base supplement review", max = 4)
+        val flags = WebSearch.search("$name side effects complaints", max = 3)
+        val merged = LinkedHashMap<String, WebSearch.WebResult>()
+        (primary + flags).forEach { r -> if (r.domain.isNotBlank()) merged.putIfAbsent(r.domain + r.title.take(16), r) }
+        return merged.values.take(6).toList()
+    }
+
+    private fun brandTakePrompt(brand: String, name: String): String = buildString {
+        appendLine("You are a cautious supplement advisor. In ONE short sentence (max 25 words), give your honest, hedged impression of the brand below for a product like this.")
+        appendLine("If you don't actually know the brand, say so plainly. This is opinion, not verified fact — do not invent specifics, certifications, or numbers.")
+        appendLine()
+        appendLine("Brand: $brand")
+        appendLine("Product: $name")
+        appendLine()
+        appendLine("Reply with only the sentence.")
     }
 
     private fun aspectPrompt(name: String, matched: Ingredient?, block: ReportBlock.Aspect, goal: String?, concern: String?): String = buildString {
