@@ -57,6 +57,7 @@ import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
 import com.quietdose.data.model.DoseUnit
 import com.quietdose.data.model.ItemType
+import com.quietdose.ui.analysis.AnalysisScreen
 import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.stack.ChipGroup
 import com.quietdose.ui.stack.EditorSection
@@ -99,6 +100,8 @@ fun ScanScreen(
 
     // Hold the Uri we asked the camera to write to so onCaptured can read it back.
     var pendingUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    // A confirmed draft awaiting contextual analysis before it's saved.
+    var pendingItem by remember { mutableStateOf<ItemEntity?>(null) }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture(),
@@ -170,9 +173,18 @@ fun ScanScreen(
                 groups = groups,
                 onClose = onClose,
                 onRetake = ::startOver,
-                onSave = vm::save,
+                // Route a scanned item through the same contextual analysis.
+                onSave = { pendingItem = it },
             )
         }
+    }
+
+    pendingItem?.let { item ->
+        AnalysisScreen(
+            item = item,
+            onAdd = { configured -> vm.save(configured) },
+            onDismiss = { pendingItem = null },
+        )
     }
 }
 
