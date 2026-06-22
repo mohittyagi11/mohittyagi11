@@ -76,12 +76,12 @@ object ModelCatalog {
             directUrl = "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.task",
             sourcePageUrl = "https://huggingface.co/litert-community/Gemma3-1B-IT",
             license = "Gemma Terms of Use",
-            notes = "Smallest, fastest. Best fit for most phones. Subject to Google's " +
-                "Gemma Terms of Use. Download from Hugging Face (token) or Kaggle " +
-                "(username + key). If a direct download fails (revisioned file or " +
-                "gating not yet accepted), open the page and import the .task.",
-            kaggleUrl = "https://www.kaggle.com/api/v1/models/google/gemma-3/tfLite/gemma3-1b-it-int4/1/download",
-            kagglePageUrl = "https://www.kaggle.com/models/google/gemma-3/tfLite/gemma3-1b-it-int4",
+            notes = "Smallest, fastest, best fit for most phones. The Hugging Face download is " +
+                "the MediaPipe .task bundle this app needs. (Kaggle's Gemma 3 ships a raw .tflite, " +
+                "which this runtime can't open.) Accept the Gemma licence on the HF page once, add " +
+                "a token, then Download — or import a .task you already have.",
+            kaggleUrl = null,
+            kagglePageUrl = null,
         ),
         OnDeviceModel(
             id = "gemma3-1b-it-int8",
@@ -94,11 +94,11 @@ object ModelCatalog {
             directUrl = "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int8.task",
             sourcePageUrl = "https://huggingface.co/litert-community/Gemma3-1B-IT",
             license = "Gemma Terms of Use",
-            notes = "Higher-quality 8-bit variant of the 1B model, same repo as int4. " +
-                "Gated: accept the licence on the page once, then download with a " +
-                "Hugging Face token or Kaggle credentials. Or import the .task.",
-            kaggleUrl = "https://www.kaggle.com/api/v1/models/google/gemma-3/tfLite/gemma3-1b-it-int8/1/download",
-            kagglePageUrl = "https://www.kaggle.com/models/google/gemma-3/tfLite/gemma3-1b-it-int8",
+            notes = "Higher-quality 8-bit variant of the 1B model, same Hugging Face repo as int4 " +
+                "and also a real .task bundle. Accept the Gemma licence on the page once, add a " +
+                "token, then Download. (Use Hugging Face, not Kaggle — Kaggle's Gemma 3 is a .tflite.)",
+            kaggleUrl = null,
+            kagglePageUrl = null,
         ),
         OnDeviceModel(
             id = "gemma3n-e2b-it-int4",
@@ -112,11 +112,11 @@ object ModelCatalog {
             directUrl = null,
             sourcePageUrl = "https://huggingface.co/google/gemma-3n-E2B-it-litert-preview",
             license = "Gemma Terms of Use (gated)",
-            notes = "Efficient 3n architecture (E2B ≈ 2B effective params). Mid-range/" +
-                "flagship phones. License-gated. Easiest via Kaggle (username + key); " +
-                "or accept terms on the page and import the .task.",
-            kaggleUrl = "https://www.kaggle.com/api/v1/models/google/gemma-3n/tfLite/gemma-3n-e2b-it-int4/1/download",
-            kagglePageUrl = "https://www.kaggle.com/models/google/gemma-3n/tfLite/gemma-3n-e2b-it-int4",
+            notes = "Efficient 3n architecture (E2B ≈ 2B effective params). Distributed in the newer " +
+                "LiteRT .litertlm format, which this MediaPipe build may not load — prefer the 1B " +
+                ".task. Open the page to check the format before relying on it.",
+            kaggleUrl = null,
+            kagglePageUrl = null,
         ),
         OnDeviceModel(
             id = "gemma3n-e4b-it-int4",
@@ -129,11 +129,11 @@ object ModelCatalog {
             directUrl = null,
             sourcePageUrl = "https://huggingface.co/google/gemma-3n-E4B-it-litert-preview",
             license = "Gemma Terms of Use (gated)",
-            notes = "Larger 3n (E4B ≈ 4B effective). Flagship-class RAM only. " +
-                "License-gated. Easiest via Kaggle (username + key); or accept terms " +
-                "on the page and import the .task.",
-            kaggleUrl = "https://www.kaggle.com/api/v1/models/google/gemma-3n/tfLite/gemma-3n-e4b-it-int4/1/download",
-            kagglePageUrl = "https://www.kaggle.com/models/google/gemma-3n/tfLite/gemma-3n-e4b-it-int4",
+            notes = "Larger 3n (E4B ≈ 4B effective). Flagship-class RAM only, and in the newer " +
+                "LiteRT .litertlm format this MediaPipe build may not load — prefer the 1B .task. " +
+                "Open the page to check the format first.",
+            kaggleUrl = null,
+            kagglePageUrl = null,
         ),
         OnDeviceModel(
             id = "gemma2-2b-it-int8",
@@ -146,11 +146,11 @@ object ModelCatalog {
             directUrl = null,
             sourcePageUrl = "https://www.kaggle.com/models/google/gemma-2/tfLite",
             license = "Gemma Terms of Use",
-            notes = "Solid all-rounder, larger than the 1B. Distributed on Kaggle " +
-                "(LiteRT / .task). Download with Kaggle credentials, or accept the " +
-                "licence on the page and import.",
-            kaggleUrl = "https://www.kaggle.com/api/v1/models/google/gemma-2/tfLite/gemma2-2b-it-cpu-int8/1/download",
-            kagglePageUrl = "https://www.kaggle.com/models/google/gemma-2/tfLite/gemma2-2b-it-cpu-int8",
+            notes = "Solid all-rounder, larger than the 1B. Kaggle's tfLite builds are raw .tflite/" +
+                ".bin (not a .task zip) and won't load here — prefer the Gemma 3 1B .task from " +
+                "Hugging Face. Open the page only if you have a true .task to import.",
+            kaggleUrl = null,
+            kagglePageUrl = null,
         ),
         OnDeviceModel(
             id = "phi2-int8",
