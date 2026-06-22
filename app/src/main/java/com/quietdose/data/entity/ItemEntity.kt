@@ -60,4 +60,8 @@ data class ItemEntity(
     val sortOrder: Int = 0,
     val enabled: Boolean = true,
     val createdAtEpochMs: Long = 0,
+
+    /** The item's ingredients as a JSON blob (see [com.quietdose.data.model.IngredientCodec]).
+     *  null/empty = not yet ingredientized; one entry = single; many = a formula. */
+    val ingredients: String? = null,
 )
