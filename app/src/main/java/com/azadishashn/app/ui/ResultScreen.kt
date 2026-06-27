@@ -32,7 +32,7 @@ fun ResultScreen(vm: GameViewModel) {
             .padding(20.dp),
     ) {
         Text(
-            if (r.cardAwarded) "Card won!" else "Resources only",
+            if (r.diverted) "Card redirected" else "Card won!",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
@@ -49,7 +49,11 @@ fun ResultScreen(vm: GameViewModel) {
                 if (r.strength >= 0) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Argument strength:  ${r.strength} / 10    ·    needed ${r.required}",
+                        if (r.diverted) {
+                            "Argument strength:  ${r.strength} / 10    ·    needed ${r.required} to keep stacking ${r.primary}"
+                        } else {
+                            "Argument strength:  ${r.strength} / 10    ·    needed ${r.required}"
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -57,10 +61,16 @@ fun ResultScreen(vm: GameViewModel) {
                 Spacer(Modifier.height(10.dp))
                 Text("Ideology card (dashboard)", style = MaterialTheme.typography.labelMedium)
                 Text(
-                    if (r.cardAwarded) "1 × ${r.primary}" else "No ${r.primary} card this turn",
+                    "1 × ${r.cardIdeology.ifBlank { r.primary }}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
+                if (r.diverted) {
+                    Text(
+                        "Redirected from ${r.primary} — your argument didn't clear the higher bar for an ideology you already hold.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
                 Text("Resources to take", style = MaterialTheme.typography.labelMedium)
                 Text(
@@ -99,7 +109,12 @@ fun ResultScreen(vm: GameViewModel) {
                 if (reading) {
                     vm.stopReadOut()
                 } else {
-                    val card = if (r.cardAwarded) "earns one ${r.primary} card" else "earns no ${r.primary} card"
+                    val cardName = r.cardIdeology.ifBlank { r.primary }
+                    val card = if (r.diverted) {
+                        "earns one $cardName card, redirected from ${r.primary} because they are already accumulating it"
+                    } else {
+                        "earns one $cardName card"
+                    }
                     val strengthLine = if (r.strength >= 0) "Strength ${r.strength} of 10, needed ${r.required}. " else ""
                     vm.readOut(
                         "${r.playerName} $card. $strengthLine" +

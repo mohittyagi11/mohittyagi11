@@ -292,10 +292,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Resources are always +2 [primary] / +1 [secondary]. The dominant CARD is earned only
-     * if [strength] (1..10) clears a baseline that SHIFTS with standing: at the table average
-     * for that ideology you need 5/10, and each card you hold above (below) the average raises
-     * (lowers) the bar. [strength] < 0 means offline (a simple anti-hoard rule instead).
+     * Resources are always +2 [primary] / +1 [secondary], and exactly one CARD is ALWAYS
+     * awarded — a judgement always lands. The baseline SHIFTS with standing (at the table
+     * average for an ideology you need 5/10; each card you hold above/below the average
+     * raises/lowers the bar) and only decides WHICH card: clear it and you keep stacking
+     * [primary]; fall short and the card is redirected to [secondary], so a player already
+     * accumulating an ideology needs a stronger argument to keep it. [strength] < 0 is
+     * offline (a simple anti-hoard rule instead of a rating).
      */
     private fun award(
         active: Player,
@@ -308,25 +311,33 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val held = active.counts[primary] ?: 0
         val tableAvg = state.players.map { it.counts[primary] ?: 0 }.average()
         val required = (5.0 + (held - tableAvg)).roundToInt().coerceIn(1, 10)
-        val cardAwarded = if (strength < 0) {
+        // A card always lands; the baseline only decides whether it stays on [primary]
+        // (keep stacking) or is redirected to [secondary] (you're hoarding [primary]).
+        val keepPrimary = if (strength < 0) {
             held < (state.players.minOf { it.counts[primary] ?: 0 }) + 2
         } else {
             strength >= required
         }
+        val cardIdeology = if (keepPrimary) primary else secondary
+        val diverted = !keepPrimary
 
         val explanation = buildString {
-            if (strength >= 0) append("Strength $strength/10 vs needed $required. ")
-            append(
-                if (cardAwarded) "Earned 1 $primary card."
-                else "No $primary card — not strong enough for your standing.",
-            )
-            append("  Resources: $primary +2, $secondary +1.")
+            if (strength >= 0) {
+                if (keepPrimary) {
+                    append("Strength $strength/10 cleared the bar (needed $required). Earned 1 $primary card. ")
+                } else {
+                    append("Strength $strength/10 — needed $required to keep stacking $primary (you hold $held). Card goes to $secondary instead. ")
+                }
+            } else {
+                append(if (keepPrimary) "Earned 1 $primary card. " else "You're hoarding $primary — card goes to $secondary instead. ")
+            }
+            append("Resources: $primary +2, $secondary +1.")
         }
 
         val updated = state.players.map { p ->
             if (p.id == active.id) {
                 val c = p.counts.toMutableMap()
-                if (cardAwarded) c[primary] = (c[primary] ?: 0) + 1
+                c[cardIdeology] = (c[cardIdeology] ?: 0) + 1
                 p.copy(counts = c)
             } else p
         }
@@ -339,7 +350,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 secondary = secondary,
                 strength = strength,
                 required = required,
-                cardAwarded = cardAwarded,
+                cardAwarded = true,
+                cardIdeology = cardIdeology,
+                diverted = diverted,
                 reasoning = reasoning,
                 historicalNote = history,
                 explanation = explanation,

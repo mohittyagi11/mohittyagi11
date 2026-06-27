@@ -83,9 +83,13 @@ data class Player(
 }
 
 /**
- * Result of a turn: resources are always +2 [primary] / +1 [secondary]. The
- * dominant CARD is earned only if [strength] (1..10) clears the shifting
- * [required] baseline. [strength] is -1 offline (no AI rating).
+ * Result of a turn. Resources are always +2 [primary] / +1 [secondary]. Exactly
+ * one ideology CARD is always awarded — a judgement always lands. The shifting
+ * [required] baseline only decides WHICH card: if [strength] (1..10) clears the
+ * bar for [primary] the player keeps stacking it ([cardIdeology] == [primary]);
+ * otherwise the card is redirected to [secondary] ([diverted] = true) so a
+ * player already accumulating an ideology needs a stronger argument to keep it.
+ * [strength] is -1 offline (no AI rating; a simple anti-hoard rule applies).
  */
 @Serializable
 data class AwardResult(
@@ -94,7 +98,9 @@ data class AwardResult(
     val secondary: String = "",
     val strength: Int = -1,
     val required: Int = 0,
-    val cardAwarded: Boolean = true,
+    val cardAwarded: Boolean = true,   // always true now — a card always lands
+    val cardIdeology: String = "",     // the ideology that actually got the card
+    val diverted: Boolean = false,     // true when redirected to [secondary]
     val reasoning: String = "",       // judge's reasoning, or "" offline
     val historicalNote: String = "",  // one-line real-world outcome, or ""
     val explanation: String = "",
