@@ -1,5 +1,11 @@
 package com.azadishashn.app.ui
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -59,6 +65,35 @@ private fun RoundBody(vm: GameViewModel) {
     // A twist swaps the round object, which resets the flow back to QUESTION.
     var phase by remember(round) { mutableStateOf(RoundPhase.QUESTION) }
     var argument by remember(round) { mutableStateOf("") }
+    var voiceHint by remember(round) { mutableStateOf<String?>(null) }
+
+    // Voice input via the system speech recognizer (no RECORD_AUDIO permission
+    // needed — the system speech UI captures the mic). Spoken text fills the
+    // argument field, which the player can still edit or type into directly.
+    val speechLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+            if (!spoken.isNullOrBlank()) {
+                argument = if (argument.isBlank()) spoken else "$argument $spoken"
+            }
+        }
+    }
+    fun startVoice() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your argument")
+        }
+        try {
+            voiceHint = null
+            speechLauncher.launch(intent)
+        } catch (e: ActivityNotFoundException) {
+            voiceHint = "No voice-input app found — type your argument instead."
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -138,15 +173,23 @@ private fun RoundBody(vm: GameViewModel) {
 
                 Text(
                     if (vm.hasKey) {
-                        "Type the gist of your argument — Claude judges it and awards the point:"
+                        "Make your case — speak it (or type) and Claude judges it:"
                     } else {
-                        "Optional notes (offline: you earn the position you championed unless you're hoarding it):"
+                        "Notes — speak or type (offline: you earn the position you championed unless hoarding):"
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
+                Button(
+                    onClick = { startVoice() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("🎤  Speak your argument") }
+                voiceHint?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
                 OutlinedTextField(
                     value = argument,
                     onValueChange = { argument = it },
+                    label = { Text("…or type / edit") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                 )
