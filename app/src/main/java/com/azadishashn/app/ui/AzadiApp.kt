@@ -35,7 +35,6 @@ fun AzadiApp(vm: GameViewModel = viewModel()) {
                 Screen.Setup -> SetupScreen(vm)
                 Screen.Settings -> SettingsScreen(vm)
                 Screen.Round -> RoundScreen(vm)
-                Screen.Vote -> VoteScreen(vm)
                 Screen.Result -> ResultScreen(vm)
                 Screen.Standings -> StandingsScreen(vm)
             }

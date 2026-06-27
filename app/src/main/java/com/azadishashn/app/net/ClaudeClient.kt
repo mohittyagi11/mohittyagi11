@@ -1,9 +1,9 @@
 package com.azadishashn.app.net
 
-import com.azadishashn.app.model.Adjudication
 import com.azadishashn.app.model.Ideologies
 import com.azadishashn.app.model.OptionCard
 import com.azadishashn.app.model.RoundData
+import com.azadishashn.app.model.Verdict
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -52,18 +52,21 @@ class ClaudeClient(
         val avoid = if (avoidTitles.isEmpty()) "" else
             "\nDo NOT reuse these scenario titles: ${avoidTitles.joinToString(", ")}."
         val user = """
-            Generate ONE round for Azadi Shashn.
+            Generate ONE round for SHASN: Azadi, a debate game about power and governance.
 
-            Pick EXACTLY 4 DISTINCT ideologies from this list:
-            ${Ideologies.ALL.joinToString(", ")}.
+            The four ideologies are fixed:
+            $IDEOLOGY_BRIEF
+
+            Produce EXACTLY 4 options — ONE for EACH ideology above (use each ideology name
+            exactly once in the "ideology" field).
 
             Requirements:
-            - The scenario is a concrete government situation, real-history-inspired or a
-              plausible future, from any country or governance structure.
-            - The dilemma must be a decision real leaders have actually faced; real_world_note
-              says what real leaders did and how it turned out.
-            - Each option is a genuine, defensible course of action tagged to one ideology
-              (NOT true/false) — four live positions worth arguing over.
+            - The scenario is a concrete government/revolution situation, real-history-inspired
+              or a plausible future, from any country or governance structure.
+            - The dilemma must be a decision real leaders or revolutionaries actually faced;
+              real_world_note says what real ones did and how it turned out.
+            - Each option is that ideology's genuine, defensible course of action (NOT true/false)
+              — four live positions worth arguing over.
             - Keep every field punchy: one or two sentences.$avoid
         """.trimIndent()
 
@@ -84,8 +87,9 @@ class ClaudeClient(
             a hidden cost) that makes the most obvious or popular answer politically costly —
             so a player cannot easily "farm" the safe ideology.
 
-            Keep the same title. Pick EXACTLY 4 DISTINCT ideologies from this list:
-            ${Ideologies.ALL.joinToString(", ")}. Keep every field punchy.
+            Keep the same title. Produce EXACTLY 4 options, ONE for EACH ideology:
+            $IDEOLOGY_BRIEF
+            Keep every field punchy.
         """.trimIndent()
 
         val text = call(system = ROUND_SYSTEM, user = user, schema = roundSchema())
@@ -93,11 +97,16 @@ class ClaudeClient(
         round.copy(options = normaliseOptions(round.options))
     }
 
-    /** Neutral classification of a player's spoken argument, to inform the vote. */
-    suspend fun adjudicate(
+    /**
+     * Impartial verdict on a player's argument. Decides which of the four ideologies the
+     * argument genuinely makes the case for and scores its strength 0..3. This is the award
+     * decision — it does not depend on the other players, so it can't be stalled.
+     */
+    suspend fun judge(
         round: RoundData,
+        championed: String,
         argument: String,
-    ): Adjudication = withContext(Dispatchers.IO) {
+    ): Verdict = withContext(Dispatchers.IO) {
         val opts = round.options.joinToString("\n") { "- ${it.ideology}: ${it.label} — ${it.summary}" }
         val user = """
             Scenario: ${round.scenario.title} — ${round.scenario.situation}
@@ -106,16 +115,21 @@ class ClaudeClient(
             Options on the table:
             $opts
 
-            A player argued, in their own words:
+            The player is arguing for the $championed position. Their argument, in their words:
             "$argument"
 
-            As a neutral adjudicator: which of the four ideologies on the table does this
-            argument MOST align with, why (one line), and what real leaders who took that
-            path historically got (one line). matched_ideology MUST be one of the four above.
+            Be an impartial judge — ignore who benefits in the game.
+            1. matched_ideology: which of the four ideologies this argument GENUINELY makes the
+               case for (usually $championed, but choose another of the four if the argument
+               actually advances that one instead).
+            2. score: how strong and genuine that case is — 0 = no real case, 1 = weak,
+               2 = solid, 3 = compelling.
+            3. reasoning: one line on the verdict.
+            4. historical_outcome: one line on what real leaders who took the matched path got.
         """.trimIndent()
 
-        val text = call(system = ADJUDICATE_SYSTEM, user = user, schema = adjudicateSchema())
-        json.decodeFromString<Adjudication>(text)
+        val text = call(system = ADJUDICATE_SYSTEM, user = user, schema = judgeSchema())
+        json.decodeFromString<Verdict>(text)
     }
 
     // -- HTTP plumbing -------------------------------------------------------
@@ -207,9 +221,16 @@ class ClaudeClient(
 
         private fun strProp(): JsonObject = buildJsonObject { put("type", "string") }
 
+        private fun intProp(): JsonObject = buildJsonObject { put("type", "integer") }
+
         private fun ideologyEnumProp(): JsonObject = buildJsonObject {
             put("type", "string")
-            put("enum", buildJsonArray { Ideologies.ALL.forEach { add(it) } })
+            put("enum", buildJsonArray { Ideologies.NAMES.forEach { add(it) } })
+        }
+
+        /** Short brief on the four SHASN ideologies, used in every prompt. */
+        private val IDEOLOGY_BRIEF: String = Ideologies.ALL.joinToString("\n") {
+            "- ${it.name} (earns ${it.resource}): ${it.blurb}"
         }
 
         private fun objSchema(required: List<String>, props: Map<String, JsonElement>): JsonObject =
@@ -254,10 +275,11 @@ class ClaudeClient(
             )
         }
 
-        private fun adjudicateSchema(): JsonObject = objSchema(
-            listOf("matched_ideology", "reasoning", "historical_outcome"),
+        private fun judgeSchema(): JsonObject = objSchema(
+            listOf("matched_ideology", "score", "reasoning", "historical_outcome"),
             mapOf(
                 "matched_ideology" to ideologyEnumProp(),
+                "score" to intProp(),
                 "reasoning" to strProp(),
                 "historical_outcome" to strProp(),
             ),

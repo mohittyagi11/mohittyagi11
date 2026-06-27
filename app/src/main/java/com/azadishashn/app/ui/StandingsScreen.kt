@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.game.GameViewModel
+import com.azadishashn.app.model.Ideologies
 
 @Composable
 fun StandingsScreen(vm: GameViewModel) {
@@ -64,7 +65,7 @@ fun StandingsScreen(vm: GameViewModel) {
                         val breakdown = player.counts.entries
                             .filter { it.value > 0 }
                             .sortedByDescending { it.value }
-                            .joinToString("  ") { "${it.key} ×${it.value}" }
+                            .joinToString("   ") { "${it.key} (${Ideologies.resourceOf(it.key)}) ×${it.value}" }
                         if (breakdown.isNotEmpty()) {
                             Text(breakdown, style = MaterialTheme.typography.bodySmall)
                         }

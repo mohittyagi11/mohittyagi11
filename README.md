@@ -1,86 +1,96 @@
-# Azadi Shashn — AI debate companion
+# Azadi Shashn — AI question companion for SHASN: Azadi
 
-A native Android (Kotlin + Jetpack Compose) companion app for the freedom-and-governance
-party game **Azadi Shashn**. It replaces the game's finite scenario deck with **AI-generated
-government scenarios** and fixes the parts of the physical game that flatten the debate.
+A native Android (Kotlin + Jetpack Compose) companion for **[SHASN](https://www.shasnthegame.com/)
+/ SHASN: Azadi** by Memesys Games — the political-strategy board game where players answer
+**ideology question cards** to earn political capital across four ideologies.
 
-> Pass-and-play on one shared phone. Players still collect the physical **ideology cards** —
-> the app generates the scenarios, runs the vote, and tracks who holds what.
+This app replaces the game's finite question deck with **AI-generated scenarios** and fixes the
+parts of the card draw that flatten the debate. The physical board, voter pegs, and win condition
+stay on the table — the app handles the **questions, the debate, and capital tracking**.
 
-## What it fixes (vs. the physical deck)
+> Pass-and-play on one shared phone.
+
+## The four SHASN ideologies
+
+| Ideology | Earns | Leaning |
+|---|---|---|
+| **Capitalist** | Funds | free markets / free trade |
+| **Supremo** | Clout | identity politics / the strongman |
+| **Showstopper** | Media | showmanship / spectacle |
+| **Idealist** | Trust | people's welfare / principle |
+
+## What it fixes (vs. the printed cards)
 
 | Problem in the deck | What the app does |
 |---|---|
-| Finite scenarios — memorized, run out | Claude **generates** fresh government scenarios on demand (historical or futuristic, any country/structure) |
-| Each card gives only **2 ideologies** + true/false → kills debate | Every scenario offers **4 distinct ideology-framed positions** to argue |
-| Players **farm** the easy ideology | The question-master can **Twist** a scenario to make the obvious answer costly |
-| The "correct" ideology is **printed/static** | The card you earn comes from **group consensus + the table's baseline**, not an answer key |
+| Finite question cards — memorized, run out | Claude **generates** fresh scenarios on demand (real-history or futuristic, any country/structure) |
+| A card forces a **yes/no** between just **2 ideologies** → kills debate | Every scenario gives **4 options — one per ideology** to argue over |
+| Players **farm** the easy ideology | The **questioner can Twist** a card to make the obvious answer costly |
+| The earned ideology is **printed** on the card | An **impartial AI judge** scores your argument and awards the matching ideology, gated by the **table's baseline** — rivals can't stall a good argument |
 
-## The award rule (the interesting bit)
+## The turn flow (matches the table)
 
-Instead of a printed answer, the ideology card a player earns is decided dynamically:
+The **questioner is the player seated *before* the turn-player**. On one shared phone:
 
-1. **Consensus** — after the active player argues a position, the *other* players vote on which
-   of the four ideologies the argument embodied, and how many were persuaded.
-2. **Baseline** — the app knows how many of each ideology every player already holds. The more
-   of the consensus ideology the active player *already* holds, the **more voters they must
-   convince** to earn another (anti-farming). Defending an ideology you're *light* on (a "brave
-   minority stance" vs. the table) **lowers** the threshold.
-3. **Neutral adjudicator** — optionally, Claude classifies the spoken argument and adds one line
-   of real historical context, to keep the vote honest. The **table still decides**.
+1. **Questioner** reads the scenario to the turn-player and may **Twist** the card.
+2. Hand over → the **turn-player** champions one of the four positions and argues it (typing the gist).
+3. **Claude judges** the argument — scoring how genuine a case it makes for that ideology — and awards the matching **ideology point** (capital). The decision doesn't depend on rivals, so they can't stall it.
+4. The running tally is kept. Rotate — the turn-player becomes the next questioner.
 
-So: *consensus picks the ideology, the baseline sets how hard it is to get, Claude keeps the
-judgment grounded.*
+The app does **not** decide the winner — that's the physical board (voter pegs / region majorities).
+It tracks each player's ideology points so you can read who holds what.
 
-## How the turn flows
+## The award rule (impartial judge + baseline)
 
-`Setup players → generate round → champion a position & debate → (optional Twist / ask Claude)
-→ table votes → award resolved against consensus+baseline → next player`
+Rivals don't decide the award — that would let them stall a good argument to deny you capital.
+Instead it's objective:
+
+1. **Claude judges** — it scores the argument 0–3 on how genuine a case it makes, and the point
+   goes to the ideology the argument actually advances. Clear and un-stallable: *a real argument
+   for X earns X.*
+2. **Baseline gates farming** — the score you must clear **rises the more of that ideology you
+   already hold**, and drops to the floor for an ideology you're light on (a brave/minority stance).
+   You know the bar before you argue.
+3. **Offline (no key)** — a deterministic rule: you earn the ideology you championed unless you're
+   clearly hoarding it (held ≥ table-minimum + 2). Still no rival veto.
 
 ## Claude integration
 
 - All API access is isolated in [`net/ClaudeClient.kt`](app/src/main/java/com/azadishashn/app/net/ClaudeClient.kt).
-- Calls use the Messages API with **structured outputs** (`output_config.format` + a JSON schema),
-  so every response is guaranteed-parseable JSON — no prose parsing on-device.
-- Each scenario's four ideologies are constrained (schema `enum`) to a fixed 12-card set, so vote
-  tallies and collected-card counts stay consistent.
-- **Model** is selectable in Settings: `claude-opus-4-8` (default, richest), `claude-sonnet-4-6`
+- Uses the Messages API with **structured outputs** (`output_config.format` + JSON schema) — every
+  response is guaranteed-parseable JSON, and each option's ideology is constrained (schema `enum`)
+  to the four SHASN ideologies.
+- **Model** selectable in Settings: `claude-opus-4-8` (default, richest), `claude-sonnet-4-6`
   (recommended for fast/cheap live play), or `claude-haiku-4-5`.
-- **No key? It still plays.** Without an API key the app falls back to a small bundled deck
+- **No key? It still plays** on a small bundled deck
   ([`data/OfflineContent.kt`](app/src/main/java/com/azadishashn/app/data/OfflineContent.kt)).
 
 ### API key & security
 
-v1 stores **your own** Anthropic API key on-device (entered in Settings). This is the simplest
-setup for a game among friends. An API key cannot be shipped safely inside an APK, so for wide
-distribution you'd put the key behind a small backend proxy — because all network access funnels
-through `ClaudeClient`, that swap only touches the networking layer.
+v1 stores **your own** Anthropic API key on-device (Settings). An API key cannot be shipped safely
+inside an APK, so for wide distribution you'd put it behind a backend proxy — because all network
+access funnels through `ClaudeClient`, that swap only touches the networking layer. Never paste a
+key into a shared chat; type it directly into the app.
 
-## Build & run
+## Build
 
-Requires **Android Studio** (Ladybug or newer) with the Android SDK.
-
-1. Open this folder in Android Studio. It will sync Gradle and generate the Gradle wrapper.
-   (From a CLI with Gradle 8.9+ installed you can instead run `gradle wrapper` once, then
-   `./gradlew assembleDebug`.)
-2. Run on an emulator or device (min SDK 24).
-3. Open **Settings**, paste your Anthropic API key, pick a model, and start a game. Or skip the
-   key to try it on the bundled deck.
+The APK is built in CI — see [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml).
+Push to the working branch (or run the workflow manually) and download the
+**`azadi-shashn-debug-apk`** artifact from the run. To build locally, open the folder in Android
+Studio (it generates the Gradle wrapper) and run on a device/emulator (min SDK 24).
 
 ## Project layout
 
 ```
 app/src/main/java/com/azadishashn/app/
-  model/Models.kt        data classes + the 12 ideology cards
+  model/Models.kt        DTOs + the four SHASN ideologies
   data/SettingsStore.kt  on-device API key + model
   data/OfflineContent.kt bundled fallback rounds
   net/ClaudeClient.kt    Messages API client (structured outputs)
-  game/GameViewModel.kt  turn flow + consensus/baseline award logic
+  game/GameViewModel.kt  questioner/turn flow + consensus/baseline award logic
   ui/                    Compose screens (Setup, Settings, Round, Vote, Result, Standings)
 ```
 
-## Status / assumptions
+## Credit
 
-This is a v1 built to validate the design. A few choices were made as defaults (model `opus-4-8`,
-own-key auth, the exact award thresholds) and are easy to tune — see `GameViewModel.submitVote`
-for the threshold maths.
+SHASN and SHASN: Azadi are created by **Memesys Games**. This is an unofficial fan companion app.

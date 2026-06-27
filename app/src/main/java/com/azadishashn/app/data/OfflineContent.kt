@@ -8,6 +8,8 @@ import com.azadishashn.app.model.Scenario
 /**
  * A small bundled set of rounds so the game still works with no API key and no
  * signal. Claude generates the real, endless variety; this is the fallback deck.
+ * Every round has one option per SHASN ideology: Capitalist, Supremo,
+ * Showstopper, Idealist.
  */
 object OfflineContent {
 
@@ -26,42 +28,42 @@ object OfflineContent {
             ),
             dilemma = Dilemma(
                 question = "How does the government keep the country running through the shortage?",
-                realWorldNote = "In 1973 several states tried rationing, price controls, and " +
-                    "crash programs for domestic energy — with very mixed results.",
+                realWorldNote = "In 1973 governments tried rationing, price controls, blaming " +
+                    "foreign cartels, and televised 'share the sacrifice' appeals — with mixed results.",
             ),
             options = listOf(
-                opt("a", "Socialism", "Ration fuel by need", "Nationalise distribution and issue " +
-                    "fuel coupons so essential workers and hospitals come first."),
-                opt("b", "Libertarianism", "Let prices float", "Remove all controls; let the price " +
-                    "rise until demand falls and new supply appears."),
-                opt("c", "Technocracy", "Crash energy programme", "Pour the budget into experts, " +
-                    "nuclear plants and efficiency mandates planned by a technical board."),
-                opt("d", "Nationalism", "Energy self-reliance", "Subsidise domestic drilling and " +
-                    "coal at any cost to break dependence on foreign suppliers."),
+                opt("a", "Capitalist", "Let prices float", "Scrap controls; let the price climb " +
+                    "until demand falls and new supply appears. The market rations it."),
+                opt("b", "Supremo", "Seize and self-supply", "Nationalise the refineries, strong-arm " +
+                    "foreign suppliers, and make energy a matter of national strength."),
+                opt("c", "Showstopper", "Rally the nation on air", "A primetime address and a " +
+                    "dramatic 'everyone sacrifices together' campaign to carry public mood."),
+                opt("d", "Idealist", "Ration by need", "Issue fair coupons so hospitals, the elderly " +
+                    "and essential workers come first, whatever the optics."),
             ),
         ),
         RoundData(
             scenario = Scenario(
                 title = "A New Constitution",
-                setting = "A newly independent island state",
+                setting = "A newly independent state",
                 era = "Near future",
                 situation = "After winning independence, the founders must agree how power will be " +
                     "held and checked before the first election. Old rivalries simmer.",
             ),
             dilemma = Dilemma(
                 question = "What kind of state should the founders build?",
-                realWorldNote = "Post-independence constitutions have ranged from strong " +
-                    "presidencies to councils of elders — the choice shaped each nation for decades.",
+                realWorldNote = "Post-independence constitutions have ranged from strongman " +
+                    "presidencies to rights-first charters — the choice shaped each nation for decades.",
             ),
             options = listOf(
-                opt("a", "Liberalism", "Rights and courts first", "Entrench free speech, elections " +
-                    "and an independent judiciary above any leader."),
-                opt("b", "Authoritarianism", "Strong founding leader", "Concentrate power for one " +
-                    "term to push reforms through before factions stall everything."),
-                opt("c", "Theocracy", "Law from faith", "Root the constitution in the shared " +
-                    "religious tradition that united the independence movement."),
-                opt("d", "Anarchism", "Power to the localities", "Keep no strong centre at all; let " +
-                    "self-governing communities federate only when they choose."),
+                opt("a", "Capitalist", "A charter for enterprise", "Entrench property rights, free " +
+                    "trade and a light state so growth and investment lead the way."),
+                opt("b", "Supremo", "One nation, one leader", "Concentrate power in a strong founding " +
+                    "leader to push the new order through before factions stall it."),
+                opt("c", "Showstopper", "Rule by the crowd", "A charismatic figurehead governing " +
+                    "through rallies and frequent referendums — politics as spectacle."),
+                opt("d", "Idealist", "Rights and courts first", "Entrench free speech, welfare and an " +
+                    "independent judiciary above any single leader."),
             ),
         ),
         RoundData(
@@ -74,18 +76,18 @@ object OfflineContent {
             ),
             dilemma = Dilemma(
                 question = "How is the water allocated until resupply arrives?",
-                realWorldNote = "Closed-life-support planning has long debated whether to ration " +
-                    "equally, by productivity, or by lottery under scarcity.",
+                realWorldNote = "Closed-life-support planning has long debated rationing equally, by " +
+                    "productivity, by decree, or by public buy-in under scarcity.",
             ),
             options = listOf(
-                opt("a", "Communism", "Equal share for all", "Every colonist gets the identical " +
+                opt("a", "Capitalist", "Price the water", "Let colonists trade water rations; those " +
+                    "who produce the most value can buy what they need."),
+                opt("b", "Supremo", "The director decides", "Suspend the council; one strong " +
+                    "administrator rations by decree and keeps order first."),
+                opt("c", "Showstopper", "Broadcast the sacrifice", "Turn rationing into a unifying " +
+                    "colony-wide drama on the screens to keep everyone bought in."),
+                opt("d", "Idealist", "Equal share for all", "Every colonist gets the identical " +
                     "ration regardless of job or status."),
-                opt("b", "Technocracy", "Ration by mission value", "An expert board gives engineers " +
-                    "and farmers more, to keep life support and food running."),
-                opt("c", "Populism", "Let the colony vote", "Put the rationing plan to a direct " +
-                    "vote of every colonist tonight and follow the majority."),
-                opt("d", "Environmentalism", "Cut consumption to zero-waste", "Shut every non-" +
-                    "essential system and rebuild around a strict closed-loop until resupply."),
             ),
         ),
     )

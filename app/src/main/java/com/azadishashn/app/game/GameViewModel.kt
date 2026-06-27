@@ -8,15 +8,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.azadishashn.app.data.OfflineContent
 import com.azadishashn.app.data.SettingsStore
-import com.azadishashn.app.model.Adjudication
 import com.azadishashn.app.model.AwardResult
+import com.azadishashn.app.model.Ideologies
 import com.azadishashn.app.model.Player
 import com.azadishashn.app.model.RoundData
+import com.azadishashn.app.model.Verdict
 import com.azadishashn.app.net.ClaudeClient
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
-enum class Screen { Setup, Settings, Round, Vote, Result, Standings }
+enum class Screen { Setup, Settings, Round, Result, Standings }
 
 data class GameState(
     val screen: Screen = Screen.Setup,
@@ -25,7 +26,6 @@ data class GameState(
     val round: Int = 1,
     val current: RoundData? = null,
     val championedOptionId: String? = null,
-    val adjudication: Adjudication? = null,
     val lastResult: AwardResult? = null,
     val twistsUsedThisTurn: Int = 0,
     val loading: Boolean = false,
@@ -33,15 +33,21 @@ data class GameState(
     val usingOffline: Boolean = false,
 ) {
     val activePlayer: Player? get() = players.getOrNull(activeIndex)
-    val voterCount: Int get() = (players.size - 1).coerceAtLeast(1)
+
+    /** The questioner is the player seated before the turn-player: they pose (and may twist) the card. */
+    val questionerIndex: Int
+        get() = if (players.isEmpty()) 0 else (activeIndex - 1 + players.size) % players.size
+    val questioner: Player? get() = players.getOrNull(questionerIndex)
 }
 
 /**
- * Owns all game logic. The award rule combines three inputs:
- *  - group consensus (which ideology the table voted the argument embodied),
- *  - the group baseline (how loaded the table already is on that ideology),
- *  - how many cards of it the active player already holds (anti-farming).
- * Claude is a neutral adjudicator/generator; the table's vote decides the award.
+ * Owns all game logic.
+ *
+ * The award is decided by Claude as an impartial judge — it scores the argument and the point
+ * goes to the ideology the argument genuinely makes the case for. It does NOT depend on the
+ * other players, so rivals can't stall a good argument. The "baseline" only sets how high the
+ * score must clear: the more of an ideology you already hold, the better your argument must be
+ * (anti-farming); a light/minority stance clears at the floor.
  */
 class GameViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -50,7 +56,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     var state by mutableStateOf(GameState())
         private set
 
-    // Settings surfaced to the UI ------------------------------------------
     val apiKey: String get() = settings.apiKey
     val model: String get() = settings.model
     val hasKey: Boolean get() = settings.hasKey
@@ -89,7 +94,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun closeSettings() {
-        // Return to setup if a game hasn't started, otherwise back to the round.
         val back = if (state.current == null) Screen.Setup else Screen.Round
         state = state.copy(screen = back)
     }
@@ -100,7 +104,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(
             current = null,
             championedOptionId = null,
-            adjudication = null,
             lastResult = null,
             twistsUsedThisTurn = 0,
             error = null,
@@ -110,7 +113,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         loadRound()
     }
 
-    /** Generate via Claude when a key is present; otherwise fall back to the bundled deck. */
     private fun loadRound() {
         if (!settings.hasKey) {
             useOfflineRound()
@@ -118,10 +120,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
         state = state.copy(loading = true, error = null)
         viewModelScope.launch {
-            val result = runCatching {
+            runCatching {
                 ClaudeClient(settings.apiKey, settings.model).generateRound(seenTitles.takeLast(8))
-            }
-            result.onSuccess { round ->
+            }.onSuccess { round ->
                 seenTitles += round.scenario.title
                 state = state.copy(current = round, loading = false, usingOffline = false)
             }.onFailure { e ->
@@ -152,7 +153,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 state = state.copy(
                     current = twisted,
                     championedOptionId = null,
-                    adjudication = null,
                     twistsUsedThisTurn = state.twistsUsedThisTurn + 1,
                     loading = false,
                 )
@@ -162,94 +162,108 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun askClaude(argument: String) {
-        val round = state.current ?: return
-        if (!settings.hasKey || argument.isBlank()) return
-        state = state.copy(loading = true, error = null)
-        viewModelScope.launch {
-            runCatching {
-                ClaudeClient(settings.apiKey, settings.model).adjudicate(round, argument)
-            }.onSuccess { adj ->
-                state = state.copy(adjudication = adj, loading = false)
-            }.onFailure { e ->
-                state = state.copy(loading = false, error = e.message ?: "Adjudication failed")
-            }
-        }
-    }
+    // -- Resolve (Claude judges; rivals can't stall) -------------------------
 
-    fun goToVote() {
-        if (state.current == null) return
-        state = state.copy(screen = Screen.Vote)
-    }
-
-    /**
-     * Resolve the turn. [votes] = ideology -> how many players thought the argument
-     * embodied it. [convinced] = how many were persuaded enough to award the card.
-     */
-    fun submitVote(votes: Map<String, Int>, convinced: Int) {
+    fun resolve(argument: String) {
         val active = state.activePlayer ?: return
-        val consensus = votes.entries
-            .filter { it.value > 0 }
-            .maxByOrNull { it.value }?.key
+        val round = state.current ?: return
+        val championed = round.options.firstOrNull { it.id == state.championedOptionId }?.ideology ?: return
 
-        if (consensus == null) {
-            state = state.copy(
-                lastResult = AwardResult(
-                    playerName = active.name,
-                    ideology = "—",
-                    awarded = false,
-                    convinced = convinced,
-                    required = 0,
-                    bravery = false,
-                    explanation = "No ideology got a vote — no card awarded.",
-                ),
-                screen = Screen.Result,
-            )
-            return
+        if (settings.hasKey && argument.isNotBlank()) {
+            state = state.copy(loading = true, error = null)
+            viewModelScope.launch {
+                runCatching {
+                    ClaudeClient(settings.apiKey, settings.model).judge(round, championed, argument)
+                }.onSuccess { verdict ->
+                    applyJudgedAward(active, verdict)
+                }.onFailure { e ->
+                    state = state.copy(loading = false, error = e.message ?: "Judging failed")
+                }
+            }
+        } else {
+            applyOfflineAward(active, championed)
         }
+    }
 
-        val held = active.counts[consensus] ?: 0
-        // Group baseline: the table's average holding of the consensus ideology.
-        val tableAvg = state.players.map { it.counts[consensus] ?: 0 }.average()
-        // Defending an ideology you're light on (vs. the table) is "brave" — easier to earn.
+    /** Bar the argument must clear for [ideology]: rises with holdings, eased for a minority stance. */
+    private fun barFor(player: Player, ideology: String): Pair<Int, Boolean> {
+        val held = player.counts[ideology] ?: 0
+        val tableAvg = state.players.map { it.counts[ideology] ?: 0 }.average()
         val bravery = held < tableAvg
-        // Anti-farming: the more of this ideology you already hold, the more voters you
-        // must convince. Bravery shaves one off. Bounded to [1, voterCount].
-        val required = (1 + held - if (bravery) 1 else 0)
-            .coerceIn(1, state.voterCount)
-        val awarded = convinced >= required
+        val bar = (1 + held - if (bravery) 1 else 0).coerceIn(1, 3)
+        return bar to bravery
+    }
 
-        val explanation = buildString {
-            append("Table voted this argument as $consensus. ")
-            append("${active.name} holds $held $consensus card(s); table average is ")
-            append("%.1f. ".format(tableAvg))
-            if (bravery) append("Brave minority stance — threshold eased. ")
-            append("Needed $required of ${state.voterCount} convinced; got $convinced. ")
-            append(if (awarded) "Card AWARDED." else "Not enough — no card.")
+    private fun applyJudgedAward(active: Player, verdict: Verdict) {
+        val ideology = if (verdict.matchedIdeology in Ideologies.NAMES) {
+            verdict.matchedIdeology
+        } else {
+            state.current?.options?.firstOrNull { it.id == state.championedOptionId }?.ideology
+                ?: Ideologies.NAMES.first()
         }
+        val score = verdict.score.coerceIn(0, 3)
+        val (bar, bravery) = barFor(active, ideology)
+        val awarded = score >= bar
+        val explanation = buildString {
+            append("Claude judged this a genuine $ideology case at strength $score/3. ")
+            append(
+                if (bravery) "A light/brave stance, so the bar eased to $bar. "
+                else "Bar was $bar — it rises as you collect more $ideology. ",
+            )
+            append(if (awarded) "Point AWARDED." else "Below the bar — no point this time.")
+        }
+        commit(active, ideology, awarded, score, bar, verdict.reasoning, verdict.historicalOutcome, explanation)
+    }
 
-        val updatedPlayers = if (awarded) {
+    private fun applyOfflineAward(active: Player, ideology: String) {
+        val held = active.counts[ideology] ?: 0
+        val tableMin = state.players.minOf { it.counts[ideology] ?: 0 }
+        val awarded = held < tableMin + 2 // block obvious hoarding without a judge
+        val explanation = if (awarded) {
+            "Offline rule: you argued the $ideology line — point awarded."
+        } else {
+            "Offline rule: you're hoarding $ideology (you hold $held, table low is $tableMin). " +
+                "Earn a different ideology first."
+        }
+        commit(active, ideology, awarded, -1, 0, "", "", explanation)
+    }
+
+    private fun commit(
+        active: Player,
+        ideology: String,
+        awarded: Boolean,
+        score: Int,
+        bar: Int,
+        reasoning: String,
+        history: String,
+        explanation: String,
+    ) {
+        val updated = if (awarded) {
             state.players.map { p ->
                 if (p.id == active.id) {
-                    p.copy(counts = p.counts + (consensus to held + 1))
+                    p.copy(counts = p.counts + (ideology to (p.counts[ideology] ?: 0) + 1))
                 } else p
             }
         } else state.players
 
         state = state.copy(
-            players = updatedPlayers,
+            players = updated,
+            loading = false,
             lastResult = AwardResult(
                 playerName = active.name,
-                ideology = consensus,
+                ideology = ideology,
                 awarded = awarded,
-                convinced = convinced,
-                required = required,
-                bravery = bravery,
+                score = score,
+                bar = bar,
+                reasoning = reasoning,
+                historicalNote = history,
                 explanation = explanation,
             ),
             screen = Screen.Result,
         )
     }
+
+    // -- Flow ----------------------------------------------------------------
 
     fun nextTurn() {
         val nextIndex = (state.activeIndex + 1) % state.players.size
@@ -262,26 +276,23 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(screen = Screen.Standings)
     }
 
+    fun newGame() {
+        seenTitles.clear()
+        state = GameState(players = state.players.map { it.copy(counts = emptyMap()) })
+    }
+
     /**
-     * Handle the system Back button. Returns to the previous logical screen
-     * instead of closing the app. On [Screen.Result] it is intentionally a no-op
-     * (consumed) so Back can't re-open the vote and double-award a card; the
-     * caller must use the Next/End buttons. Back is not intercepted on
-     * [Screen.Setup], so it exits the app there as usual.
+     * Handle the system Back button — return to the previous screen instead of closing the app.
+     * Back is a no-op on [Screen.Result] so it can't undo a resolved turn; not intercepted on
+     * [Screen.Setup], so it exits there as usual.
      */
     fun onBack() {
         state = when (state.screen) {
             Screen.Settings -> state.copy(screen = if (state.current == null) Screen.Setup else Screen.Round)
             Screen.Round -> state.copy(screen = Screen.Setup)
-            Screen.Vote -> state.copy(screen = Screen.Round)
             Screen.Result -> state
             Screen.Standings -> state.copy(screen = Screen.Setup)
             Screen.Setup -> state
         }
-    }
-
-    fun newGame() {
-        seenTitles.clear()
-        state = GameState(players = state.players.map { it.copy(counts = emptyMap()) })
     }
 }

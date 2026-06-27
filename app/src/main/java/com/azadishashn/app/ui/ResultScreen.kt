@@ -14,9 +14,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.game.GameViewModel
+import com.azadishashn.app.model.Ideologies
 
 @Composable
 fun ResultScreen(vm: GameViewModel) {
@@ -29,7 +31,7 @@ fun ResultScreen(vm: GameViewModel) {
             .padding(20.dp),
     ) {
         Text(
-            if (result.awarded) "Card won!" else "No card this time",
+            if (result.awarded) "Point won!" else "No point this time",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
@@ -39,21 +41,32 @@ fun ResultScreen(vm: GameViewModel) {
         Card(colors = CardDefaults.cardColors(containerColor = container)) {
             Column(Modifier.padding(16.dp)) {
                 Text(
-                    "${result.playerName} → ${result.ideology}",
+                    "${result.playerName} → ${result.ideology} (${Ideologies.resourceOf(result.ideology)})",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
-                if (result.bravery) {
-                    Text("Brave minority stance", style = MaterialTheme.typography.labelMedium)
+                if (result.score >= 0) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Argument strength ${result.score}/3 · needed ${result.bar}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "Convinced ${result.convinced} of ${result.required} needed.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(result.explanation, style = MaterialTheme.typography.bodySmall)
+                Text(result.explanation, style = MaterialTheme.typography.bodyMedium)
+                if (result.reasoning.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Why: ${result.reasoning}", style = MaterialTheme.typography.bodySmall)
+                }
+                if (result.historicalNote.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "History: ${result.historicalNote}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontStyle = FontStyle.Italic,
+                    )
+                }
             }
         }
 

@@ -31,7 +31,10 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.game.GameViewModel
+import com.azadishashn.app.model.Ideologies
 import com.azadishashn.app.model.OptionCard
+
+private enum class RoundPhase { QUESTION, ANSWER }
 
 @Composable
 fun RoundScreen(vm: GameViewModel) {
@@ -41,11 +44,8 @@ fun RoundScreen(vm: GameViewModel) {
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        TurnHeader(vm)
-        Spacer(Modifier.height(12.dp))
-
         when {
-            s.loading && s.current == null -> LoadingBlock("Summoning a government in crisis…")
+            s.loading && s.current == null -> LoadingBlock("Drawing an ideology card…")
             s.error != null && s.current == null -> ErrorBlock(vm)
             s.current != null -> RoundBody(vm)
         }
@@ -53,33 +53,11 @@ fun RoundScreen(vm: GameViewModel) {
 }
 
 @Composable
-private fun TurnHeader(vm: GameViewModel) {
-    val s = vm.state
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column {
-            Text(
-                "Round ${s.round} · ${s.activePlayer?.name ?: ""}'s turn",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                if (s.usingOffline) "Offline deck" else "Live · ${vm.model}",
-                style = MaterialTheme.typography.labelSmall,
-            )
-        }
-        TextButton(onClick = vm::openSettings) { Text("⚙") }
-    }
-}
-
-@Composable
 private fun RoundBody(vm: GameViewModel) {
     val s = vm.state
     val round = s.current!!
+    // A twist swaps the round object, which resets the flow back to QUESTION.
+    var phase by remember(round) { mutableStateOf(RoundPhase.QUESTION) }
     var argument by remember(round) { mutableStateOf("") }
 
     Column(
@@ -87,92 +65,135 @@ private fun RoundBody(vm: GameViewModel) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.padding(16.dp)) {
-                Text(round.scenario.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        // Roles header — who is asking whom.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
                 Text(
-                    "${round.scenario.setting} · ${round.scenario.era}",
+                    "Round ${s.round}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
-                Spacer(Modifier.height(8.dp))
-                Text(round.scenario.situation, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "${s.questioner?.name} asks → ${s.activePlayer?.name} answers",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    if (s.usingOffline) "Offline deck" else "Live · ${vm.model}",
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            TextButton(onClick = vm::openSettings) { Text("⚙") }
+        }
+        Spacer(Modifier.height(12.dp))
+
+        ScenarioCard(vm)
+
+        when (phase) {
+            RoundPhase.QUESTION -> {
                 Spacer(Modifier.height(12.dp))
-                Text(round.dilemma.question, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-        Text("Champion one position, then argue it to the table:", style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(6.dp))
-
-        round.options.forEach { option ->
-            OptionRow(option, selected = s.championedOptionId == option.id) { vm.champion(option.id) }
-            Spacer(Modifier.height(6.dp))
-        }
-
-        if (vm.hasKey) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = vm::twist,
-                    enabled = s.twistsUsedThisTurn < 2 && !s.loading,
-                    modifier = Modifier.weight(1f),
-                ) { Text("Twist (${2 - s.twistsUsedThisTurn} left)") }
-            }
-            Spacer(Modifier.height(8.dp))
-
-            Text("Optional — type the gist of your argument for a neutral read:", style = MaterialTheme.typography.bodySmall)
-            OutlinedTextField(
-                value = argument,
-                onValueChange = { argument = it },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 2,
-            )
-            OutlinedButton(
-                onClick = { vm.askClaude(argument) },
-                enabled = argument.isNotBlank() && !s.loading,
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Ask Claude to weigh in") }
-        }
-
-        if (s.loading) {
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(modifier = Modifier.height(20.dp))
-                Spacer(Modifier.height(0.dp))
-                Text("  Thinking…", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-
-        s.adjudication?.let { adj ->
-            Spacer(Modifier.height(8.dp))
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary)) {
-                Column(Modifier.padding(14.dp)) {
-                    Text("Claude reads this as: ${adj.matchedIdeology}", fontWeight = FontWeight.Bold)
-                    Text(adj.reasoning, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "${s.questioner?.name}: read this out to ${s.activePlayer?.name}. " +
+                        "You may twist the card to make the easy answer costly.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (vm.hasKey) {
                     Spacer(Modifier.height(6.dp))
-                    Text("History: ${adj.historicalOutcome}", style = MaterialTheme.typography.bodySmall, fontStyle = FontStyle.Italic)
+                    OutlinedButton(
+                        onClick = vm::twist,
+                        enabled = s.twistsUsedThisTurn < 2 && !s.loading,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Twist the card (${2 - s.twistsUsedThisTurn} left)") }
                 }
+                if (s.loading) LoadingInline()
+                s.error?.let { ErrorLine(it) }
+
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = { phase = RoundPhase.ANSWER },
+                    enabled = !s.loading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Pass to ${s.activePlayer?.name} to answer") }
+                Spacer(Modifier.height(24.dp))
+            }
+
+            RoundPhase.ANSWER -> {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "${s.activePlayer?.name}: champion one position and make your case.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(6.dp))
+                round.options.forEach { option ->
+                    OptionRow(option, selected = s.championedOptionId == option.id) {
+                        vm.champion(option.id)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+
+                Text(
+                    if (vm.hasKey) {
+                        "Type the gist of your argument — Claude judges it and awards the point:"
+                    } else {
+                        "Optional notes (offline: you earn the position you championed unless you're hoarding it):"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedTextField(
+                    value = argument,
+                    onValueChange = { argument = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                )
+
+                if (s.loading) LoadingInline()
+                s.error?.let { ErrorLine(it) }
+
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Real-world note: ${round.dilemma.realWorldNote}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontStyle = FontStyle.Italic,
+                )
+
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = { vm.resolve(argument) },
+                    enabled = s.championedOptionId != null &&
+                        (!vm.hasKey || argument.isNotBlank()) && !s.loading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (vm.hasKey) "Resolve — Claude judges" else "Resolve") }
+                TextButton(
+                    onClick = { phase = RoundPhase.QUESTION },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Re-read the question") }
+                Spacer(Modifier.height(24.dp))
             }
         }
+    }
+}
 
-        s.error?.let {
+@Composable
+private fun ScenarioCard(vm: GameViewModel) {
+    val round = vm.state.current!!
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(16.dp)) {
+            Text(round.scenario.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                "${round.scenario.setting} · ${round.scenario.era}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
             Spacer(Modifier.height(8.dp))
-            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            Text(round.scenario.situation, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(12.dp))
+            Text(round.dilemma.question, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         }
-
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "Real-world note: ${round.dilemma.realWorldNote}",
-            style = MaterialTheme.typography.bodySmall,
-            fontStyle = FontStyle.Italic,
-        )
-
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = vm::goToVote, modifier = Modifier.fillMaxWidth()) {
-            Text("Debate done — go to the vote")
-        }
-        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -186,11 +207,31 @@ private fun OptionRow(option: OptionCard, selected: Boolean, onClick: () -> Unit
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(14.dp)) {
-            Text(option.ideology, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
+            Text(
+                "${option.ideology} · ${Ideologies.resourceOf(option.ideology)}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+                fontWeight = FontWeight.Bold,
+            )
             Text(option.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(option.summary, style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+@Composable
+private fun LoadingInline() {
+    Spacer(Modifier.height(8.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(modifier = Modifier.height(20.dp))
+        Text("  Thinking…", style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun ErrorLine(message: String) {
+    Spacer(Modifier.height(8.dp))
+    Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable
