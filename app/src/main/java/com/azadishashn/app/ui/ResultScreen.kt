@@ -44,15 +44,23 @@ fun ResultScreen(vm: GameViewModel) {
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
+                Text("Ideology card (dashboard)", style = MaterialTheme.typography.labelMedium)
                 Text(
-                    "${r.primary}  +2   (${Ideologies.resourceOf(r.primary)})",
+                    "1 × ${r.primary}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
+                Spacer(Modifier.height(10.dp))
+                Text("Resources to take", style = MaterialTheme.typography.labelMedium)
                 Text(
-                    "${r.secondary}  +1   (${Ideologies.resourceOf(r.secondary)})",
-                    style = MaterialTheme.typography.titleMedium,
+                    "${r.primary}  +2 · ${Ideologies.resourceOf(r.primary)}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "${r.secondary}  +1 · ${Ideologies.resourceOf(r.secondary)}",
+                    style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
                 )
                 if (r.explanation.isNotBlank()) {

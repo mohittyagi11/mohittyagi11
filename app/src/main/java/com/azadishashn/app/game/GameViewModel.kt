@@ -283,11 +283,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         history: String,
         explanation: String,
     ) {
+        // The dashboard tracks ideology CARDS: one card of the dominant ideology per
+        // turn. The +2/+1 are resources (physical tokens), shown on the result screen.
         val updated = state.players.map { p ->
             if (p.id == active.id) {
                 val c = p.counts.toMutableMap()
-                c[primary] = (c[primary] ?: 0) + 2
-                c[secondary] = (c[secondary] ?: 0) + 1
+                c[primary] = (c[primary] ?: 0) + 1
                 p.copy(counts = c)
             } else p
         }

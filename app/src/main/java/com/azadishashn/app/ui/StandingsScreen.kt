@@ -48,7 +48,7 @@ fun StandingsScreen(vm: GameViewModel) {
             )
         }
         Text(
-            "Ideology points (political capital) per player",
+            "Ideology cards (the dominant ideology, one per turn) per player",
             style = MaterialTheme.typography.bodySmall,
         )
         Spacer(Modifier.height(12.dp))
@@ -70,7 +70,7 @@ fun StandingsScreen(vm: GameViewModel) {
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
-                                "${player.total} pt",
+                                "${player.total} cards",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.tertiary,
                                 fontWeight = FontWeight.Bold,
