@@ -4,9 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Themed-icon silhouette (Android 13+): the ring + centre point. -->
+    <!-- Themed-icon silhouette (Android 13+): ring + crown + peg finials. -->
     <path android:strokeColor="#FFFFFF" android:strokeWidth="3" android:fillColor="#00000000"
         android:pathData="M26,54 a28,28 0 1,0 56,0 a28,28 0 1,0 -56,0 z" />
     <path android:fillColor="#FFFFFF"
-        android:pathData="M49.5,54 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 z" />
+        android:pathData="M42,62 L42,46 L48,54 L54,42 L60,54 L66,46 L66,62 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M40,46 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M51.6,42 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0 z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M64,46 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 z" />
 </vector>
