@@ -1,6 +1,9 @@
 package com.azadishashn.app.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -15,13 +18,22 @@ fun AzadiApp(vm: GameViewModel = viewModel()) {
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
-        when (vm.state.screen) {
-            Screen.Setup -> SetupScreen(vm)
-            Screen.Settings -> SettingsScreen(vm)
-            Screen.Round -> RoundScreen(vm)
-            Screen.Vote -> VoteScreen(vm)
-            Screen.Result -> ResultScreen(vm)
-            Screen.Standings -> StandingsScreen(vm)
+        // Inset the content away from the status/navigation bars (edge-to-edge is
+        // forced on Android 15 / target SDK 35) and lift it above the keyboard.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .systemBarsPadding()
+                .imePadding(),
+        ) {
+            when (vm.state.screen) {
+                Screen.Setup -> SetupScreen(vm)
+                Screen.Settings -> SettingsScreen(vm)
+                Screen.Round -> RoundScreen(vm)
+                Screen.Vote -> VoteScreen(vm)
+                Screen.Result -> ResultScreen(vm)
+                Screen.Standings -> StandingsScreen(vm)
+            }
         }
     }
 }

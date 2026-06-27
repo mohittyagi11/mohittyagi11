@@ -21,6 +21,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -38,7 +39,10 @@ class ClaudeClient(
     private val baseUrl: String = "https://api.anthropic.com/v1/messages",
 ) {
     private val http = OkHttpClient.Builder()
-        .callTimeout(90, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(150, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(180, TimeUnit.SECONDS)
         .build()
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -143,10 +147,18 @@ class ClaudeClient(
             .post(payload.toString().toRequestBody(JSON_MEDIA))
             .build()
 
-        http.newCall(request).execute().use { response ->
-            val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                throw IOException("Claude API ${response.code}: ${extractError(body)}")
+        val response = try {
+            http.newCall(request).execute()
+        } catch (e: InterruptedIOException) {
+            throw IOException(
+                "Claude took too long to respond. Try again, switch to a faster model " +
+                    "(Sonnet or Haiku) in Settings, or use a bundled round.",
+            )
+        }
+        response.use {
+            val body = it.body?.string().orEmpty()
+            if (!it.isSuccessful) {
+                throw IOException("Claude API ${it.code}: ${extractError(body)}")
             }
             return extractText(body)
         }
