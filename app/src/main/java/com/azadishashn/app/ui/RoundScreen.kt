@@ -123,7 +123,10 @@ private fun RoundBody(vm: GameViewModel) {
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
-            TextButton(onClick = vm::openSettings) { Text("⚙") }
+            Row {
+                TextButton(onClick = vm::openDashboard) { Text("📊") }
+                TextButton(onClick = vm::openSettings) { Text("⚙") }
+            }
         }
         Spacer(Modifier.height(12.dp))
 

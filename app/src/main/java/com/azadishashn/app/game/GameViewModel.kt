@@ -31,6 +31,8 @@ data class GameState(
     val loading: Boolean = false,
     val error: String? = null,
     val usingOffline: Boolean = false,
+    /** When set, Standings is being viewed mid-game as a dashboard; resume returns here. */
+    val dashboardReturn: Screen? = null,
 ) {
     val activePlayer: Player? get() = players.getOrNull(activeIndex)
 
@@ -272,8 +274,18 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         beginTurn()
     }
 
+    /** Open Standings mid-game as a dashboard; [leaveDashboard] returns to where we were. */
+    fun openDashboard() {
+        if (state.screen == Screen.Standings) return
+        state = state.copy(dashboardReturn = state.screen, screen = Screen.Standings)
+    }
+
+    fun leaveDashboard() {
+        state = state.copy(screen = state.dashboardReturn ?: Screen.Round, dashboardReturn = null)
+    }
+
     fun endGame() {
-        state = state.copy(screen = Screen.Standings)
+        state = state.copy(screen = Screen.Standings, dashboardReturn = null)
     }
 
     fun newGame() {
@@ -291,7 +303,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             Screen.Settings -> state.copy(screen = if (state.current == null) Screen.Setup else Screen.Round)
             Screen.Round -> state.copy(screen = Screen.Setup)
             Screen.Result -> state
-            Screen.Standings -> state.copy(screen = Screen.Setup)
+            Screen.Standings -> state.copy(screen = state.dashboardReturn ?: Screen.Setup, dashboardReturn = null)
             Screen.Setup -> state
         }
     }

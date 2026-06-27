@@ -14,6 +14,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -24,7 +25,9 @@ import com.azadishashn.app.model.Ideologies
 
 @Composable
 fun StandingsScreen(vm: GameViewModel) {
-    val ranked = vm.state.players.sortedByDescending { it.total }
+    val s = vm.state
+    val midGame = s.dashboardReturn != null
+    val ranked = s.players.sortedByDescending { it.total }
 
     Column(
         modifier = Modifier
@@ -32,10 +35,21 @@ fun StandingsScreen(vm: GameViewModel) {
             .padding(20.dp),
     ) {
         Text(
-            "Standings",
+            if (midGame) "Dashboard" else "Final standings",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
+        )
+        if (midGame) {
+            Text(
+                "Round ${s.round} · next up: ${s.activePlayer?.name ?: ""}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+        }
+        Text(
+            "Ideology points (political capital) per player",
+            style = MaterialTheme.typography.bodySmall,
         )
         Spacer(Modifier.height(12.dp))
 
@@ -56,27 +70,34 @@ fun StandingsScreen(vm: GameViewModel) {
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
-                                "${player.total} card(s)",
+                                "${player.total} pt",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.tertiary,
                                 fontWeight = FontWeight.Bold,
                             )
                         }
-                        val breakdown = player.counts.entries
-                            .filter { it.value > 0 }
-                            .sortedByDescending { it.value }
-                            .joinToString("   ") { "${it.key} (${Ideologies.resourceOf(it.key)}) ×${it.value}" }
-                        if (breakdown.isNotEmpty()) {
-                            Text(breakdown, style = MaterialTheme.typography.bodySmall)
+                        // Show every ideology so it's clear who holds what (and who holds none).
+                        val line = Ideologies.NAMES.joinToString("   ") { name ->
+                            "$name ${player.counts[name] ?: 0}"
                         }
+                        Text(line, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
         }
 
         Spacer(Modifier.height(12.dp))
-        Button(onClick = vm::newGame, modifier = Modifier.fillMaxWidth()) {
-            Text("New game (keep players)")
+        if (midGame) {
+            Button(onClick = vm::leaveDashboard, modifier = Modifier.fillMaxWidth()) {
+                Text("Resume game")
+            }
+            OutlinedButton(onClick = vm::newGame, modifier = Modifier.fillMaxWidth()) {
+                Text("New game (keep players)")
+            }
+        } else {
+            Button(onClick = vm::newGame, modifier = Modifier.fillMaxWidth()) {
+                Text("New game (keep players)")
+            }
         }
     }
 }

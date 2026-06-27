@@ -75,6 +75,9 @@ fun ResultScreen(vm: GameViewModel) {
         Button(onClick = vm::nextTurn, modifier = Modifier.fillMaxWidth()) {
             Text("Next player's turn")
         }
+        OutlinedButton(onClick = vm::openDashboard, modifier = Modifier.fillMaxWidth()) {
+            Text("📊  Dashboard")
+        }
         OutlinedButton(onClick = vm::endGame, modifier = Modifier.fillMaxWidth()) {
             Text("End game & see standings")
         }
