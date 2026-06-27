@@ -81,11 +81,14 @@ class ClaudeClient(
             Requirements:
             - The scenario is a concrete government/revolution situation, real-history-inspired
               or a plausible future, that fits the theme(s) above.
+            - scenario.dimension: a short category label (1-4 words) naming the question's
+              dimension(s), e.g. "Surveillance · Technology" or "Migration · Society".
+            - scenario.situation: a vivid paragraph (2-4 sentences) that sets the scene.
             - The dilemma must be a decision real leaders or revolutionaries actually faced;
               real_world_note says what real ones did and how it turned out.
             - Each option is that ideology's genuine, defensible course of action (NOT true/false)
               — four live positions worth arguing over.
-            - Keep every field punchy: one or two sentences.$avoid
+            - Keep titles, option labels, and the question itself to one line each.$avoid
         """.trimIndent()
 
         val text = call(system = ROUND_SYSTEM, user = user, schema = roundSchema())
@@ -271,9 +274,10 @@ class ClaudeClient(
                 listOf("scenario", "dilemma", "options"),
                 mapOf(
                     "scenario" to objSchema(
-                        listOf("title", "setting", "era", "situation"),
+                        listOf("title", "dimension", "setting", "era", "situation"),
                         mapOf(
                             "title" to strProp(),
+                            "dimension" to strProp(),
                             "setting" to strProp(),
                             "era" to strProp(),
                             "situation" to strProp(),

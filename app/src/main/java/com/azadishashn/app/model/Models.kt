@@ -38,6 +38,7 @@ data class RoundData(
 @Serializable
 data class Scenario(
     val title: String,
+    val dimension: String = "", // the question's category/dimension, e.g. "Surveillance · Technology"
     val setting: String,
     val era: String,
     val situation: String,

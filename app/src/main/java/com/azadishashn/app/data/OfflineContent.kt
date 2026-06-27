@@ -20,6 +20,7 @@ object OfflineContent {
         RoundData(
             scenario = Scenario(
                 title = "The Oil Shock",
+                dimension = "Energy · Economy",
                 setting = "An industrial nation dependent on imported oil",
                 era = "1973",
                 situation = "Exporting nations cut supply overnight. Petrol queues stretch for " +
@@ -45,6 +46,7 @@ object OfflineContent {
         RoundData(
             scenario = Scenario(
                 title = "A New Constitution",
+                dimension = "Founding · Power",
                 setting = "A newly independent state",
                 era = "Near future",
                 situation = "After winning independence, the founders must agree how power will be " +
@@ -69,6 +71,7 @@ object OfflineContent {
         RoundData(
             scenario = Scenario(
                 title = "Water on Mars",
+                dimension = "Scarcity · Survival",
                 setting = "A struggling Mars colony",
                 era = "2140",
                 situation = "The recycler is failing and the next resupply is eight months away. " +

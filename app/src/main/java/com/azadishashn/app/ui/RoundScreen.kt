@@ -318,6 +318,15 @@ private fun ScenarioCard(vm: GameViewModel) {
     val round = vm.state.current!!
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(16.dp)) {
+            if (round.scenario.dimension.isNotBlank()) {
+                Text(
+                    round.scenario.dimension.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(2.dp))
+            }
             Text(round.scenario.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
                 "${round.scenario.setting} · ${round.scenario.era}",
@@ -330,8 +339,9 @@ private fun ScenarioCard(vm: GameViewModel) {
             Text(round.dilemma.question, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = {
+                val dim = round.scenario.dimension.takeIf { it.isNotBlank() }?.let { "$it. " } ?: ""
                 vm.readOut(
-                    "${round.scenario.title}. ${round.scenario.situation}  ${round.dilemma.question}",
+                    "$dim${round.scenario.title}. ${round.scenario.situation}  ${round.dilemma.question}",
                 )
             }) { Text("🔊  Read aloud") }
         }
