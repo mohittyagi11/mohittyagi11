@@ -63,6 +63,7 @@ data class OptionCard(
 data class Verdict(
     @SerialName("primary_ideology") val primaryIdeology: String,
     @SerialName("secondary_ideology") val secondaryIdeology: String,
+    val strength: Int, // 1..10 — how strongly the answer favoured the primary ideology
     val reasoning: String,
     @SerialName("historical_outcome") val historicalOutcome: String,
 )
@@ -81,12 +82,19 @@ data class Player(
     val total: Int get() = counts.values.sum()
 }
 
-/** Result of a turn: always +2 to [primary], +1 to [secondary]. */
+/**
+ * Result of a turn: resources are always +2 [primary] / +1 [secondary]. The
+ * dominant CARD is earned only if [strength] (1..10) clears the shifting
+ * [required] baseline. [strength] is -1 offline (no AI rating).
+ */
 @Serializable
 data class AwardResult(
     val playerName: String = "",
     val primary: String = "",
     val secondary: String = "",
+    val strength: Int = -1,
+    val required: Int = 0,
+    val cardAwarded: Boolean = true,
     val reasoning: String = "",       // judge's reasoning, or "" offline
     val historicalNote: String = "",  // one-line real-world outcome, or ""
     val explanation: String = "",

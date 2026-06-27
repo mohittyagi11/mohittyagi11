@@ -143,8 +143,10 @@ class ClaudeClient(
                Idealist) the answer MOST embodies.
             2. secondary_ideology: the NEXT most dominant ideology present in the answer, chosen from
                the OTHER three. It MUST be different from primary_ideology.
-            3. reasoning: one line on the dominant and secondary leanings.
-            4. historical_outcome: one line on what real leaders who took the primary path got.
+            3. strength: on a 1-10 scale, how STRONGLY and convincingly the answer favoured the
+               primary ideology (1 = barely, 5 = a solid case, 10 = an overwhelming, expert case).
+            4. reasoning: one line on the dominant and secondary leanings.
+            5. historical_outcome: one line on what real leaders who took the primary path got.
         """.trimIndent()
 
         val text = call(system = ADJUDICATE_SYSTEM, user = user, schema = judgeSchema())
@@ -296,10 +298,11 @@ class ClaudeClient(
         }
 
         private fun judgeSchema(): JsonObject = objSchema(
-            listOf("primary_ideology", "secondary_ideology", "reasoning", "historical_outcome"),
+            listOf("primary_ideology", "secondary_ideology", "strength", "reasoning", "historical_outcome"),
             mapOf(
                 "primary_ideology" to ideologyEnumProp(),
                 "secondary_ideology" to ideologyEnumProp(),
+                "strength" to intProp(),
                 "reasoning" to strProp(),
                 "historical_outcome" to strProp(),
             ),

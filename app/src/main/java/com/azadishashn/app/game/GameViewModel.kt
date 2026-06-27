@@ -20,6 +20,7 @@ import com.azadishashn.app.net.ClaudeClient
 import com.azadishashn.app.tts.Speaker
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+import kotlin.math.roundToInt
 
 @Serializable
 enum class Screen { Setup, Settings, Round, Result, Standings, Edit }
@@ -267,10 +268,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                         ?: Ideologies.NAMES.first()
                     val secondary = v.secondaryIdeology.takeIf { it in Ideologies.NAMES && it != primary }
                         ?: Ideologies.NAMES.first { it != primary }
-                    award(
-                        active, primary, secondary, v.reasoning, v.historicalOutcome,
-                        "Claude read this as mainly $primary, with $secondary as the secondary lean.",
-                    )
+                    award(active, primary, secondary, v.strength.coerceIn(1, 10), v.reasoning, v.historicalOutcome)
                 }.onFailure { e ->
                     state = state.copy(loading = false, error = e.message ?: "Judging failed")
                 }
@@ -281,25 +279,46 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val secondary = round.options.firstOrNull { it.id == state.secondaryOptionId }?.ideology
                 ?.takeIf { it != primary }
                 ?: Ideologies.NAMES.first { it != primary }
-            award(active, primary, secondary, "", "", "Offline: +2 $primary, +1 $secondary.")
+            award(active, primary, secondary, -1, "", "")
         }
     }
 
-    /** Always award 3 resources: +2 to [primary], +1 to [secondary]. */
+    /**
+     * Resources are always +2 [primary] / +1 [secondary]. The dominant CARD is earned only
+     * if [strength] (1..10) clears a baseline that SHIFTS with standing: at the table average
+     * for that ideology you need 5/10, and each card you hold above (below) the average raises
+     * (lowers) the bar. [strength] < 0 means offline (a simple anti-hoard rule instead).
+     */
     private fun award(
         active: Player,
         primary: String,
         secondary: String,
+        strength: Int,
         reasoning: String,
         history: String,
-        explanation: String,
     ) {
-        // The dashboard tracks ideology CARDS: one card of the dominant ideology per
-        // turn. The +2/+1 are resources (physical tokens), shown on the result screen.
+        val held = active.counts[primary] ?: 0
+        val tableAvg = state.players.map { it.counts[primary] ?: 0 }.average()
+        val required = (5.0 + (held - tableAvg)).roundToInt().coerceIn(1, 10)
+        val cardAwarded = if (strength < 0) {
+            held < (state.players.minOf { it.counts[primary] ?: 0 }) + 2
+        } else {
+            strength >= required
+        }
+
+        val explanation = buildString {
+            if (strength >= 0) append("Strength $strength/10 vs needed $required. ")
+            append(
+                if (cardAwarded) "Earned 1 $primary card."
+                else "No $primary card — not strong enough for your standing.",
+            )
+            append("  Resources: $primary +2, $secondary +1.")
+        }
+
         val updated = state.players.map { p ->
             if (p.id == active.id) {
                 val c = p.counts.toMutableMap()
-                c[primary] = (c[primary] ?: 0) + 1
+                if (cardAwarded) c[primary] = (c[primary] ?: 0) + 1
                 p.copy(counts = c)
             } else p
         }
@@ -310,6 +329,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 playerName = active.name,
                 primary = primary,
                 secondary = secondary,
+                strength = strength,
+                required = required,
+                cardAwarded = cardAwarded,
                 reasoning = reasoning,
                 historicalNote = history,
                 explanation = explanation,
@@ -360,19 +382,19 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
      * round = totalCards / players + 1, and the next answerer = starter + totalCards.
      * Drops back into the current question with the edited state.
      */
-    fun applyEdit(starterId: Int?, counts: Map<Int, Map<String, Int>>) {
+    fun applyEdit(round: Int, turnInRound: Int, starterId: Int?, counts: Map<Int, Map<String, Int>>) {
         val players = state.players.map { p ->
             val c = counts[p.id]
             if (c != null) p.copy(counts = c.filterValues { it > 0 }) else p
         }
         val n = players.size.coerceAtLeast(1)
-        val totalCards = players.sumOf { it.total }
         val starterIdx = players.indexOfFirst { it.id == starterId }.coerceAtLeast(0)
+        val turn = turnInRound.coerceIn(1, n)
         state = state.copy(
             players = players,
             starterId = players.getOrNull(starterIdx)?.id,
-            round = totalCards / n + 1,
-            activeIndex = (starterIdx + totalCards) % n,
+            round = round.coerceAtLeast(1),
+            activeIndex = (starterIdx + (turn - 1)) % n,
             screen = Screen.Round,
             dashboardReturn = null,
         )

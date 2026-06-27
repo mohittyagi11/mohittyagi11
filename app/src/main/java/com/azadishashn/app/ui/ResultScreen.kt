@@ -31,7 +31,7 @@ fun ResultScreen(vm: GameViewModel) {
             .padding(20.dp),
     ) {
         Text(
-            "Resources awarded",
+            if (r.cardAwarded) "Card won!" else "Resources only",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
@@ -45,10 +45,18 @@ fun ResultScreen(vm: GameViewModel) {
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
+                if (r.strength >= 0) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Argument strength:  ${r.strength} / 10    ·    needed ${r.required}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
                 Text("Ideology card (dashboard)", style = MaterialTheme.typography.labelMedium)
                 Text(
-                    "1 × ${r.primary}",
+                    if (r.cardAwarded) "1 × ${r.primary}" else "No ${r.primary} card this turn",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
