@@ -5,12 +5,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Navy field with a soft radial vignette glow, full-bleed for the mask. -->
+    <!-- Deep near-black navy with a whisper of a radial sheen — quiet luxury. -->
     <path android:pathData="M0,0 h108 v108 h-108 z">
         <aapt:attr name="android:fillColor">
             <gradient android:type="radial"
-                android:centerX="54" android:centerY="48" android:gradientRadius="86"
-                android:startColor="#232C5E" android:endColor="#0B0E22" />
+                android:centerX="54" android:centerY="46" android:gradientRadius="80"
+                android:startColor="#1A2142" android:endColor="#0A0C18" />
         </aapt:attr>
     </path>
 </vector>
