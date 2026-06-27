@@ -5,52 +5,50 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Four glossy ideology orbs orbiting a luminous core, ringed — the four
-         ideologies converging. Kept inside the 66dp safe zone. -->
+    <!-- "The wheel of debate": one luminous ring whose colour flows continuously
+         through the four ideology hues (a sweep/conic gradient) and converges on
+         a bright core. Abstract, single mark — not four objects. Safe zone: the
+         ring sits within radius 33 of centre (54,54). -->
 
-    <!-- subtle orbit ring -->
-    <path android:strokeColor="#2EFFFFFF" android:strokeWidth="2" android:fillColor="#00000000"
-        android:pathData="M24,54 a30,30 0 1,0 60,0 a30,30 0 1,0 -60,0 z" />
+    <!-- soft outer halo -->
+    <path android:pathData="M16,54 a38,38 0 1,0 76,0 a38,38 0 1,0 -76,0 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="54" android:centerY="54" android:gradientRadius="40"
+                android:startColor="#22FFFFFF" android:endColor="#00FFFFFF" />
+        </aapt:attr>
+    </path>
 
-    <!-- top: Capitalist gold -->
-    <path android:pathData="M36,36 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z">
+    <!-- the colour-flow ring (donut via even-odd) -->
+    <path
+        android:fillType="evenOdd"
+        android:pathData="M21,54 a33,33 0 1,0 66,0 a33,33 0 1,0 -66,0 z M39,54 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0 z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="radial"
-                android:centerX="48" android:centerY="30" android:gradientRadius="27"
-                android:startColor="#FFF1C4" android:endColor="#F2B300" />
+            <gradient android:type="sweep" android:centerX="54" android:centerY="54">
+                <item android:offset="0.00" android:color="#FFCA28" />
+                <item android:offset="0.25" android:color="#FF6E6E" />
+                <item android:offset="0.50" android:color="#9E7BFF" />
+                <item android:offset="0.75" android:color="#2EE6C6" />
+                <item android:offset="1.00" android:color="#FFCA28" />
+            </gradient>
         </aapt:attr>
     </path>
-    <!-- right: Supremo red -->
-    <path android:pathData="M54,54 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z">
+
+    <!-- inner shading on the ring's hole for depth -->
+    <path android:pathData="M39,54 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0 z">
         <aapt:attr name="android:fillColor">
             <gradient android:type="radial"
-                android:centerX="66" android:centerY="48" android:gradientRadius="27"
-                android:startColor="#FFD2D2" android:endColor="#F0554F" />
-        </aapt:attr>
-    </path>
-    <!-- bottom: Showstopper teal -->
-    <path android:pathData="M36,72 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:type="radial"
-                android:centerX="48" android:centerY="66" android:gradientRadius="27"
-                android:startColor="#C9FBF1" android:endColor="#14C7A6" />
-        </aapt:attr>
-    </path>
-    <!-- left: Idealist purple -->
-    <path android:pathData="M18,54 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:type="radial"
-                android:centerX="30" android:centerY="48" android:gradientRadius="27"
-                android:startColor="#E4D8FF" android:endColor="#7E5AE6" />
+                android:centerX="54" android:centerY="54" android:gradientRadius="16"
+                android:startColor="#000B0E22" android:endColor="#660B0E22" />
         </aapt:attr>
     </path>
 
     <!-- luminous convergence core -->
-    <path android:pathData="M43,54 a11,11 0 1,0 22,0 a11,11 0 1,0 -22,0 z">
+    <path android:pathData="M44,54 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 z">
         <aapt:attr name="android:fillColor">
             <gradient android:type="radial"
-                android:centerX="54" android:centerY="54" android:gradientRadius="13"
-                android:startColor="#F5FFFFFF" android:endColor="#26FFFFFF" />
+                android:centerX="54" android:centerY="54" android:gradientRadius="12"
+                android:startColor="#F7FFFFFF" android:endColor="#1FFFFFFF" />
         </aapt:attr>
     </path>
 </vector>

@@ -4,14 +4,10 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Single-colour silhouette of the four-dot motif for themed icons
-         (Android 13+). The system tints this; keep it solid white. -->
+    <!-- Themed-icon silhouette (Android 13+): the debate-wheel ring + core.
+         System tints this; keep it solid white. -->
+    <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
+        android:pathData="M21,54 a33,33 0 1,0 66,0 a33,33 0 1,0 -66,0 z M39,54 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0 z" />
     <path android:fillColor="#FFFFFF"
-        android:pathData="M36,36 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z" />
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M54,54 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z" />
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M36,72 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z" />
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M18,54 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z" />
+        android:pathData="M45,54 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 z" />
 </vector>
