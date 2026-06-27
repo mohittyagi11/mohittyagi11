@@ -57,11 +57,11 @@ data class OptionCard(
     val summary: String,
 )
 
-/** Claude's impartial verdict on an argument: which ideology it makes the case for, and how strong. */
+/** Claude's verdict: the dominant ideology in the answer and the next-strongest one. */
 @Serializable
 data class Verdict(
-    @SerialName("matched_ideology") val matchedIdeology: String,
-    val score: Int, // 0..3 — strength/genuineness of the case
+    @SerialName("primary_ideology") val primaryIdeology: String,
+    @SerialName("secondary_ideology") val secondaryIdeology: String,
     val reasoning: String,
     @SerialName("historical_outcome") val historicalOutcome: String,
 )
@@ -80,14 +80,12 @@ data class Player(
     val total: Int get() = counts.values.sum()
 }
 
-/** Result of resolving a turn: who earned what, and why it was (or wasn't) awarded. */
+/** Result of a turn: always +2 to [primary], +1 to [secondary]. */
 @Serializable
 data class AwardResult(
     val playerName: String,
-    val ideology: String,
-    val awarded: Boolean,
-    val score: Int,   // 0..3 when Claude judged; -1 offline (no AI score)
-    val bar: Int,     // the score the argument had to clear; 0 offline
+    val primary: String,
+    val secondary: String,
     val reasoning: String,       // judge's reasoning, or "" offline
     val historicalNote: String,  // one-line real-world outcome, or ""
     val explanation: String,

@@ -126,6 +126,7 @@ private fun ThemePicker(vm: GameViewModel) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RoundBody(vm: GameViewModel) {
     val s = vm.state
@@ -235,7 +236,7 @@ private fun RoundBody(vm: GameViewModel) {
                 Spacer(Modifier.height(12.dp))
                 Text(
                     "${s.activePlayer?.name}: answer the question in your own words. " +
-                        "Claude decides which ideology it fits and allocates by the baseline.",
+                        "Claude awards +2 to the ideology your answer most embodies and +1 to the next.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(8.dp))
@@ -256,10 +257,10 @@ private fun RoundBody(vm: GameViewModel) {
                 )
 
                 if (!vm.hasKey) {
-                    // Offline only: no AI to classify, so tag your ideology yourself.
+                    // Offline only: no AI to classify, so tag your ideologies yourself.
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Offline — tag which ideology your answer was:",
+                        "Offline — tag your MAIN ideology (+2):",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(4.dp))
@@ -268,6 +269,20 @@ private fun RoundBody(vm: GameViewModel) {
                             vm.champion(option.id)
                         }
                         Spacer(Modifier.height(6.dp))
+                    }
+                    Text(
+                        "…and a secondary lean (+1):",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        round.options.filter { it.id != s.championedOptionId }.forEach { option ->
+                            FilterChip(
+                                selected = s.secondaryOptionId == option.id,
+                                onClick = { vm.championSecondary(option.id) },
+                                label = { Text(option.ideology) },
+                            )
+                        }
                     }
                 }
 

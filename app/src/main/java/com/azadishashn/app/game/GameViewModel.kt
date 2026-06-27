@@ -31,6 +31,7 @@ data class GameState(
     val round: Int = 1,
     val current: RoundData? = null,
     val championedOptionId: String? = null,
+    val secondaryOptionId: String? = null,
     val lastResult: AwardResult? = null,
     val twistsUsedThisTurn: Int = 0,
     val loading: Boolean = false,
@@ -141,6 +142,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val base = state.copy(
             current = null,
             championedOptionId = null,
+            secondaryOptionId = null,
             lastResult = null,
             twistsUsedThisTurn = 0,
             error = null,
@@ -212,6 +214,11 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(championedOptionId = optionId)
     }
 
+    /** Offline only: the secondary (+1) ideology tag; tapping again clears it. */
+    fun championSecondary(optionId: String) {
+        state = state.copy(secondaryOptionId = if (state.secondaryOptionId == optionId) null else optionId)
+    }
+
     fun twist() {
         val round = state.current ?: return
         if (!settings.hasKey || state.twistsUsedThisTurn >= twistLimit) return
@@ -239,93 +246,58 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val round = state.current ?: return
 
         if (settings.hasKey && argument.isNotBlank()) {
-            // Player just argued; Claude decides among all four ideologies.
+            // Player argued; Claude names the dominant and secondary ideologies.
             state = state.copy(loading = true, error = null)
             viewModelScope.launch {
                 runCatching {
                     ClaudeClient(settings.apiKey, settings.model).judge(round, argument)
-                }.onSuccess { verdict ->
-                    applyJudgedAward(active, verdict)
+                }.onSuccess { v ->
+                    val primary = v.primaryIdeology.takeIf { it in Ideologies.NAMES }
+                        ?: Ideologies.NAMES.first()
+                    val secondary = v.secondaryIdeology.takeIf { it in Ideologies.NAMES && it != primary }
+                        ?: Ideologies.NAMES.first { it != primary }
+                    award(
+                        active, primary, secondary, v.reasoning, v.historicalOutcome,
+                        "Claude read this as mainly $primary, with $secondary as the secondary lean.",
+                    )
                 }.onFailure { e ->
                     state = state.copy(loading = false, error = e.message ?: "Judging failed")
                 }
             }
         } else {
-            // Offline (no AI to classify): use the ideology the player self-tagged.
-            val championed = round.options.firstOrNull { it.id == state.championedOptionId }?.ideology ?: return
-            applyOfflineAward(active, championed)
+            // Offline: the player self-tags primary (+2) and an optional secondary (+1).
+            val primary = round.options.firstOrNull { it.id == state.championedOptionId }?.ideology ?: return
+            val secondary = round.options.firstOrNull { it.id == state.secondaryOptionId }?.ideology
+                ?.takeIf { it != primary }
+                ?: Ideologies.NAMES.first { it != primary }
+            award(active, primary, secondary, "", "", "Offline: +2 $primary, +1 $secondary.")
         }
     }
 
-    /** Bar the argument must clear for [ideology]: rises with holdings, eased for a minority stance. */
-    private fun barFor(player: Player, ideology: String): Pair<Int, Boolean> {
-        val held = player.counts[ideology] ?: 0
-        val tableAvg = state.players.map { it.counts[ideology] ?: 0 }.average()
-        val bravery = held < tableAvg
-        val bar = (1 + held - if (bravery) 1 else 0).coerceIn(1, 3)
-        return bar to bravery
-    }
-
-    private fun applyJudgedAward(active: Player, verdict: Verdict) {
-        val ideology = if (verdict.matchedIdeology in Ideologies.NAMES) {
-            verdict.matchedIdeology
-        } else {
-            Ideologies.NAMES.first()
-        }
-        val score = verdict.score.coerceIn(0, 3)
-        val (bar, bravery) = barFor(active, ideology)
-        val awarded = score >= bar
-        val explanation = buildString {
-            append("Claude judged this a genuine $ideology case at strength $score/3. ")
-            append(
-                if (bravery) "A light/brave stance, so the bar eased to $bar. "
-                else "Bar was $bar — it rises as you collect more $ideology. ",
-            )
-            append(if (awarded) "Point AWARDED." else "Below the bar — no point this time.")
-        }
-        commit(active, ideology, awarded, score, bar, verdict.reasoning, verdict.historicalOutcome, explanation)
-    }
-
-    private fun applyOfflineAward(active: Player, ideology: String) {
-        val held = active.counts[ideology] ?: 0
-        val tableMin = state.players.minOf { it.counts[ideology] ?: 0 }
-        val awarded = held < tableMin + 2 // block obvious hoarding without a judge
-        val explanation = if (awarded) {
-            "Offline rule: you argued the $ideology line — point awarded."
-        } else {
-            "Offline rule: you're hoarding $ideology (you hold $held, table low is $tableMin). " +
-                "Earn a different ideology first."
-        }
-        commit(active, ideology, awarded, -1, 0, "", "", explanation)
-    }
-
-    private fun commit(
+    /** Always award 3 resources: +2 to [primary], +1 to [secondary]. */
+    private fun award(
         active: Player,
-        ideology: String,
-        awarded: Boolean,
-        score: Int,
-        bar: Int,
+        primary: String,
+        secondary: String,
         reasoning: String,
         history: String,
         explanation: String,
     ) {
-        val updated = if (awarded) {
-            state.players.map { p ->
-                if (p.id == active.id) {
-                    p.copy(counts = p.counts + (ideology to (p.counts[ideology] ?: 0) + 1))
-                } else p
-            }
-        } else state.players
-
+        val updated = state.players.map { p ->
+            if (p.id == active.id) {
+                val c = p.counts.toMutableMap()
+                c[primary] = (c[primary] ?: 0) + 2
+                c[secondary] = (c[secondary] ?: 0) + 1
+                p.copy(counts = c)
+            } else p
+        }
         state = state.copy(
             players = updated,
             loading = false,
             lastResult = AwardResult(
                 playerName = active.name,
-                ideology = ideology,
-                awarded = awarded,
-                score = score,
-                bar = bar,
+                primary = primary,
+                secondary = secondary,
                 reasoning = reasoning,
                 historicalNote = history,
                 explanation = explanation,

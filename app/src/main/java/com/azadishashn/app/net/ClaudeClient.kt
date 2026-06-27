@@ -136,12 +136,12 @@ class ClaudeClient(
             "$argument"
 
             Be an impartial judge — ignore who benefits in the game. Judge the player's actual words.
-            1. matched_ideology: which ONE of the four ideologies (Capitalist, Supremo, Showstopper,
-               Idealist) this answer most genuinely embodies.
-            2. score: how strong and genuine that case is — 0 = no real case, 1 = weak,
-               2 = solid, 3 = compelling.
-            3. reasoning: one line on why it maps to that ideology.
-            4. historical_outcome: one line on what real leaders who took that path got.
+            1. primary_ideology: the ONE of the four ideologies (Capitalist, Supremo, Showstopper,
+               Idealist) the answer MOST embodies.
+            2. secondary_ideology: the NEXT most dominant ideology present in the answer, chosen from
+               the OTHER three. It MUST be different from primary_ideology.
+            3. reasoning: one line on the dominant and secondary leanings.
+            4. historical_outcome: one line on what real leaders who took the primary path got.
         """.trimIndent()
 
         val text = call(system = ADJUDICATE_SYSTEM, user = user, schema = judgeSchema())
@@ -292,10 +292,10 @@ class ClaudeClient(
         }
 
         private fun judgeSchema(): JsonObject = objSchema(
-            listOf("matched_ideology", "score", "reasoning", "historical_outcome"),
+            listOf("primary_ideology", "secondary_ideology", "reasoning", "historical_outcome"),
             mapOf(
-                "matched_ideology" to ideologyEnumProp(),
-                "score" to intProp(),
+                "primary_ideology" to ideologyEnumProp(),
+                "secondary_ideology" to ideologyEnumProp(),
                 "reasoning" to strProp(),
                 "historical_outcome" to strProp(),
             ),

@@ -22,8 +22,7 @@ import com.azadishashn.app.model.Ideologies
 
 @Composable
 fun ResultScreen(vm: GameViewModel) {
-    val result = vm.state.lastResult ?: return
-    val container = if (result.awarded) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surface
+    val r = vm.state.lastResult ?: return
 
     Column(
         modifier = Modifier
@@ -31,38 +30,43 @@ fun ResultScreen(vm: GameViewModel) {
             .padding(20.dp),
     ) {
         Text(
-            if (result.awarded) "Point won!" else "No point this time",
+            "Resources awarded",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.height(16.dp))
 
-        Card(colors = CardDefaults.cardColors(containerColor = container)) {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiary)) {
             Column(Modifier.padding(16.dp)) {
                 Text(
-                    "${result.playerName} → ${result.ideology} (${Ideologies.resourceOf(result.ideology)})",
+                    r.playerName,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
-                if (result.score >= 0) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Argument strength ${result.score}/3 · needed ${result.bar}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
                 Spacer(Modifier.height(8.dp))
-                Text(result.explanation, style = MaterialTheme.typography.bodyMedium)
-                if (result.reasoning.isNotBlank()) {
+                Text(
+                    "${r.primary}  +2   (${Ideologies.resourceOf(r.primary)})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "${r.secondary}  +1   (${Ideologies.resourceOf(r.secondary)})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (r.explanation.isNotBlank()) {
                     Spacer(Modifier.height(8.dp))
-                    Text("Why: ${result.reasoning}", style = MaterialTheme.typography.bodySmall)
+                    Text(r.explanation, style = MaterialTheme.typography.bodyMedium)
                 }
-                if (result.historicalNote.isNotBlank()) {
+                if (r.reasoning.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Why: ${r.reasoning}", style = MaterialTheme.typography.bodySmall)
+                }
+                if (r.historicalNote.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "History: ${result.historicalNote}",
+                        "History: ${r.historicalNote}",
                         style = MaterialTheme.typography.bodySmall,
                         fontStyle = FontStyle.Italic,
                     )
