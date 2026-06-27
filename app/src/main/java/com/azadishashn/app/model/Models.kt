@@ -83,10 +83,10 @@ data class Player(
 /** Result of a turn: always +2 to [primary], +1 to [secondary]. */
 @Serializable
 data class AwardResult(
-    val playerName: String,
-    val primary: String,
-    val secondary: String,
-    val reasoning: String,       // judge's reasoning, or "" offline
-    val historicalNote: String,  // one-line real-world outcome, or ""
-    val explanation: String,
+    val playerName: String = "",
+    val primary: String = "",
+    val secondary: String = "",
+    val reasoning: String = "",       // judge's reasoning, or "" offline
+    val historicalNote: String = "",  // one-line real-world outcome, or ""
+    val explanation: String = "",
 )
