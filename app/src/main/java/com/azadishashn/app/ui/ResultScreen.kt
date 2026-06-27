@@ -1,145 +1,187 @@
 package com.azadishashn.app.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.model.Ideologies
+import com.azadishashn.app.ui.components.AzadiScaffold
+import com.azadishashn.app.ui.components.IconActionButton
+import com.azadishashn.app.ui.components.IdeologyBadge
+import com.azadishashn.app.ui.components.IdeologyDot
+import com.azadishashn.app.ui.components.PrimaryCta
+import com.azadishashn.app.ui.components.SectionCard
+import com.azadishashn.app.ui.components.StatTile
+import com.azadishashn.app.ui.components.StrengthMeter
+import com.azadishashn.app.ui.theme.IdeologyTheme
 
 @Composable
 fun ResultScreen(vm: GameViewModel) {
     val r = vm.state.lastResult ?: return
+    val cardIdeo = r.cardIdeology.ifBlank { r.primary }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(20.dp),
-    ) {
-        Text(
-            if (r.diverted) "Card redirected" else "Card won!",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.height(16.dp))
-
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiary)) {
-            Column(Modifier.padding(16.dp)) {
+    AzadiScaffold(title = "Verdict") { pad ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(pad)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp),
+        ) {
+            // Hero — the awarded card, tinted by its ideology.
+            SectionCard(containerColor = IdeologyTheme.container(cardIdeo)) {
                 Text(
                     r.playerName,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-                if (r.strength >= 0) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        if (r.diverted) {
-                            "Argument strength:  ${r.strength} / 10    ·    needed ${r.required} to keep stacking ${r.primary}"
-                        } else {
-                            "Argument strength:  ${r.strength} / 10    ·    needed ${r.required}"
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
-                Text("Ideology card (dashboard)", style = MaterialTheme.typography.labelMedium)
-                Text(
-                    "1 × ${r.cardIdeology.ifBlank { r.primary }}",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Text(
+                    if (r.diverted) "Card redirected" else "Card won!",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(12.dp))
+                IdeologyBadge(cardIdeo, count = 1)
+
                 if (r.diverted) {
-                    Text(
-                        "Redirected from ${r.primary} — your argument didn't clear the higher bar for an ideology you already hold.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IdeologyDot(r.primary, size = 14.dp)
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "redirected to",
+                            modifier = Modifier.padding(horizontal = 8.dp).height(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        IdeologyDot(r.secondary, size = 14.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "didn't clear the bar for ${r.primary} — moved to ${r.secondary}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
-                Spacer(Modifier.height(10.dp))
-                Text("Resources to take", style = MaterialTheme.typography.labelMedium)
-                Text(
-                    "${r.primary}  +2 · ${Ideologies.resourceOf(r.primary)}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
+
+                Spacer(Modifier.height(16.dp))
+                StrengthMeter(strength = r.strength, required = r.required, ideology = r.primary)
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Text("Resources to take", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatTile(
+                    label = r.primary,
+                    value = "+2 · ${Ideologies.resourceOf(r.primary)}",
+                    tint = IdeologyTheme.container(r.primary),
+                    modifier = Modifier.weight(1f),
                 )
-                Text(
-                    "${r.secondary}  +1 · ${Ideologies.resourceOf(r.secondary)}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
+                StatTile(
+                    label = r.secondary,
+                    value = "+1 · ${Ideologies.resourceOf(r.secondary)}",
+                    tint = IdeologyTheme.container(r.secondary),
+                    modifier = Modifier.weight(1f),
                 )
-                if (r.explanation.isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(r.explanation, style = MaterialTheme.typography.bodyMedium)
-                }
-                if (r.reasoning.isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text("Why: ${r.reasoning}", style = MaterialTheme.typography.bodySmall)
-                }
-                if (r.historicalNote.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "History: ${r.historicalNote}",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontStyle = FontStyle.Italic,
-                    )
+            }
+
+            if (r.reasoning.isNotBlank() || r.historicalNote.isNotBlank()) {
+                Spacer(Modifier.height(14.dp))
+                SectionCard {
+                    if (r.reasoning.isNotBlank()) {
+                        Text("Why", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
+                        Text(r.reasoning, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    if (r.historicalNote.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("History", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
+                        Text(
+                            r.historicalNote,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontStyle = FontStyle.Italic,
+                        )
+                    }
                 }
             }
-        }
 
-        Spacer(Modifier.height(8.dp))
-        val reading = vm.isReading
-        TextButton(
-            onClick = {
-                if (reading) {
-                    vm.stopReadOut()
-                } else {
-                    val cardName = r.cardIdeology.ifBlank { r.primary }
-                    val card = if (r.diverted) {
-                        "earns one $cardName card, redirected from ${r.primary} because they are already accumulating it"
-                    } else {
-                        "earns one $cardName card"
-                    }
-                    val strengthLine = if (r.strength >= 0) "Strength ${r.strength} of 10, needed ${r.required}. " else ""
-                    vm.readOut(
-                        "${r.playerName} $card. $strengthLine" +
-                            "Resources: ${r.primary} plus two ${Ideologies.resourceOf(r.primary)}, " +
-                            "and ${r.secondary} plus one ${Ideologies.resourceOf(r.secondary)}. " +
-                            "${r.reasoning}. ${r.historicalNote}",
-                    )
-                }
-            },
-            colors = ButtonDefaults.textButtonColors(
-                contentColor = if (reading) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-            ),
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (reading) "⏹  Stop" else "🔊  Read aloud") }
+            Spacer(Modifier.height(8.dp))
+            val reading = vm.isReading
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconActionButton(
+                    if (reading) Icons.Filled.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = if (reading) "Stop" else "Read aloud",
+                    tint = if (reading) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    onClick = {
+                        if (reading) {
+                            vm.stopReadOut()
+                        } else {
+                            val card = if (r.diverted) {
+                                "earns one $cardIdeo card, redirected from ${r.primary} because they are already accumulating it"
+                            } else {
+                                "earns one $cardIdeo card"
+                            }
+                            val strengthLine = if (r.strength >= 0) "Strength ${r.strength} of 10, needed ${r.required}. " else ""
+                            vm.readOut(
+                                "${r.playerName} $card. $strengthLine" +
+                                    "Resources: ${r.primary} plus two ${Ideologies.resourceOf(r.primary)}, " +
+                                    "and ${r.secondary} plus one ${Ideologies.resourceOf(r.secondary)}. " +
+                                    "${r.reasoning}. ${r.historicalNote}",
+                            )
+                        }
+                    },
+                )
+                Text(
+                    if (reading) "Stop" else "Read aloud",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (reading) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                )
+            }
 
-        Spacer(Modifier.weight(1f))
-
-        Button(onClick = vm::nextTurn, modifier = Modifier.fillMaxWidth()) {
-            Text("Next player's turn")
-        }
-        OutlinedButton(onClick = vm::openDashboard, modifier = Modifier.fillMaxWidth()) {
-            Text("📊  Dashboard")
-        }
-        OutlinedButton(onClick = vm::endGame, modifier = Modifier.fillMaxWidth()) {
-            Text("End game & see standings")
+            Spacer(Modifier.height(16.dp))
+            PrimaryCta(text = "Next player's turn", onClick = vm::nextTurn)
+            OutlinedButton(
+                onClick = vm::openDashboard,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.BarChart, contentDescription = null, modifier = Modifier.height(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Dashboard")
+            }
+            OutlinedButton(
+                onClick = vm::endGame,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.Flag, contentDescription = null, modifier = Modifier.height(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("End game & see standings")
+            }
         }
     }
 }

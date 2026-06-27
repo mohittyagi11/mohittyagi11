@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark window background (deep navy-charcoal) — matches Compose DarkColors.background. -->
+    <color name="window_bg">#FF101321</color>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Single-colour silhouette of the four-dot motif for themed icons
+         (Android 13+). The system tints this; keep it solid white. -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M36,36 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M54,54 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M36,72 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M18,54 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z" />
+</vector>

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -28,6 +27,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.data.SettingsStore
 import com.azadishashn.app.game.GameViewModel
+import com.azadishashn.app.ui.components.AzadiScaffold
+import com.azadishashn.app.ui.components.PrimaryCta
+import com.azadishashn.app.ui.components.SectionCard
 
 @Composable
 fun SettingsScreen(vm: GameViewModel) {
@@ -36,92 +38,96 @@ fun SettingsScreen(vm: GameViewModel) {
     var context by remember { mutableStateOf(vm.context) }
     var voice by remember { mutableStateOf(vm.voiceLang) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-    ) {
-        Text(
-            "Settings",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.height(16.dp))
-
-        Text("Anthropic API key", fontWeight = FontWeight.Bold)
-        Text(
-            "Stored only on this device. Leave blank to play offline with the bundled deck.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        OutlinedTextField(
-            value = key,
-            onValueChange = { key = it },
-            label = { Text("sk-ant-...") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
+    AzadiScaffold(title = "Settings", onBack = vm::closeSettings) { pad ->
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp),
-        )
-
-        Spacer(Modifier.height(20.dp))
-        Text("Context / country", fontWeight = FontWeight.Bold)
-        Text(
-            "Scenarios are framed here — the world's dilemmas, set in this context.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        OutlinedTextField(
-            value = context,
-            onValueChange = { context = it },
-            label = { Text("e.g. India") },
-            singleLine = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp),
-        )
-
-        Spacer(Modifier.height(20.dp))
-        Text("Voice input language", fontWeight = FontWeight.Bold)
-        SettingsStore.VOICE_LANGS.forEach { (label, tag) ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .selectable(selected = voice == tag, onClick = { voice = tag })
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(selected = voice == tag, onClick = { voice = tag })
-                Text(label, modifier = Modifier.padding(start = 4.dp))
+                .fillMaxSize()
+                .padding(pad)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp),
+        ) {
+            SectionCard {
+                Text("Anthropic API key", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Stored only on this device. Leave blank to play offline with the bundled deck.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = key,
+                    onValueChange = { key = it },
+                    label = { Text("sk-ant-...") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
             }
-        }
 
-        Spacer(Modifier.height(20.dp))
-        Text("Model", fontWeight = FontWeight.Bold)
-        SettingsStore.MODELS.forEach { (label, id) ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .selectable(selected = model == id, onClick = { model = id })
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(selected = model == id, onClick = { model = id })
-                Text(label, modifier = Modifier.padding(start = 4.dp))
+            Spacer(Modifier.height(12.dp))
+            SectionCard {
+                Text("Context / country", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Scenarios are framed here — the world's dilemmas, set in this context.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = context,
+                    onValueChange = { context = it },
+                    label = { Text("e.g. India") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
             }
-        }
 
-        Spacer(Modifier.height(24.dp))
-        Button(
-            onClick = {
-                vm.saveSettings(key, model, context, voice)
-                vm.closeSettings()
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Save") }
-        TextButton(onClick = vm::closeSettings, modifier = Modifier.fillMaxWidth()) {
-            Text("Cancel")
+            Spacer(Modifier.height(12.dp))
+            SectionCard {
+                Text("Voice input language", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                SettingsStore.VOICE_LANGS.forEach { (label, tag) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = voice == tag, onClick = { voice = tag })
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = voice == tag, onClick = { voice = tag })
+                        Text(label, modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            SectionCard {
+                Text("Model", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                SettingsStore.MODELS.forEach { (label, id) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = model == id, onClick = { model = id })
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = model == id, onClick = { model = id })
+                        Text(label, modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+            PrimaryCta(
+                text = "Save",
+                onClick = {
+                    vm.saveSettings(key, model, context, voice)
+                    vm.closeSettings()
+                },
+            )
+            TextButton(onClick = vm::closeSettings, modifier = Modifier.fillMaxWidth()) {
+                Text("Cancel")
+            }
         }
     }
 }
