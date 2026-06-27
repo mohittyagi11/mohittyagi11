@@ -19,6 +19,23 @@ class GameStore(context: Context) {
         encodeDefaults = true
     }
 
+    // Human-readable variant for the export/import (copy-paste) flow.
+    private val prettyJson = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+        prettyPrint = true
+    }
+
+    /** Serialize a game to shareable, human-readable JSON (for copy / export). */
+    fun export(state: GameState): String =
+        prettyJson.encodeToString(GameState.serializer(), state)
+
+    /** Parse a pasted/exported game back into a [GameState]; null if it isn't valid. */
+    fun import(raw: String): GameState? =
+        raw.trim().takeIf { it.isNotEmpty() }?.let {
+            runCatching { json.decodeFromString(GameState.serializer(), it) }.getOrNull()
+        }
+
     fun save(state: GameState) {
         runCatching {
             prefs.edit()

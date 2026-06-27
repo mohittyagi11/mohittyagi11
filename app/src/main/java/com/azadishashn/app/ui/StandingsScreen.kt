@@ -97,6 +97,9 @@ fun StandingsScreen(vm: GameViewModel) {
                 Text("✏️  Edit game state")
             }
         }
+        OutlinedButton(onClick = vm::openTransfer, modifier = Modifier.fillMaxWidth()) {
+            Text("⇪  Export / Import game")
+        }
         OutlinedButton(onClick = vm::newGame, modifier = Modifier.fillMaxWidth()) {
             Text("New game (keep players)")
         }

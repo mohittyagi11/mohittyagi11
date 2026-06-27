@@ -25,7 +25,7 @@ import kotlinx.serialization.Serializable
 import kotlin.math.roundToInt
 
 @Serializable
-enum class Screen { Setup, Settings, Round, Result, Standings, Edit }
+enum class Screen { Setup, Settings, Round, Result, Standings, Edit, Transfer }
 
 @Serializable
 data class GameState(
@@ -48,6 +48,8 @@ data class GameState(
     val lastThemes: List<String> = emptyList(),
     /** When set, Standings is being viewed mid-game as a dashboard; resume returns here. */
     val dashboardReturn: Screen? = null,
+    /** When set, the Export/Import screen is open; closing returns here. */
+    val transferReturn: Screen? = null,
 ) {
     val activePlayer: Player? get() = players.getOrNull(activeIndex)
 
@@ -426,6 +428,42 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = GameState(players = state.players.map { it.copy(counts = emptyMap()) })
     }
 
+    // -- Export / Import (take a copy, simulate, restore) --------------------
+
+    fun openTransfer() {
+        if (state.screen == Screen.Transfer) return
+        state = state.copy(transferReturn = state.screen, screen = Screen.Transfer)
+    }
+
+    fun closeTransfer() {
+        state = state.copy(screen = state.transferReturn ?: Screen.Setup, transferReturn = null)
+    }
+
+    /**
+     * Serialize the current game to shareable JSON. The snapshot resumes at the
+     * question (if one is loaded) or the dashboard, and drops the ephemeral
+     * transfer/dashboard/loading bits so a re-import lands somewhere sensible.
+     */
+    fun exportState(): String {
+        val snapshot = state.copy(
+            screen = if (state.current != null) Screen.Round else Screen.Standings,
+            transferReturn = null,
+            dashboardReturn = null,
+            loading = false,
+            error = null,
+        )
+        return store.export(snapshot)
+    }
+
+    /** Load a pasted/exported game, replacing the current one. Returns false if it won't parse. */
+    fun importState(raw: String): Boolean {
+        val loaded = store.import(raw)?.takeIf { it.players.isNotEmpty() } ?: return false
+        seenTitles.clear()
+        nextPlayerId = (loaded.players.maxOfOrNull { it.id } ?: -1) + 1
+        state = loaded.copy(loading = false, error = null, transferReturn = null, dashboardReturn = null)
+        return true
+    }
+
     /**
      * Handle the system Back button — return to the previous screen instead of closing the app.
      * Back is a no-op on [Screen.Result] so it can't undo a resolved turn; not intercepted on
@@ -438,6 +476,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             Screen.Result -> state
             Screen.Standings -> state.copy(screen = state.dashboardReturn ?: Screen.Setup, dashboardReturn = null)
             Screen.Edit -> state.copy(screen = Screen.Standings)
+            Screen.Transfer -> state.copy(screen = state.transferReturn ?: Screen.Setup, transferReturn = null)
             Screen.Setup -> state
         }
     }

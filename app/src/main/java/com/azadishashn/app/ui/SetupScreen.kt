@@ -129,6 +129,11 @@ fun SetupScreen(vm: GameViewModel) {
             onClick = vm::openSettings,
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Settings (API key & model)") }
+
+        TextButton(
+            onClick = vm::openTransfer,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("⇪  Export / Import a saved game") }
     }
 }
 

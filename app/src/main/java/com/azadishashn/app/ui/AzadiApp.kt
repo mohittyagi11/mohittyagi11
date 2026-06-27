@@ -38,6 +38,7 @@ fun AzadiApp(vm: GameViewModel = viewModel()) {
                 Screen.Result -> ResultScreen(vm)
                 Screen.Standings -> StandingsScreen(vm)
                 Screen.Edit -> EditScreen(vm)
+                Screen.Transfer -> TransferScreen(vm)
             }
         }
     }
