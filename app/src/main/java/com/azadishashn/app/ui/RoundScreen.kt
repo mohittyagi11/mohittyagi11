@@ -259,8 +259,9 @@ private fun OptionRow(option: OptionCard, selected: Boolean, onClick: () -> Unit
                 color = MaterialTheme.colorScheme.tertiary,
                 fontWeight = FontWeight.Bold,
             )
+            // Only the stance — NOT the reasoning. The player must make the case
+            // themselves; the option's rationale stays private to the judge.
             Text(option.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Text(option.summary, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
