@@ -206,13 +206,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun resolve(argument: String) {
         val active = state.activePlayer ?: return
         val round = state.current ?: return
-        val championed = round.options.firstOrNull { it.id == state.championedOptionId }?.ideology ?: return
 
         if (settings.hasKey && argument.isNotBlank()) {
+            // Player just argued; Claude decides among all four ideologies.
             state = state.copy(loading = true, error = null)
             viewModelScope.launch {
                 runCatching {
-                    ClaudeClient(settings.apiKey, settings.model).judge(round, championed, argument)
+                    ClaudeClient(settings.apiKey, settings.model).judge(round, argument)
                 }.onSuccess { verdict ->
                     applyJudgedAward(active, verdict)
                 }.onFailure { e ->
@@ -220,6 +220,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         } else {
+            // Offline (no AI to classify): use the ideology the player self-tagged.
+            val championed = round.options.firstOrNull { it.id == state.championedOptionId }?.ideology ?: return
             applyOfflineAward(active, championed)
         }
     }
@@ -237,8 +239,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val ideology = if (verdict.matchedIdeology in Ideologies.NAMES) {
             verdict.matchedIdeology
         } else {
-            state.current?.options?.firstOrNull { it.id == state.championedOptionId }?.ideology
-                ?: Ideologies.NAMES.first()
+            Ideologies.NAMES.first()
         }
         val score = verdict.score.coerceIn(0, 3)
         val (bar, bravery) = barFor(active, ideology)

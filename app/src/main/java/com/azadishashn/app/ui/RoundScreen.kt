@@ -231,29 +231,16 @@ private fun RoundBody(vm: GameViewModel) {
             RoundPhase.ANSWER -> {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "${s.activePlayer?.name}: champion one position and make your case.",
+                    "${s.activePlayer?.name}: answer the question in your own words. " +
+                        "Claude decides which ideology it fits and allocates by the baseline.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Spacer(Modifier.height(6.dp))
-                round.options.forEach { option ->
-                    OptionRow(option, selected = s.championedOptionId == option.id) {
-                        vm.champion(option.id)
-                    }
-                    Spacer(Modifier.height(6.dp))
-                }
+                Spacer(Modifier.height(8.dp))
 
-                Text(
-                    if (vm.hasKey) {
-                        "Make your case — speak it (or type) and Claude judges it:"
-                    } else {
-                        "Notes — speak or type (offline: you earn the position you championed unless hoarding):"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Button(
-                    onClick = { startVoice() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("🎤  Speak your argument") }
+                // Voice-first argument input — no options/categories shown.
+                Button(onClick = { startVoice() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("🎤  Speak your answer")
+                }
                 voiceHint?.let {
                     Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
@@ -264,6 +251,22 @@ private fun RoundBody(vm: GameViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                 )
+
+                if (!vm.hasKey) {
+                    // Offline only: no AI to classify, so tag your ideology yourself.
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Offline — tag which ideology your answer was:",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    round.options.forEach { option ->
+                        OptionRow(option, selected = s.championedOptionId == option.id) {
+                            vm.champion(option.id)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                    }
+                }
 
                 if (s.loading) LoadingInline()
                 s.error?.let { ErrorLine(it) }
@@ -278,10 +281,10 @@ private fun RoundBody(vm: GameViewModel) {
                 Spacer(Modifier.height(16.dp))
                 Button(
                     onClick = { vm.resolve(argument) },
-                    enabled = s.championedOptionId != null &&
-                        (!vm.hasKey || argument.isNotBlank()) && !s.loading,
+                    enabled = !s.loading &&
+                        if (vm.hasKey) argument.isNotBlank() else s.championedOptionId != null,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (vm.hasKey) "Resolve — Claude judges" else "Resolve") }
+                ) { Text(if (vm.hasKey) "Resolve — Claude decides" else "Resolve") }
                 TextButton(
                     onClick = { phase = RoundPhase.QUESTION },
                     modifier = Modifier.fillMaxWidth(),

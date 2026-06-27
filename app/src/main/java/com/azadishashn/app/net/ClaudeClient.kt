@@ -116,28 +116,26 @@ class ClaudeClient(
      */
     suspend fun judge(
         round: RoundData,
-        championed: String,
         argument: String,
     ): Verdict = withContext(Dispatchers.IO) {
-        val opts = round.options.joinToString("\n") { "- ${it.ideology}: ${it.label} — ${it.summary}" }
+        val opts = round.options.joinToString("\n") { "- ${it.ideology}: ${it.label}" }
         val user = """
             Scenario: ${round.scenario.title} — ${round.scenario.situation}
             Question: ${round.dilemma.question}
 
-            Options on the table:
+            For reference only, how each of the four ideologies might lean here:
             $opts
 
-            The player is arguing for the $championed position. Their argument, in their words:
+            The player answered the question in their OWN words (they were NOT shown the list above):
             "$argument"
 
-            Be an impartial judge — ignore who benefits in the game.
-            1. matched_ideology: which of the four ideologies this argument GENUINELY makes the
-               case for (usually $championed, but choose another of the four if the argument
-               actually advances that one instead).
+            Be an impartial judge — ignore who benefits in the game. Judge the player's actual words.
+            1. matched_ideology: which ONE of the four ideologies (Capitalist, Supremo, Showstopper,
+               Idealist) this answer most genuinely embodies.
             2. score: how strong and genuine that case is — 0 = no real case, 1 = weak,
                2 = solid, 3 = compelling.
-            3. reasoning: one line on the verdict.
-            4. historical_outcome: one line on what real leaders who took the matched path got.
+            3. reasoning: one line on why it maps to that ideology.
+            4. historical_outcome: one line on what real leaders who took that path got.
         """.trimIndent()
 
         val text = call(system = ADJUDICATE_SYSTEM, user = user, schema = judgeSchema())
