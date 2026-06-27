@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Tricolour "Azadi" bands, full-bleed for the adaptive mask. -->
+    <path android:fillColor="#FF9933" android:pathData="M0,0 h108 v36 h-108 z" />
+    <path android:fillColor="#FFF8EE" android:pathData="M0,36 h108 v36 h-108 z" />
+    <path android:fillColor="#138808" android:pathData="M0,72 h108 v36 h-108 z" />
+</vector>
