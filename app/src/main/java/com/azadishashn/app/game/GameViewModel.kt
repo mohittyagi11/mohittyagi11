@@ -262,6 +262,24 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(screen = Screen.Standings)
     }
 
+    /**
+     * Handle the system Back button. Returns to the previous logical screen
+     * instead of closing the app. On [Screen.Result] it is intentionally a no-op
+     * (consumed) so Back can't re-open the vote and double-award a card; the
+     * caller must use the Next/End buttons. Back is not intercepted on
+     * [Screen.Setup], so it exits the app there as usual.
+     */
+    fun onBack() {
+        state = when (state.screen) {
+            Screen.Settings -> state.copy(screen = if (state.current == null) Screen.Setup else Screen.Round)
+            Screen.Round -> state.copy(screen = Screen.Setup)
+            Screen.Vote -> state.copy(screen = Screen.Round)
+            Screen.Result -> state
+            Screen.Standings -> state.copy(screen = Screen.Setup)
+            Screen.Setup -> state
+        }
+    }
+
     fun newGame() {
         seenTitles.clear()
         state = GameState(players = state.players.map { it.copy(counts = emptyMap()) })

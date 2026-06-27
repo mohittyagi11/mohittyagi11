@@ -1,5 +1,6 @@
 package com.azadishashn.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
@@ -14,6 +15,10 @@ import com.azadishashn.app.game.Screen
 
 @Composable
 fun AzadiApp(vm: GameViewModel = viewModel()) {
+    // Intercept system Back everywhere except the root Setup screen, so Back
+    // navigates within the app instead of closing it.
+    BackHandler(enabled = vm.state.screen != Screen.Setup) { vm.onBack() }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
