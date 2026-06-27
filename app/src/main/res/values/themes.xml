@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base platform theme; the real theming lives in Compose (ui/theme). -->
+    <style name="Theme.AzadiShashn" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
