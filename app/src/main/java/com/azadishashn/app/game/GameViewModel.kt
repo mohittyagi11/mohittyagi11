@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class Screen { Setup, Settings, Round, Result, Standings }
+enum class Screen { Setup, Settings, Round, Result, Standings, Edit }
 
 @Serializable
 data class GameState(
@@ -357,6 +357,36 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(screen = Screen.Standings, dashboardReturn = null)
     }
 
+    // -- Manual repair (edit current game state) -----------------------------
+
+    fun openEdit() {
+        state = state.copy(screen = Screen.Edit)
+    }
+
+    fun cancelEdit() {
+        state = state.copy(screen = Screen.Standings)
+    }
+
+    /**
+     * Overwrite the round, who is answering (the ★), and every player's ideology
+     * card counts, then drop back into the current question. The current answer is
+     * resolved on top of the edited state.
+     */
+    fun applyEdit(round: Int, activeId: Int?, counts: Map<Int, Map<String, Int>>) {
+        val players = state.players.map { p ->
+            val c = counts[p.id]
+            if (c != null) p.copy(counts = c.filterValues { it > 0 }) else p
+        }
+        val idx = players.indexOfFirst { it.id == activeId }.coerceAtLeast(0)
+        state = state.copy(
+            players = players,
+            round = round.coerceAtLeast(1),
+            activeIndex = if (players.isEmpty()) 0 else idx,
+            screen = Screen.Round,
+            dashboardReturn = null,
+        )
+    }
+
     fun newGame() {
         seenTitles.clear()
         state = GameState(players = state.players.map { it.copy(counts = emptyMap()) })
@@ -373,6 +403,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             Screen.Round -> state.copy(screen = Screen.Setup)
             Screen.Result -> state
             Screen.Standings -> state.copy(screen = state.dashboardReturn ?: Screen.Setup, dashboardReturn = null)
+            Screen.Edit -> state.copy(screen = Screen.Standings)
             Screen.Setup -> state
         }
     }

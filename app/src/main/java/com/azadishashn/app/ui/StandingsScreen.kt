@@ -91,13 +91,14 @@ fun StandingsScreen(vm: GameViewModel) {
             Button(onClick = vm::leaveDashboard, modifier = Modifier.fillMaxWidth()) {
                 Text("Resume game")
             }
-            OutlinedButton(onClick = vm::newGame, modifier = Modifier.fillMaxWidth()) {
-                Text("New game (keep players)")
+        }
+        if (s.players.isNotEmpty()) {
+            OutlinedButton(onClick = vm::openEdit, modifier = Modifier.fillMaxWidth()) {
+                Text("✏️  Edit game state")
             }
-        } else {
-            Button(onClick = vm::newGame, modifier = Modifier.fillMaxWidth()) {
-                Text("New game (keep players)")
-            }
+        }
+        OutlinedButton(onClick = vm::newGame, modifier = Modifier.fillMaxWidth()) {
+            Text("New game (keep players)")
         }
     }
 }
