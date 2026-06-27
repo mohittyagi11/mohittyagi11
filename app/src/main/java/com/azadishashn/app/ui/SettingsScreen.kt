@@ -1,6 +1,5 @@
 package com.azadishashn.app.ui
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,7 +7,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -32,10 +33,13 @@ import com.azadishashn.app.game.GameViewModel
 fun SettingsScreen(vm: GameViewModel) {
     var key by remember { mutableStateOf(vm.apiKey) }
     var model by remember { mutableStateOf(vm.model) }
+    var context by remember { mutableStateOf(vm.context) }
+    var voice by remember { mutableStateOf(vm.voiceLang) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
         Text(
@@ -63,6 +67,37 @@ fun SettingsScreen(vm: GameViewModel) {
         )
 
         Spacer(Modifier.height(20.dp))
+        Text("Context / country", fontWeight = FontWeight.Bold)
+        Text(
+            "Scenarios are framed here — the world's dilemmas, set in this context.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        OutlinedTextField(
+            value = context,
+            onValueChange = { context = it },
+            label = { Text("e.g. India") },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+        )
+
+        Spacer(Modifier.height(20.dp))
+        Text("Voice input language", fontWeight = FontWeight.Bold)
+        SettingsStore.VOICE_LANGS.forEach { (label, tag) ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectable(selected = voice == tag, onClick = { voice = tag })
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = voice == tag, onClick = { voice = tag })
+                Text(label, modifier = Modifier.padding(start = 4.dp))
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
         Text("Model", fontWeight = FontWeight.Bold)
         SettingsStore.MODELS.forEach { (label, id) ->
             Row(
@@ -77,11 +112,10 @@ fun SettingsScreen(vm: GameViewModel) {
             }
         }
 
-        Spacer(Modifier.weight(1f))
-
+        Spacer(Modifier.height(24.dp))
         Button(
             onClick = {
-                vm.saveSettings(key, model)
+                vm.saveSettings(key, model, context, voice)
                 vm.closeSettings()
             },
             modifier = Modifier.fillMaxWidth(),

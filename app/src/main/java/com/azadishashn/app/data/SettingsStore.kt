@@ -21,19 +21,40 @@ class SettingsStore(context: Context) {
         get() = prefs.getString(KEY_MODEL, DEFAULT_MODEL).orEmpty()
         set(value) = prefs.edit().putString(KEY_MODEL, value).apply()
 
+    /** The country/setting scenarios are framed in (global dilemmas, local context). */
+    var context: String
+        get() = prefs.getString(KEY_CONTEXT, DEFAULT_CONTEXT).orEmpty()
+        set(value) = prefs.edit().putString(KEY_CONTEXT, value.trim().ifEmpty { DEFAULT_CONTEXT }).apply()
+
+    /** BCP-47 language tag for voice input. */
+    var voiceLang: String
+        get() = prefs.getString(KEY_VOICE, DEFAULT_VOICE).orEmpty()
+        set(value) = prefs.edit().putString(KEY_VOICE, value).apply()
+
     val hasKey: Boolean get() = apiKey.isNotBlank()
 
     companion object {
         private const val KEY_API = "api_key"
         private const val KEY_MODEL = "model"
+        private const val KEY_CONTEXT = "context"
+        private const val KEY_VOICE = "voice_lang"
 
         const val DEFAULT_MODEL = "claude-opus-4-8"
+        const val DEFAULT_CONTEXT = "India"
+        const val DEFAULT_VOICE = "hi-IN"
 
         /** label -> model id, shown in the Settings picker. */
         val MODELS: List<Pair<String, String>> = listOf(
             "Opus 4.8 — richest scenarios" to "claude-opus-4-8",
             "Sonnet 4.6 — fast & cheap (good for live play)" to "claude-sonnet-4-6",
             "Haiku 4.5 — fastest / cheapest" to "claude-haiku-4-5",
+        )
+
+        /** label -> BCP-47 tag, for the voice-input picker. */
+        val VOICE_LANGS: List<Pair<String, String>> = listOf(
+            "Hindi / Hinglish" to "hi-IN",
+            "English (India)" to "en-IN",
+            "English (US)" to "en-US",
         )
     }
 }

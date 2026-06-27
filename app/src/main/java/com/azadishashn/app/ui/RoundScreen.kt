@@ -153,7 +153,10 @@ private fun RoundBody(vm: GameViewModel) {
     fun startVoice() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your argument")
+            // Hindi / Hinglish by default (configurable in Settings); Claude understands it.
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, vm.voiceLang)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, vm.voiceLang)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your answer")
         }
         try {
             voiceHint = null

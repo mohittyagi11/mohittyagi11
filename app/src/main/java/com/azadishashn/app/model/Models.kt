@@ -70,6 +70,7 @@ data class Verdict(
 // Game state — lives in memory, driven by the ViewModel.
 // ---------------------------------------------------------------------------
 
+@Serializable
 data class Player(
     val id: Int,
     val name: String,
@@ -80,6 +81,7 @@ data class Player(
 }
 
 /** Result of resolving a turn: who earned what, and why it was (or wasn't) awarded. */
+@Serializable
 data class AwardResult(
     val playerName: String,
     val ideology: String,

@@ -53,6 +53,7 @@ class ClaudeClient(
      */
     suspend fun generateRound(
         themes: List<String>,
+        context: String,
         avoidTitles: List<String>,
     ): RoundData = withContext(Dispatchers.IO) {
         val avoid = if (avoidTitles.isEmpty()) "" else
@@ -61,10 +62,15 @@ class ClaudeClient(
         val user = """
             Generate ONE round for SHASN: Azadi, a debate game about power and governance.
 
+            Set the scenario in a $context context. Draw on dilemmas that leaders, reformers, and
+            revolutionaries ANYWHERE in the world have actually faced, but frame each as a situation
+            playing out in $context — its institutions, regions, society, and stakes. This is NOT
+            limited to $context's own historical problems; it is the world's dilemmas, localised.
+
             Theme(s) to lean hard into: $themeLine.
-            Range WIDELY across eras, countries, and governance structures. Pull from political,
-            social, technological, environmental, legal, ethical, philosophical, dark, and
-            provocative angles. Do NOT default to economic or industrial crises.
+            Range WIDELY across eras and governance structures. Pull from political, social,
+            technological, environmental, legal, ethical, philosophical, dark, and provocative
+            angles. Do NOT default to economic or industrial crises.
 
             The four ideologies are fixed:
             $IDEOLOGY_BRIEF

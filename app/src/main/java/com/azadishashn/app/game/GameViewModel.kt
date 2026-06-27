@@ -4,8 +4,10 @@ import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.azadishashn.app.data.GameStore
 import com.azadishashn.app.data.OfflineContent
 import com.azadishashn.app.data.SettingsStore
 import com.azadishashn.app.model.AwardResult
@@ -16,9 +18,12 @@ import com.azadishashn.app.model.Themes
 import com.azadishashn.app.model.Verdict
 import com.azadishashn.app.net.ClaudeClient
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 
+@Serializable
 enum class Screen { Setup, Settings, Round, Result, Standings }
 
+@Serializable
 data class GameState(
     val screen: Screen = Screen.Setup,
     val players: List<Player> = emptyList(),
@@ -57,17 +62,40 @@ data class GameState(
 class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     private val settings = SettingsStore(app)
+    private val store = GameStore(app)
 
     var state by mutableStateOf(GameState())
         private set
 
     val apiKey: String get() = settings.apiKey
     val model: String get() = settings.model
+    val context: String get() = settings.context
+    val voiceLang: String get() = settings.voiceLang
     val hasKey: Boolean get() = settings.hasKey
 
     private val seenTitles = mutableListOf<String>()
     private var nextPlayerId = 0
     private val twistLimit = 2
+
+    init {
+        // Restore an in-progress game so app updates / restarts don't kill it.
+        val saved = store.load()
+        if (saved != null && saved.players.isNotEmpty()) {
+            nextPlayerId = (saved.players.maxOfOrNull { it.id } ?: -1) + 1
+            var restored = saved.copy(loading = false, error = null)
+            // If we were killed at the theme-pick stage, repopulate the chips.
+            if (restored.screen == Screen.Round && restored.current == null &&
+                settings.hasKey && restored.availableThemes.isEmpty()
+            ) {
+                restored = restored.copy(availableThemes = Themes.sample(12))
+            }
+            state = restored
+        }
+        // Persist on every state change.
+        viewModelScope.launch {
+            snapshotFlow { state }.collect { store.save(it) }
+        }
+    }
 
     // -- Setup ---------------------------------------------------------------
 
@@ -95,9 +123,11 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(screen = Screen.Settings)
     }
 
-    fun saveSettings(apiKey: String, model: String) {
+    fun saveSettings(apiKey: String, model: String, context: String, voiceLang: String) {
         settings.apiKey = apiKey
         settings.model = model
+        settings.context = context
+        settings.voiceLang = voiceLang
     }
 
     fun closeSettings() {
@@ -158,7 +188,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(loading = true, error = null, lastThemes = themes)
         viewModelScope.launch {
             runCatching {
-                ClaudeClient(settings.apiKey, settings.model).generateRound(themes, seenTitles.takeLast(8))
+                ClaudeClient(settings.apiKey, settings.model)
+                    .generateRound(themes, settings.context, seenTitles.takeLast(8))
             }.onSuccess { round ->
                 seenTitles += round.scenario.title
                 state = state.copy(current = round, loading = false, usingOffline = false)
