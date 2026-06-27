@@ -30,6 +30,7 @@ import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.ui.components.AzadiScaffold
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.SectionCard
+import com.azadishashn.app.ui.theme.Dim
 
 @Composable
 fun SettingsScreen(vm: GameViewModel) {
@@ -44,8 +45,8 @@ fun SettingsScreen(vm: GameViewModel) {
                 .fillMaxSize()
                 .padding(pad)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 20.dp),
+                .padding(horizontal = Dim.screenH)
+                .padding(bottom = Dim.sectionGap),
         ) {
             SectionCard {
                 Text("Anthropic API key", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)

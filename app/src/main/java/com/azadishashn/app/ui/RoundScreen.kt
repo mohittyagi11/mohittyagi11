@@ -6,7 +6,9 @@ import android.content.Intent
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,17 +24,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,16 +48,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.model.OptionCard
 import com.azadishashn.app.ui.components.AzadiScaffold
+import com.azadishashn.app.ui.components.GeneratingView
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.IdeologyChip
 import com.azadishashn.app.ui.components.PrimaryCta
-import com.azadishashn.app.ui.components.SectionCard
+import com.azadishashn.app.ui.components.ScenarioStory
+import com.azadishashn.app.ui.theme.Dim
 import com.azadishashn.app.ui.theme.IdeologyTheme
 
 private enum class RoundPhase { QUESTION, ANSWER }
@@ -81,14 +82,16 @@ fun RoundScreen(vm: GameViewModel) {
             Modifier
                 .fillMaxSize()
                 .padding(pad)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = Dim.screenH),
         ) {
             when {
+                // RoundBody overlays the loader itself while twisting/judging, so
+                // the player's typed answer and phase survive a failed judge.
                 s.current != null -> RoundBody(vm)
-                s.loading -> LoadingBlock("Generating the scenario…")
+                s.loading -> GeneratingView(s.loadingKind, vm.context)
                 s.error != null -> ErrorBlock(vm)
                 vm.hasKey -> ThemePicker(vm)
-                else -> LoadingBlock("Loading…")
+                else -> GeneratingView(s.loadingKind, vm.context)
             }
         }
     }
@@ -105,13 +108,13 @@ private fun ThemePicker(vm: GameViewModel) {
     ) {
         Text(
             "Pick a theme — or a few — then Generate. Skip the picks to roll a random one.",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Dim.sectionGap))
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(Dim.tight),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             s.availableThemes.forEach { theme ->
                 FilterChip(
@@ -121,7 +124,7 @@ private fun ThemePicker(vm: GameViewModel) {
                 )
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Dim.sectionGap))
         OutlinedButton(
             onClick = vm::refreshThemes,
             shape = MaterialTheme.shapes.large,
@@ -131,12 +134,12 @@ private fun ThemePicker(vm: GameViewModel) {
             Spacer(Modifier.width(8.dp))
             Text("Refresh themes")
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Dim.itemGap))
         PrimaryCta(
             text = if (s.selectedThemes.isEmpty()) "Surprise me — generate" else "Generate question",
             onClick = vm::generate,
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(Dim.sectionGap))
     }
 }
 
@@ -176,6 +179,7 @@ private fun RoundBody(vm: GameViewModel) {
         }
     }
 
+    Box(Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -186,52 +190,69 @@ private fun RoundBody(vm: GameViewModel) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Dim.tight))
 
-        ScenarioCard(vm)
+        ScenarioStory(
+            round = round,
+            isReading = vm.isReading,
+            onNarrate = {
+                val dim = round.scenario.dimension.takeIf { it.isNotBlank() }?.let { "$it. " } ?: ""
+                vm.readOut("$dim${round.scenario.title}. ${round.scenario.situation}  ${round.dilemma.question}")
+            },
+            onStop = vm::stopReadOut,
+        )
 
         when (phase) {
             RoundPhase.QUESTION -> {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(Dim.sectionGap))
                 Text(
                     "${s.questioner?.name}: read this out to ${s.activePlayer?.name}. " +
-                        "You may twist the card to make the easy answer costly.",
-                    style = MaterialTheme.typography.bodySmall,
+                        "Twist it to make the easy answer costly, or change it for a fresh scenario.",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (vm.hasKey) {
-                    Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Dim.itemGap))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dim.tight)) {
+                    if (vm.hasKey) {
+                        OutlinedButton(
+                            onClick = vm::twist,
+                            enabled = s.twistsUsedThisTurn < 2,
+                            shape = MaterialTheme.shapes.large,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.height(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Twist (${2 - s.twistsUsedThisTurn})")
+                        }
+                    }
                     OutlinedButton(
-                        onClick = vm::twist,
-                        enabled = s.twistsUsedThisTurn < 2 && !s.loading,
+                        onClick = vm::changeQuestion,
                         shape = MaterialTheme.shapes.large,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.weight(1f),
                     ) {
-                        Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.height(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Twist the card (${2 - s.twistsUsedThisTurn} left)")
+                        Icon(Icons.Filled.Autorenew, contentDescription = null, modifier = Modifier.height(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Change")
                     }
                 }
-                if (s.loading) LoadingInline()
                 s.error?.let { ErrorLine(it) }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(Dim.sectionGap))
                 PrimaryCta(
                     text = "Pass to ${s.activePlayer?.name} to answer",
                     onClick = { phase = RoundPhase.ANSWER },
-                    enabled = !s.loading,
                 )
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(Dim.sectionGap))
             }
 
             RoundPhase.ANSWER -> {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(Dim.sectionGap))
                 Text(
                     "${s.activePlayer?.name}: answer in your own words. " +
                         "Claude awards +2 to the ideology your answer most embodies and +1 to the next.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Dim.itemGap))
 
                 Button(
                     onClick = { startVoice() },
@@ -250,31 +271,33 @@ private fun RoundBody(vm: GameViewModel) {
                     onValueChange = { argument = it },
                     label = { Text("…or type / edit") },
                     shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateContentSize(),
                     minLines = 2,
                 )
 
                 if (!vm.hasKey) {
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(Dim.itemGap))
                     Text(
                         "Offline — tag your MAIN ideology (+2):",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(Dim.tight))
                     round.options.forEach { option ->
                         OptionRow(option, selected = s.championedOptionId == option.id) {
                             vm.champion(option.id)
                         }
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(Dim.tight))
                     }
                     Text(
                         "…and a secondary lean (+1):",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(6.dp))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Spacer(Modifier.height(Dim.tight))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Dim.tight)) {
                         round.options.filter { it.id != s.championedOptionId }.forEach { option ->
                             IdeologyChip(
                                 name = option.ideology,
@@ -285,10 +308,9 @@ private fun RoundBody(vm: GameViewModel) {
                     }
                 }
 
-                if (s.loading) LoadingInline()
                 s.error?.let { ErrorLine(it) }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Dim.itemGap))
                 Text(
                     "Real-world note: ${round.dilemma.realWorldNote}",
                     style = MaterialTheme.typography.bodySmall,
@@ -296,67 +318,29 @@ private fun RoundBody(vm: GameViewModel) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(Dim.sectionGap))
                 PrimaryCta(
                     text = if (vm.hasKey) "Resolve — Claude decides" else "Resolve",
                     onClick = { vm.resolve(argument) },
-                    enabled = !s.loading &&
-                        if (vm.hasKey) argument.isNotBlank() else s.championedOptionId != null,
+                    enabled = if (vm.hasKey) argument.isNotBlank() else s.championedOptionId != null,
                 )
                 TextButton(
                     onClick = { phase = RoundPhase.QUESTION },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Re-read the question") }
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(Dim.sectionGap))
             }
         }
     }
-}
 
-@Composable
-private fun ScenarioCard(vm: GameViewModel) {
-    val round = vm.state.current!!
-    SectionCard {
-        if (round.scenario.dimension.isNotBlank()) {
-            Text(
-                round.scenario.dimension.uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.secondary,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(4.dp))
-        }
-        Text(round.scenario.title, style = MaterialTheme.typography.headlineSmall)
-        Text(
-            "${round.scenario.setting} · ${round.scenario.era}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.tertiary,
-        )
-        Spacer(Modifier.height(10.dp))
-        Text(round.scenario.situation, style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(12.dp))
-        Text(round.dilemma.question, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        val reading = vm.isReading
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconActionButton(
-                if (reading) Icons.Filled.Stop else Icons.AutoMirrored.Filled.VolumeUp,
-                contentDescription = if (reading) "Stop" else "Read aloud",
-                tint = if (reading) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                onClick = {
-                    if (reading) {
-                        vm.stopReadOut()
-                    } else {
-                        val dim = round.scenario.dimension.takeIf { it.isNotBlank() }?.let { "$it. " } ?: ""
-                        vm.readOut("$dim${round.scenario.title}. ${round.scenario.situation}  ${round.dilemma.question}")
-                    }
-                },
-            )
-            Text(
-                if (reading) "Stop" else "Read aloud",
-                style = MaterialTheme.typography.labelLarge,
-                color = if (reading) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-            )
+        if (s.loading) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(MaterialTheme.colorScheme.background),
+            ) {
+                GeneratingView(s.loadingKind, vm.context)
+            }
         }
     }
 }
@@ -373,48 +357,26 @@ private fun OptionRow(option: OptionCard, selected: Boolean, onClick: () -> Unit
         colors = CardDefaults.cardColors(containerColor = container),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(14.dp)) {
+        Column(Modifier.padding(Dim.cardPad)) {
             IdeologyBadge(option.ideology)
-            Spacer(Modifier.height(8.dp))
-            Text(option.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(Dim.tight))
+            Text(option.label, style = MaterialTheme.typography.titleSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun LoadingInline() {
-    Spacer(Modifier.height(8.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        CircularProgressIndicator(modifier = Modifier.height(20.dp))
-        Text("  Thinking…", style = MaterialTheme.typography.bodySmall)
-    }
-}
-
-@Composable
 private fun ErrorLine(message: String) {
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(Dim.tight))
     Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-}
-
-@Composable
-private fun LoadingBlock(message: String) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        CircularProgressIndicator()
-        Spacer(Modifier.height(12.dp))
-        Text(message, style = MaterialTheme.typography.bodyMedium)
-    }
 }
 
 @Composable
 private fun ErrorBlock(vm: GameViewModel) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text("Couldn't reach Claude", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("Couldn't reach Claude", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
         Text(vm.state.error ?: "", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Dim.itemGap))
         PrimaryCta(text = "Retry", onClick = vm::retryRound)
         OutlinedButton(
             onClick = vm::useOfflineRound,

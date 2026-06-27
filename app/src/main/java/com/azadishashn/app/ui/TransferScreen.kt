@@ -38,6 +38,7 @@ import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.ui.components.AzadiScaffold
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.SectionCard
+import com.azadishashn.app.ui.theme.Dim
 
 /**
  * Export / Import the whole game as JSON: copy or share a snapshot to take a
@@ -58,8 +59,8 @@ fun TransferScreen(vm: GameViewModel) {
                 .fillMaxSize()
                 .padding(pad)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 20.dp),
+                .padding(horizontal = Dim.screenH)
+                .padding(bottom = Dim.sectionGap),
         ) {
             Text(
                 "Take a copy of the whole game (players, cards, round, current question) " +

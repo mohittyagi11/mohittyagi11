@@ -5,15 +5,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Deep navy field with a diagonal gradient for depth, full-bleed. -->
+    <!-- Navy field with a soft radial vignette glow, full-bleed for the mask. -->
     <path android:pathData="M0,0 h108 v108 h-108 z">
         <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="linear"
-                android:startX="0" android:startY="0"
-                android:endX="108" android:endY="108"
-                android:startColor="#1B2250"
-                android:endColor="#0C1028" />
+            <gradient android:type="radial"
+                android:centerX="54" android:centerY="48" android:gradientRadius="86"
+                android:startColor="#232C5E" android:endColor="#0B0E22" />
         </aapt:attr>
     </path>
 </vector>

@@ -7,7 +7,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
@@ -42,8 +45,12 @@ fun AzadiApp(vm: GameViewModel = viewModel()) {
             AnimatedContent(
                 targetState = vm.state.screen,
                 transitionSpec = {
-                    (fadeIn(tween(220)) + slideInHorizontally { it / 12 }) togetherWith
-                        (fadeOut(tween(160)) + slideOutHorizontally { -it / 12 })
+                    val enterSlide = spring<IntOffset>(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    )
+                    (fadeIn(tween(260)) + slideInHorizontally(enterSlide) { it / 6 }) togetherWith
+                        (fadeOut(tween(180)) + slideOutHorizontally(tween(180)) { -it / 8 })
                 },
                 label = "screen",
             ) { screen ->

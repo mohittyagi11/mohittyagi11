@@ -34,6 +34,7 @@ import com.azadishashn.app.ui.components.IdeologyDistributionBar
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.RankMedallion
 import com.azadishashn.app.ui.components.SectionCard
+import com.azadishashn.app.ui.theme.Dim
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -51,11 +52,11 @@ fun StandingsScreen(vm: GameViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(pad)
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = Dim.screenH),
         ) {
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Dim.itemGap),
             ) {
                 itemsIndexed(ranked) { index, player ->
                     SectionCard {

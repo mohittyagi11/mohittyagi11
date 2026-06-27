@@ -37,6 +37,7 @@ import com.azadishashn.app.ui.components.AzadiScaffold
 import com.azadishashn.app.ui.components.IdeologyDot
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.SectionCard
+import com.azadishashn.app.ui.theme.Dim
 
 @Composable
 fun EditScreen(vm: GameViewModel) {
@@ -69,8 +70,8 @@ fun EditScreen(vm: GameViewModel) {
                 .fillMaxSize()
                 .padding(pad)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 20.dp),
+                .padding(horizontal = Dim.screenH)
+                .padding(bottom = Dim.sectionGap),
         ) {
             Text(
                 "Set the round, the turn, who started, and each player's cards. " +

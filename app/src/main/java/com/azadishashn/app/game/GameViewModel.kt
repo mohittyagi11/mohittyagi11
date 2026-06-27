@@ -40,6 +40,10 @@ data class GameState(
     val lastResult: AwardResult? = null,
     val twistsUsedThisTurn: Int = 0,
     val loading: Boolean = false,
+    /** What we're loading: "generate" | "twist" | "judge" | null — drives the loader captions. */
+    val loadingKind: String? = null,
+    /** Titles of scenarios already seen this game, so generation avoids repeats. Persisted. */
+    val seenTitles: List<String> = emptyList(),
     val error: String? = null,
     val usingOffline: Boolean = false,
     // Theme picking (questioner, before the question is generated).
@@ -95,7 +99,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     val voiceLang: String get() = settings.voiceLang
     val hasKey: Boolean get() = settings.hasKey
 
-    private val seenTitles = mutableListOf<String>()
     private var nextPlayerId = 0
     private val twistLimit = 2
 
@@ -104,7 +107,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val saved = store.load()
         if (saved != null && saved.players.isNotEmpty()) {
             nextPlayerId = (saved.players.maxOfOrNull { it.id } ?: -1) + 1
-            var restored = saved.copy(loading = false, error = null)
+            var restored = saved.copy(loading = false, loadingKind = null, error = null)
             // If we were killed at the theme-pick stage, repopulate the chips.
             if (restored.screen == Screen.Round && restored.current == null &&
                 settings.hasKey && restored.availableThemes.isEmpty()
@@ -204,32 +207,63 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         loadRound(themes)
     }
 
-    private fun loadRound(themes: List<String>) {
+    private fun loadRound(themes: List<String>, retry: Boolean = false) {
         if (!settings.hasKey) {
             useOfflineRound()
             return
         }
-        state = state.copy(loading = true, error = null, lastThemes = themes)
+        state = state.copy(loading = true, loadingKind = "generate", error = null, lastThemes = themes)
+        val avoid = state.seenTitles.takeLast(20)
         viewModelScope.launch {
             runCatching {
                 ClaudeClient(settings.apiKey, settings.model)
-                    .generateRound(themes, settings.context, seenTitles.takeLast(8))
+                    .generateRound(themes, settings.context, avoid)
             }.onSuccess { round ->
-                seenTitles += round.scenario.title
-                state = state.copy(current = round, loading = false, usingOffline = false)
+                val title = round.scenario.title.trim()
+                val dup = state.seenTitles.any { it.trim().equals(title, ignoreCase = true) }
+                if (dup && !retry) {
+                    // Claude repeated a scenario — record it and try once more, explicitly avoiding it.
+                    state = state.copy(seenTitles = state.seenTitles + round.scenario.title)
+                    loadRound(themes, retry = true)
+                } else {
+                    state = state.copy(
+                        current = round,
+                        seenTitles = state.seenTitles + round.scenario.title,
+                        loading = false,
+                        loadingKind = null,
+                        usingOffline = false,
+                    )
+                }
             }.onFailure { e ->
-                state = state.copy(loading = false, error = e.message ?: "Generation failed")
+                state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Generation failed")
             }
         }
     }
 
     fun useOfflineRound() {
-        val round = OfflineContent.ROUNDS[(0 until OfflineContent.ROUNDS.size).random()]
-        state = state.copy(current = round, loading = false, error = null, usingOffline = true)
+        // Avoid handing out the same bundled round twice in a row.
+        val currentTitle = state.current?.scenario?.title
+        val pool = OfflineContent.ROUNDS.filter { it.scenario.title != currentTitle }
+            .ifEmpty { OfflineContent.ROUNDS }
+        val round = pool[pool.indices.random()]
+        state = state.copy(current = round, loading = false, loadingKind = null, error = null, usingOffline = true)
     }
 
     fun retryRound() {
         loadRound(state.lastThemes.ifEmpty { listOf(Themes.random()) })
+    }
+
+    /** Swap the current question for a fresh, non-repeating one (questioner's "change the card"). */
+    fun changeQuestion() {
+        if (state.loading) return
+        val cur = state.current
+        if (cur != null) {
+            state = state.copy(seenTitles = state.seenTitles + cur.scenario.title)
+        }
+        val themes = state.lastThemes.ifEmpty {
+            if (state.selectedThemes.isNotEmpty()) state.selectedThemes.toList() else listOf(Themes.random())
+        }
+        loadRound(themes)
     }
 
     fun champion(optionId: String) {
@@ -244,7 +278,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun twist() {
         val round = state.current ?: return
         if (!settings.hasKey || state.twistsUsedThisTurn >= twistLimit) return
-        state = state.copy(loading = true, error = null)
+        state = state.copy(loading = true, loadingKind = "twist", error = null)
         viewModelScope.launch {
             runCatching {
                 ClaudeClient(settings.apiKey, settings.model).twistRound(round)
@@ -254,9 +288,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                     championedOptionId = null,
                     twistsUsedThisTurn = state.twistsUsedThisTurn + 1,
                     loading = false,
+                    loadingKind = null,
                 )
             }.onFailure { e ->
-                state = state.copy(loading = false, error = e.message ?: "Twist failed")
+                state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Twist failed")
             }
         }
     }
@@ -269,7 +304,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
         if (settings.hasKey && argument.isNotBlank()) {
             // Player argued; Claude names the dominant and secondary ideologies.
-            state = state.copy(loading = true, error = null)
+            state = state.copy(loading = true, loadingKind = "judge", error = null)
             viewModelScope.launch {
                 runCatching {
                     ClaudeClient(settings.apiKey, settings.model).judge(round, argument)
@@ -280,7 +315,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                         ?: Ideologies.NAMES.first { it != primary }
                     award(active, primary, secondary, v.strength.coerceIn(1, 10), v.reasoning, v.historicalOutcome)
                 }.onFailure { e ->
-                    state = state.copy(loading = false, error = e.message ?: "Judging failed")
+                    state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Judging failed")
                 }
             }
         } else {
@@ -346,6 +381,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(
             players = updated,
             loading = false,
+            loadingKind = null,
             lastResult = AwardResult(
                 playerName = active.name,
                 primary = primary,
@@ -424,7 +460,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun newGame() {
-        seenTitles.clear()
         state = GameState(players = state.players.map { it.copy(counts = emptyMap()) })
     }
 
@@ -458,9 +493,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     /** Load a pasted/exported game, replacing the current one. Returns false if it won't parse. */
     fun importState(raw: String): Boolean {
         val loaded = store.import(raw)?.takeIf { it.players.isNotEmpty() } ?: return false
-        seenTitles.clear()
         nextPlayerId = (loaded.players.maxOfOrNull { it.id } ?: -1) + 1
-        state = loaded.copy(loading = false, error = null, transferReturn = null, dashboardReturn = null)
+        state = loaded.copy(loading = false, loadingKind = null, error = null, transferReturn = null, dashboardReturn = null)
         return true
     }
 

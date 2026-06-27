@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.azadishashn.app.ui.theme.Dim
 import com.azadishashn.app.ui.theme.IdeologyTheme
 
 /** The one consistent elevated card used everywhere a section is grouped. */
@@ -49,7 +50,7 @@ fun SectionCard(
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
-        Column(Modifier.padding(16.dp), content = content)
+        Column(Modifier.padding(Dim.cardPad), content = content)
     }
 }
 

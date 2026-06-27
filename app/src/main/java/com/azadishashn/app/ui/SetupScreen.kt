@@ -40,6 +40,7 @@ import com.azadishashn.app.ui.components.FlowBackground
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.SectionCard
+import com.azadishashn.app.ui.theme.Dim
 
 @Composable
 fun SetupScreen(vm: GameViewModel) {
@@ -54,7 +55,7 @@ fun SetupScreen(vm: GameViewModel) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(20.dp),
+                .padding(horizontal = Dim.screenH, vertical = Dim.screenV),
         ) {
             // Hero
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -107,7 +108,7 @@ fun SetupScreen(vm: GameViewModel) {
             Spacer(Modifier.height(10.dp))
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Dim.itemGap),
             ) {
                 items(players, key = { it.id }) { p ->
                     SectionCard {
