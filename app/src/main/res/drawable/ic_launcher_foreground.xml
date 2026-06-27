@@ -3,14 +3,18 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Navy chakra-blue disc with a white check — a decision made. Kept inside
-         the adaptive safe zone (centered, ~48dp wide). -->
-    <path android:fillColor="#1A237E" android:pathData="M54,30 A24,24 0 1 1 53.99,30 Z" />
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="7"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillColor="#00000000"
-        android:pathData="M43,55 l8,8 l16,-18" />
+    <!-- Four translucent dots — the four ideologies — overlapping into a bright
+         centre. Abstract, bold, Material colour-blend. Kept in the safe zone. -->
+    <!-- top -->
+    <path android:fillColor="#FFCA28" android:fillAlpha="0.9"
+        android:pathData="M36,36 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z" />
+    <!-- right -->
+    <path android:fillColor="#FF6E6E" android:fillAlpha="0.9"
+        android:pathData="M54,54 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z" />
+    <!-- bottom -->
+    <path android:fillColor="#2EE6C6" android:fillAlpha="0.9"
+        android:pathData="M36,72 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z" />
+    <!-- left -->
+    <path android:fillColor="#9E7BFF" android:fillAlpha="0.9"
+        android:pathData="M18,54 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 z" />
 </vector>
