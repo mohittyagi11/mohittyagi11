@@ -12,6 +12,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontStyle
@@ -81,6 +82,19 @@ fun ResultScreen(vm: GameViewModel) {
                 }
             }
         }
+
+        Spacer(Modifier.height(8.dp))
+        TextButton(
+            onClick = {
+                vm.readOut(
+                    "${r.playerName} earns one ${r.primary} card. " +
+                        "Resources: ${r.primary} plus two ${Ideologies.resourceOf(r.primary)}, " +
+                        "and ${r.secondary} plus one ${Ideologies.resourceOf(r.secondary)}. " +
+                        "${r.reasoning}. ${r.historicalNote}",
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("🔊  Read aloud") }
 
         Spacer(Modifier.weight(1f))
 

@@ -328,6 +328,12 @@ private fun ScenarioCard(vm: GameViewModel) {
             Text(round.scenario.situation, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(12.dp))
             Text(round.dilemma.question, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = {
+                vm.readOut(
+                    "${round.scenario.title}. ${round.scenario.situation}  ${round.dilemma.question}",
+                )
+            }) { Text("🔊  Read aloud") }
         }
     }
 }

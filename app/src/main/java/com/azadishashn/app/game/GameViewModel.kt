@@ -17,6 +17,7 @@ import com.azadishashn.app.model.RoundData
 import com.azadishashn.app.model.Themes
 import com.azadishashn.app.model.Verdict
 import com.azadishashn.app.net.ClaudeClient
+import com.azadishashn.app.tts.Speaker
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
@@ -64,6 +65,15 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     private val settings = SettingsStore(app)
     private val store = GameStore(app)
+    private val speaker = Speaker(app)
+
+    fun readOut(text: String) = speaker.speak(text)
+    fun stopReadOut() = speaker.stop()
+
+    override fun onCleared() {
+        speaker.shutdown()
+        super.onCleared()
+    }
 
     var state by mutableStateOf(GameState())
         private set
