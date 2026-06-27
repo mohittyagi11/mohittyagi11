@@ -21,7 +21,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,8 +36,9 @@ import com.azadishashn.app.model.Ideologies
 fun EditScreen(vm: GameViewModel) {
     val players = vm.state.players
 
-    var round by remember { mutableIntStateOf(vm.state.round) }
-    var activeId by remember { mutableStateOf(vm.state.activePlayer?.id ?: players.firstOrNull()?.id) }
+    var starterId by remember {
+        mutableStateOf(vm.state.starterId ?: vm.state.activePlayer?.id ?: players.firstOrNull()?.id)
+    }
     // key = "$playerId#$ideology" -> count
     val counts = remember {
         mutableStateMapOf<String, Int>().apply {
@@ -47,6 +47,15 @@ fun EditScreen(vm: GameViewModel) {
             }
         }
     }
+
+    // Derived from total cards (one card per completed turn) + who started.
+    val n = players.size
+    val totalCards = players.sumOf { p -> Ideologies.NAMES.sumOf { counts["${p.id}#$it"] ?: 0 } }
+    val starterIdx = players.indexOfFirst { it.id == starterId }.coerceAtLeast(0)
+    val round = if (n > 0) totalCards / n + 1 else 1
+    val turnInRound = if (n > 0) totalCards % n + 1 else 1
+    val activeIdx = if (n > 0) (starterIdx + totalCards) % n else 0
+    val activeName = players.getOrNull(activeIdx)?.name ?: ""
 
     Column(
         modifier = Modifier
@@ -61,36 +70,51 @@ fun EditScreen(vm: GameViewModel) {
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            "Repair a broken game, then drop back into the current question.",
+            "Set who started and each player's ideology-card counts. The round and " +
+                "whose turn it is are worked out from the totals.",
             style = MaterialTheme.typography.bodySmall,
         )
         Spacer(Modifier.height(16.dp))
 
-        // Round
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Round", fontWeight = FontWeight.Bold)
-            Stepper(round, onDec = { if (round > 1) round-- }, onInc = { round++ })
+        // Live derived summary
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiary)) {
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    "Round $round · turn $turnInRound of ${n.coerceAtLeast(1)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text("$activeName answers next  ★", style = MaterialTheme.typography.bodyMedium)
+                Text("Total cards on the table: $totalCards", style = MaterialTheme.typography.bodySmall)
+            }
         }
-        Spacer(Modifier.height(12.dp))
 
-        Text("Players — ★ is who's answering; set each ideology's card count.", fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(16.dp))
+        Text("Who started the game?", fontWeight = FontWeight.Bold)
+        players.forEach { p ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = starterId == p.id, onClick = { starterId = p.id })
+                Text(p.name, modifier = Modifier.padding(start = 4.dp))
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Text("Ideology cards per player", fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
 
-        players.forEach { p ->
+        players.forEachIndexed { index, p ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = activeId == p.id, onClick = { activeId = p.id })
-                        Text(
-                            p.name + if (activeId == p.id) "  ★" else "",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
+                    Text(
+                        p.name + if (index == activeIdx) "   ★ answering" else "",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
                     Ideologies.ALL.forEach { ideo ->
                         val keyName = "${p.id}#${ideo.name}"
                         val value = counts[keyName] ?: 0
@@ -123,7 +147,7 @@ fun EditScreen(vm: GameViewModel) {
                 val byPlayer = players.associate { p ->
                     p.id to Ideologies.NAMES.associateWith { ideo -> counts["${p.id}#$ideo"] ?: 0 }
                 }
-                vm.applyEdit(round, activeId, byPlayer)
+                vm.applyEdit(starterId, byPlayer)
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Apply & resume") }

@@ -30,6 +30,7 @@ data class GameState(
     val players: List<Player> = emptyList(),
     val activeIndex: Int = 0,
     val round: Int = 1,
+    val starterId: Int? = null,
     val current: RoundData? = null,
     val championedOptionId: String? = null,
     val secondaryOptionId: String? = null,
@@ -124,7 +125,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun startGame(firstPlayerId: Int) {
         if (state.players.size < 2) return
         val idx = state.players.indexOfFirst { it.id == firstPlayerId }.coerceAtLeast(0)
-        state = state.copy(screen = Screen.Round, activeIndex = idx, round = 1)
+        state = state.copy(screen = Screen.Round, activeIndex = idx, round = 1, starterId = firstPlayerId)
         beginTurn()
     }
 
@@ -320,8 +321,11 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     // -- Flow ----------------------------------------------------------------
 
     fun nextTurn() {
-        val nextIndex = (state.activeIndex + 1) % state.players.size
-        val nextRound = if (nextIndex == 0) state.round + 1 else state.round
+        val n = state.players.size
+        val nextIndex = (state.activeIndex + 1) % n
+        val starterIdx = state.players.indexOfFirst { it.id == state.starterId }.coerceAtLeast(0)
+        // A round completes when the turn returns to whoever started.
+        val nextRound = if (nextIndex == starterIdx) state.round + 1 else state.round
         state = state.copy(activeIndex = nextIndex, round = nextRound)
         beginTurn()
     }
@@ -351,20 +355,24 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Overwrite the round, who is answering (the ★), and every player's ideology
-     * card counts, then drop back into the current question. The current answer is
-     * resolved on top of the edited state.
+     * Overwrite who started and each player's ideology-card counts, then DERIVE the
+     * round and whose turn it is from the total cards (one card per completed turn):
+     * round = totalCards / players + 1, and the next answerer = starter + totalCards.
+     * Drops back into the current question with the edited state.
      */
-    fun applyEdit(round: Int, activeId: Int?, counts: Map<Int, Map<String, Int>>) {
+    fun applyEdit(starterId: Int?, counts: Map<Int, Map<String, Int>>) {
         val players = state.players.map { p ->
             val c = counts[p.id]
             if (c != null) p.copy(counts = c.filterValues { it > 0 }) else p
         }
-        val idx = players.indexOfFirst { it.id == activeId }.coerceAtLeast(0)
+        val n = players.size.coerceAtLeast(1)
+        val totalCards = players.sumOf { it.total }
+        val starterIdx = players.indexOfFirst { it.id == starterId }.coerceAtLeast(0)
         state = state.copy(
             players = players,
-            round = round.coerceAtLeast(1),
-            activeIndex = if (players.isEmpty()) 0 else idx,
+            starterId = players.getOrNull(starterIdx)?.id,
+            round = totalCards / n + 1,
+            activeIndex = (starterIdx + totalCards) % n,
             screen = Screen.Round,
             dashboardReturn = null,
         )
