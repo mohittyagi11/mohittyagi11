@@ -17,7 +17,23 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        // A committed, stable debug key so every build is signed identically.
+        // This lets new builds install as an UPDATE over the old app, preserving
+        // app data (your saved API key) instead of forcing an uninstall.
+        // Debug keystores are not secrets (password is the conventional "android").
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
