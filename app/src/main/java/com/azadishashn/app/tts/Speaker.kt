@@ -2,15 +2,21 @@ package com.azadishashn.app.tts
 
 import android.content.Context
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import java.util.Locale
 
 /**
  * Text-to-Speech for reading questions, ideology cards, and rationale aloud.
  * Prefers Google's neural engine and the highest-quality available voice for a
- * more expressive read, falling back to the device default.
+ * more expressive read. [onSpeaking] reports start/stop so the UI can toggle a
+ * read/stop button. Callbacks fire on a background thread — marshal to the UI
+ * thread in the consumer.
  */
-class Speaker(context: Context) {
+class Speaker(
+    context: Context,
+    private val onSpeaking: (Boolean) -> Unit,
+) {
     private val appContext = context.applicationContext
     private var tts: TextToSpeech? = null
     private var ready = false
@@ -27,7 +33,6 @@ class Speaker(context: Context) {
                 if (status == TextToSpeech.SUCCESS) {
                     onReady()
                 } else if (engine != null) {
-                    // Google engine unavailable — fall back to the system default.
                     runCatching { tts?.shutdown() }
                     initEngine(null)
                 }
@@ -43,6 +48,14 @@ class Speaker(context: Context) {
         selectBestVoice(engine, locale)
         engine.setPitch(1.06f)
         engine.setSpeechRate(0.95f)
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) = onSpeaking(true)
+            override fun onDone(utteranceId: String?) = onSpeaking(false)
+            override fun onStop(utteranceId: String?, interrupted: Boolean) = onSpeaking(false)
+
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) = onSpeaking(false)
+        })
         ready = true
         pending?.let { text ->
             pending = null
@@ -50,7 +63,6 @@ class Speaker(context: Context) {
         }
     }
 
-    /** Pick the highest-quality on-device voice for the language (most expressive). */
     private fun selectBestVoice(engine: TextToSpeech, locale: Locale) {
         val voices: Set<Voice> = runCatching { engine.voices }.getOrNull() ?: return
         val sameLang = voices.filter { it.locale.language == locale.language }
@@ -73,10 +85,12 @@ class Speaker(context: Context) {
 
     fun stop() {
         tts?.stop()
+        onSpeaking(false)
     }
 
     fun shutdown() {
         tts?.stop()
+        onSpeaking(false)
         tts?.shutdown()
         tts = null
     }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -338,12 +339,22 @@ private fun ScenarioCard(vm: GameViewModel) {
             Spacer(Modifier.height(12.dp))
             Text(round.dilemma.question, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            TextButton(onClick = {
-                val dim = round.scenario.dimension.takeIf { it.isNotBlank() }?.let { "$it. " } ?: ""
-                vm.readOut(
-                    "$dim${round.scenario.title}. ${round.scenario.situation}  ${round.dilemma.question}",
-                )
-            }) { Text("🔊  Read aloud") }
+            val reading = vm.isReading
+            TextButton(
+                onClick = {
+                    if (reading) {
+                        vm.stopReadOut()
+                    } else {
+                        val dim = round.scenario.dimension.takeIf { it.isNotBlank() }?.let { "$it. " } ?: ""
+                        vm.readOut(
+                            "$dim${round.scenario.title}. ${round.scenario.situation}  ${round.dilemma.question}",
+                        )
+                    }
+                },
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = if (reading) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                ),
+            ) { Text(if (reading) "⏹  Stop" else "🔊  Read aloud") }
         }
     }
 }

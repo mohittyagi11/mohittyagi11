@@ -1,6 +1,8 @@
 package com.azadishashn.app.game
 
 import android.app.Application
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -67,7 +69,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     private val settings = SettingsStore(app)
     private val store = GameStore(app)
-    private val speaker = Speaker(app)
+
+    /** True while the read-aloud is speaking; the UI flips the button to Stop. */
+    var isReading by mutableStateOf(false)
+        private set
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val speaker = Speaker(app) { speaking -> mainHandler.post { isReading = speaking } }
 
     fun readOut(text: String) = speaker.speak(text)
     fun stopReadOut() = speaker.stop()
@@ -151,6 +158,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     // -- A turn --------------------------------------------------------------
 
     fun beginTurn() {
+        speaker.stop()
         val base = state.copy(
             current = null,
             championedOptionId = null,

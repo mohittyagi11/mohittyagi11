@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -92,17 +93,27 @@ fun ResultScreen(vm: GameViewModel) {
         }
 
         Spacer(Modifier.height(8.dp))
+        val reading = vm.isReading
         TextButton(
             onClick = {
-                vm.readOut(
-                    "${r.playerName} earns one ${r.primary} card. " +
-                        "Resources: ${r.primary} plus two ${Ideologies.resourceOf(r.primary)}, " +
-                        "and ${r.secondary} plus one ${Ideologies.resourceOf(r.secondary)}. " +
-                        "${r.reasoning}. ${r.historicalNote}",
-                )
+                if (reading) {
+                    vm.stopReadOut()
+                } else {
+                    val card = if (r.cardAwarded) "earns one ${r.primary} card" else "earns no ${r.primary} card"
+                    val strengthLine = if (r.strength >= 0) "Strength ${r.strength} of 10, needed ${r.required}. " else ""
+                    vm.readOut(
+                        "${r.playerName} $card. $strengthLine" +
+                            "Resources: ${r.primary} plus two ${Ideologies.resourceOf(r.primary)}, " +
+                            "and ${r.secondary} plus one ${Ideologies.resourceOf(r.secondary)}. " +
+                            "${r.reasoning}. ${r.historicalNote}",
+                    )
+                }
             },
+            colors = ButtonDefaults.textButtonColors(
+                contentColor = if (reading) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            ),
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("🔊  Read aloud") }
+        ) { Text(if (reading) "⏹  Stop" else "🔊  Read aloud") }
 
         Spacer(Modifier.weight(1f))
 
