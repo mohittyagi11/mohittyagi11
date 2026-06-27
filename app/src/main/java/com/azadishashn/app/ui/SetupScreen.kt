@@ -17,6 +17,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,7 +34,11 @@ import com.azadishashn.app.game.GameViewModel
 @Composable
 fun SetupScreen(vm: GameViewModel) {
     var name by remember { mutableStateOf("") }
+    var firstId by remember { mutableStateOf<Int?>(null) }
     val players = vm.state.players
+    // Default to the first added player; stays valid if players are removed.
+    val effectiveFirst = firstId?.takeIf { id -> players.any { it.id == id } }
+        ?: players.firstOrNull()?.id
 
     Column(
         modifier = Modifier
@@ -56,6 +61,12 @@ fun SetupScreen(vm: GameViewModel) {
         Spacer(Modifier.height(16.dp))
 
         Text("Players", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        if (players.size >= 2) {
+            Text(
+                "Select who plays first (◉).",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = name,
@@ -80,13 +91,20 @@ fun SetupScreen(vm: GameViewModel) {
             items(players, key = { it.id }) { p ->
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 14.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text(p.name, style = MaterialTheme.typography.bodyLarge)
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = effectiveFirst == p.id,
+                                onClick = { firstId = p.id },
+                            )
+                            Text(p.name, style = MaterialTheme.typography.bodyLarge)
+                        }
                         IconButton(onClick = { vm.removePlayer(p.id) }) {
                             Text("✕", style = MaterialTheme.typography.titleMedium)
                         }
@@ -96,10 +114,16 @@ fun SetupScreen(vm: GameViewModel) {
         }
 
         Button(
-            onClick = vm::startGame,
+            onClick = { effectiveFirst?.let { vm.startGame(it) } },
             enabled = players.size >= 2,
             modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (players.size < 2) "Add at least 2 players" else "Start game") }
+        ) {
+            val starter = players.firstOrNull { it.id == effectiveFirst }?.name
+            Text(
+                if (players.size < 2) "Add at least 2 players"
+                else "Start — $starter plays first",
+            )
+        }
 
         TextButton(
             onClick = vm::openSettings,

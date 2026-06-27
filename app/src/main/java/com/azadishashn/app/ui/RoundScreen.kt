@@ -8,6 +8,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -51,10 +54,75 @@ fun RoundScreen(vm: GameViewModel) {
             .padding(16.dp),
     ) {
         when {
-            s.loading && s.current == null -> LoadingBlock("Drawing an ideology card…")
-            s.error != null && s.current == null -> ErrorBlock(vm)
             s.current != null -> RoundBody(vm)
+            s.loading -> LoadingBlock("Generating the scenario…")
+            s.error != null -> ErrorBlock(vm)
+            vm.hasKey -> ThemePicker(vm)
+            else -> LoadingBlock("Loading…")
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ThemePicker(vm: GameViewModel) {
+    val s = vm.state
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
+                Text(
+                    "Round ${s.round}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+                Text(
+                    "${s.questioner?.name}: set the theme for ${s.activePlayer?.name}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Row {
+                TextButton(onClick = vm::openDashboard) { Text("📊") }
+                TextButton(onClick = vm::openSettings) { Text("⚙") }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Pick a theme — or a few — then Generate. Skip the picks to roll a random one. " +
+                "Refresh for new themes.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(10.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            s.availableThemes.forEach { theme ->
+                FilterChip(
+                    selected = theme in s.selectedThemes,
+                    onClick = { vm.toggleTheme(theme) },
+                    label = { Text(theme) },
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(onClick = vm::refreshThemes, modifier = Modifier.fillMaxWidth()) {
+            Text("🔀  Refresh themes")
+        }
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = vm::generate, modifier = Modifier.fillMaxWidth()) {
+            Text(if (s.selectedThemes.isEmpty()) "🎲  Surprise me — generate" else "Generate question")
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }
 

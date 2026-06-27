@@ -47,12 +47,24 @@ class ClaudeClient(
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** Generate a fresh round. [avoidTitles] nudges Claude away from repeats. */
-    suspend fun generateRound(avoidTitles: List<String>): RoundData = withContext(Dispatchers.IO) {
+    /**
+     * Generate a fresh round leaning into [themes] (any of PESTEL, deep, dark, trigger, etc.).
+     * [avoidTitles] nudges Claude away from repeats.
+     */
+    suspend fun generateRound(
+        themes: List<String>,
+        avoidTitles: List<String>,
+    ): RoundData = withContext(Dispatchers.IO) {
         val avoid = if (avoidTitles.isEmpty()) "" else
             "\nDo NOT reuse these scenario titles: ${avoidTitles.joinToString(", ")}."
+        val themeLine = if (themes.isEmpty()) "any compelling dimension" else themes.joinToString(", ")
         val user = """
             Generate ONE round for SHASN: Azadi, a debate game about power and governance.
+
+            Theme(s) to lean hard into: $themeLine.
+            Range WIDELY across eras, countries, and governance structures. Pull from political,
+            social, technological, environmental, legal, ethical, philosophical, dark, and
+            provocative angles. Do NOT default to economic or industrial crises.
 
             The four ideologies are fixed:
             $IDEOLOGY_BRIEF
@@ -62,7 +74,7 @@ class ClaudeClient(
 
             Requirements:
             - The scenario is a concrete government/revolution situation, real-history-inspired
-              or a plausible future, from any country or governance structure.
+              or a plausible future, that fits the theme(s) above.
             - The dilemma must be a decision real leaders or revolutionaries actually faced;
               real_world_note says what real ones did and how it turned out.
             - Each option is that ideology's genuine, defensible course of action (NOT true/false)

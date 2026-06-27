@@ -12,10 +12,10 @@ import com.azadishashn.app.model.AwardResult
 import com.azadishashn.app.model.Ideologies
 import com.azadishashn.app.model.Player
 import com.azadishashn.app.model.RoundData
+import com.azadishashn.app.model.Themes
 import com.azadishashn.app.model.Verdict
 import com.azadishashn.app.net.ClaudeClient
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 
 enum class Screen { Setup, Settings, Round, Result, Standings }
 
@@ -31,12 +31,16 @@ data class GameState(
     val loading: Boolean = false,
     val error: String? = null,
     val usingOffline: Boolean = false,
+    // Theme picking (questioner, before the question is generated).
+    val availableThemes: List<String> = emptyList(),
+    val selectedThemes: Set<String> = emptySet(),
+    val lastThemes: List<String> = emptyList(),
     /** When set, Standings is being viewed mid-game as a dashboard; resume returns here. */
     val dashboardReturn: Screen? = null,
 ) {
     val activePlayer: Player? get() = players.getOrNull(activeIndex)
 
-    /** The questioner is the player seated before the turn-player: they pose (and may twist) the card. */
+    /** The questioner is the player seated before the turn-player: they set the theme and pose the card. */
     val questionerIndex: Int
         get() = if (players.isEmpty()) 0 else (activeIndex - 1 + players.size) % players.size
     val questioner: Player? get() = players.getOrNull(questionerIndex)
@@ -45,11 +49,10 @@ data class GameState(
 /**
  * Owns all game logic.
  *
- * The award is decided by Claude as an impartial judge — it scores the argument and the point
- * goes to the ideology the argument genuinely makes the case for. It does NOT depend on the
- * other players, so rivals can't stall a good argument. The "baseline" only sets how high the
- * score must clear: the more of an ideology you already hold, the better your argument must be
- * (anti-farming); a light/minority stance clears at the floor.
+ * Flow: configure players + pick who starts -> each turn the questioner chooses
+ * theme(s) -> Claude generates a scenario in those themes -> turn-player argues
+ * -> Claude judges and awards. The award is impartial (rivals can't stall); the
+ * baseline only raises the bar the more of an ideology you already hold.
  */
 class GameViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -78,9 +81,11 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(players = state.players.filterNot { it.id == id })
     }
 
-    fun startGame() {
+    /** Start the game oriented on the chosen first player. */
+    fun startGame(firstPlayerId: Int) {
         if (state.players.size < 2) return
-        state = state.copy(screen = Screen.Round, activeIndex = 0, round = 1)
+        val idx = state.players.indexOfFirst { it.id == firstPlayerId }.coerceAtLeast(0)
+        state = state.copy(screen = Screen.Round, activeIndex = idx, round = 1)
         beginTurn()
     }
 
@@ -96,34 +101,64 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun closeSettings() {
-        val back = if (state.current == null) Screen.Setup else Screen.Round
+        val back = if (state.players.isEmpty()) Screen.Setup else Screen.Round
         state = state.copy(screen = back)
     }
 
     // -- A turn --------------------------------------------------------------
 
     fun beginTurn() {
-        state = state.copy(
+        val base = state.copy(
             current = null,
             championedOptionId = null,
             lastResult = null,
             twistsUsedThisTurn = 0,
             error = null,
             usingOffline = false,
+            selectedThemes = emptySet(),
             screen = Screen.Round,
         )
-        loadRound()
+        if (settings.hasKey) {
+            // Show the questioner a theme picker; generation waits for [generate].
+            state = base.copy(availableThemes = Themes.sample(12))
+        } else {
+            // Offline deck ignores themes — go straight to a bundled round.
+            state = base.copy(availableThemes = emptyList())
+            useOfflineRound()
+        }
     }
 
-    private fun loadRound() {
+    fun toggleTheme(theme: String) {
+        val sel = state.selectedThemes.toMutableSet()
+        if (!sel.add(theme)) sel.remove(theme)
+        state = state.copy(selectedThemes = sel)
+    }
+
+    /** Surface a fresh set of theme chips (keeping any already selected). */
+    fun refreshThemes() {
+        val fresh = (state.selectedThemes + Themes.sample(12)).toList().distinct()
+        state = state.copy(availableThemes = fresh)
+    }
+
+    /** Generate the scenario in the selected themes (or a random one if none picked). */
+    fun generate() {
+        val themes = if (state.selectedThemes.isNotEmpty()) {
+            state.selectedThemes.toList()
+        } else {
+            listOf(Themes.random())
+        }
+        loadRound(themes)
+    }
+
+    private fun loadRound(themes: List<String>) {
         if (!settings.hasKey) {
             useOfflineRound()
             return
         }
-        state = state.copy(loading = true, error = null)
+        state = state.copy(loading = true, error = null, lastThemes = themes)
         viewModelScope.launch {
             runCatching {
-                ClaudeClient(settings.apiKey, settings.model).generateRound(seenTitles.takeLast(8))
+                ClaudeClient(settings.apiKey, settings.model).generateRound(themes, seenTitles.takeLast(8))
             }.onSuccess { round ->
                 seenTitles += round.scenario.title
                 state = state.copy(current = round, loading = false, usingOffline = false)
@@ -134,11 +169,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun useOfflineRound() {
-        val round = OfflineContent.ROUNDS[Random.nextInt(OfflineContent.ROUNDS.size)]
+        val round = OfflineContent.ROUNDS[(0 until OfflineContent.ROUNDS.size).random()]
         state = state.copy(current = round, loading = false, error = null, usingOffline = true)
     }
 
-    fun retryRound() = loadRound()
+    fun retryRound() {
+        loadRound(state.lastThemes.ifEmpty { listOf(Themes.random()) })
+    }
 
     fun champion(optionId: String) {
         state = state.copy(championedOptionId = optionId)
@@ -300,7 +337,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun onBack() {
         state = when (state.screen) {
-            Screen.Settings -> state.copy(screen = if (state.current == null) Screen.Setup else Screen.Round)
+            Screen.Settings -> state.copy(screen = if (state.players.isEmpty()) Screen.Setup else Screen.Round)
             Screen.Round -> state.copy(screen = Screen.Setup)
             Screen.Result -> state
             Screen.Standings -> state.copy(screen = state.dashboardReturn ?: Screen.Setup, dashboardReturn = null)
