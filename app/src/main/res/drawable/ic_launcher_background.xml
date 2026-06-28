@@ -5,12 +5,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Deep near-black navy with a whisper of a radial sheen — quiet luxury. -->
+    <!-- Near-black field with a faint top sheen — stark, SHASN-grade. -->
     <path android:pathData="M0,0 h108 v108 h-108 z">
         <aapt:attr name="android:fillColor">
             <gradient android:type="radial"
-                android:centerX="54" android:centerY="46" android:gradientRadius="80"
-                android:startColor="#1A2142" android:endColor="#0A0C18" />
+                android:centerX="54" android:centerY="40" android:gradientRadius="84"
+                android:startColor="#1A1F2B" android:endColor="#070910" />
         </aapt:attr>
     </path>
 </vector>

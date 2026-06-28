@@ -88,7 +88,10 @@ class ClaudeClient(
               real_world_note says what real ones did and how it turned out.
             - Each option is that ideology's genuine, defensible course of action (NOT true/false)
               — four live positions worth arguing over.
-            - Keep titles, option labels, and the question itself to one line each.$avoid
+            - Keep titles, option labels, and the question itself to one line each.
+            - paths: EXACTLY 4 entries, ONE per ideology (use each ideology name once). For each,
+              think like a high-end policy analyst: stance (its one-line position), outcome (where
+              that plausibly leads), risk (what it costs). Crisp, causal, non-partisan — one line each.$avoid
         """.trimIndent()
 
         val text = call(system = ROUND_SYSTEM, user = user, schema = roundSchema())
@@ -147,6 +150,12 @@ class ClaudeClient(
                primary ideology (1 = barely, 5 = a solid case, 10 = an overwhelming, expert case).
             4. reasoning: one line on the dominant and secondary leanings.
             5. historical_outcome: one line on what real leaders who took the primary path got.
+            6. causal_chain: 3-4 steps, reasoning like a high-end policy analyst — a tight causal
+               chain from the chosen stance to its consequences. Each step: label (the effect, a
+               few words), mechanism (the "→ because/therefore" that links the PREVIOUS step to
+               this one), horizon (immediate | short_term | long_term, roughly ordered), polarity
+               (gain | cost | mixed). End at the long-run / historical echo.
+            7. tradeoff: one sharp line naming the central cost-of-power tradeoff of this path.
         """.trimIndent()
 
         val text = call(system = ADJUDICATE_SYSTEM, user = user, schema = judgeSchema())
@@ -158,7 +167,7 @@ class ClaudeClient(
     private fun call(system: String, user: String, schema: JsonObject): String {
         val payload = buildJsonObject {
             put("model", model)
-            put("max_tokens", 2048)
+            put("max_tokens", 3500)
             put("system", system)
             put("messages", buildJsonArray {
                 add(buildJsonObject {
@@ -249,6 +258,16 @@ class ClaudeClient(
             put("enum", buildJsonArray { Ideologies.NAMES.forEach { add(it) } })
         }
 
+        private fun enumProp(values: List<String>): JsonObject = buildJsonObject {
+            put("type", "string")
+            put("enum", buildJsonArray { values.forEach { add(it) } })
+        }
+
+        private fun arraySchema(items: JsonObject): JsonObject = buildJsonObject {
+            put("type", "array")
+            put("items", items)
+        }
+
         /** Short brief on the four SHASN ideologies, used in every prompt. */
         private val IDEOLOGY_BRIEF: String = Ideologies.ALL.joinToString("\n") {
             "- ${it.name} (earns ${it.resource}): ${it.blurb}"
@@ -272,8 +291,17 @@ class ClaudeClient(
                     "summary" to strProp(),
                 ),
             )
+            val pathSchema = objSchema(
+                listOf("ideology", "stance", "outcome", "risk"),
+                mapOf(
+                    "ideology" to ideologyEnumProp(),
+                    "stance" to strProp(),
+                    "outcome" to strProp(),
+                    "risk" to strProp(),
+                ),
+            )
             return objSchema(
-                listOf("scenario", "dilemma", "options"),
+                listOf("scenario", "dilemma", "options", "paths"),
                 mapOf(
                     "scenario" to objSchema(
                         listOf("title", "dimension", "setting", "era", "situation"),
@@ -289,23 +317,37 @@ class ClaudeClient(
                         listOf("question", "real_world_note"),
                         mapOf("question" to strProp(), "real_world_note" to strProp()),
                     ),
-                    "options" to buildJsonObject {
-                        put("type", "array")
-                        put("items", optionSchema)
-                    },
+                    "options" to arraySchema(optionSchema),
+                    "paths" to arraySchema(pathSchema),
                 ),
             )
         }
 
-        private fun judgeSchema(): JsonObject = objSchema(
-            listOf("primary_ideology", "secondary_ideology", "strength", "reasoning", "historical_outcome"),
-            mapOf(
-                "primary_ideology" to ideologyEnumProp(),
-                "secondary_ideology" to ideologyEnumProp(),
-                "strength" to intProp(),
-                "reasoning" to strProp(),
-                "historical_outcome" to strProp(),
-            ),
-        )
+        private fun judgeSchema(): JsonObject {
+            val stepSchema = objSchema(
+                listOf("label", "mechanism", "horizon", "polarity"),
+                mapOf(
+                    "label" to strProp(),
+                    "mechanism" to strProp(),
+                    "horizon" to enumProp(listOf("immediate", "short_term", "long_term")),
+                    "polarity" to enumProp(listOf("gain", "cost", "mixed")),
+                ),
+            )
+            return objSchema(
+                listOf(
+                    "primary_ideology", "secondary_ideology", "strength", "reasoning",
+                    "historical_outcome", "causal_chain", "tradeoff",
+                ),
+                mapOf(
+                    "primary_ideology" to ideologyEnumProp(),
+                    "secondary_ideology" to ideologyEnumProp(),
+                    "strength" to intProp(),
+                    "reasoning" to strProp(),
+                    "historical_outcome" to strProp(),
+                    "causal_chain" to arraySchema(stepSchema),
+                    "tradeoff" to strProp(),
+                ),
+            )
+        }
     }
 }

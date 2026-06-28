@@ -6,6 +6,7 @@ import android.content.Intent
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -25,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.BarChart
@@ -61,6 +63,7 @@ import com.azadishashn.app.ui.components.IdeologyChip
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.ScenarioStory
 import com.azadishashn.app.ui.components.TurnProgress
+import com.azadishashn.app.ui.components.causal.PathsFanOut
 import com.azadishashn.app.ui.theme.Dim
 import com.azadishashn.app.ui.theme.IdeologyTheme
 
@@ -261,6 +264,22 @@ private fun RoundBody(vm: GameViewModel) {
                     }
                 }
                 s.error?.let { ErrorLine(it) }
+
+                if (round.paths.isNotEmpty()) {
+                    Spacer(Modifier.height(Dim.itemGap))
+                    var showPaths by remember(round) { mutableStateOf(false) }
+                    TextButton(
+                        onClick = { showPaths = !showPaths },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Filled.AccountTree, contentDescription = null, modifier = Modifier.height(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (showPaths) "Hide the four paths" else "Compare the four paths")
+                    }
+                    AnimatedVisibility(visible = showPaths) {
+                        PathsFanOut(paths = round.paths, question = round.dilemma.question)
+                    }
+                }
 
                 Spacer(Modifier.height(Dim.sectionGap))
                 PrimaryCta(

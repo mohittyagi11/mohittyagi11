@@ -26,25 +26,27 @@ data class IdeologyVisual(
     val label: String,
 )
 
+// Authentic SHASN token colours: Capitalist = green (Funds), Supremo = red
+// (Clout), Showstopper = blue (Media), Idealist = yellow (Trust).
 private val VISUALS = listOf(
     IdeologyVisual(
-        name = "Capitalist", brand = Color(0xFFE6A100), onBrand = Color(0xFF231A00),
-        containerLight = Color(0xFFFFF1CC), containerDark = Color(0xFF3A2E00),
+        name = "Capitalist", brand = Color(0xFF2FB16B), onBrand = Color(0xFF00210F),
+        containerLight = Color(0xFFD3F3DF), containerDark = Color(0xFF0B3A22),
         icon = Icons.Filled.Paid, label = "Funds",
     ),
     IdeologyVisual(
-        name = "Supremo", brand = Color(0xFFE65555), onBrand = Color.White,
+        name = "Supremo", brand = Color(0xFFE5484D), onBrand = Color.White,
         containerLight = Color(0xFFFFE0E0), containerDark = Color(0xFF4A1414),
         icon = Icons.Filled.Shield, label = "Clout",
     ),
     IdeologyVisual(
-        name = "Showstopper", brand = Color(0xFF12B99B), onBrand = Color(0xFF00271F),
-        containerLight = Color(0xFFCFF6EE), containerDark = Color(0xFF053A30),
+        name = "Showstopper", brand = Color(0xFF3B82F6), onBrand = Color.White,
+        containerLight = Color(0xFFD6E6FF), containerDark = Color(0xFF0E2A55),
         icon = Icons.Filled.Campaign, label = "Media",
     ),
     IdeologyVisual(
-        name = "Idealist", brand = Color(0xFF8A63F0), onBrand = Color.White,
-        containerLight = Color(0xFFEAE0FF), containerDark = Color(0xFF2E1E5A),
+        name = "Idealist", brand = Color(0xFFE8B61E), onBrand = Color(0xFF241A00),
+        containerLight = Color(0xFFFFF0C2), containerDark = Color(0xFF3D2E00),
         icon = Icons.Filled.Balance, label = "Trust",
     ),
 )

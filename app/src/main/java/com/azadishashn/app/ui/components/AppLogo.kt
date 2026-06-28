@@ -6,52 +6,36 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * The brand mark (mirrors the launcher icon): a fine champagne-gold ring framing
- * a majestic crown (Shashn / rule) tipped with peg finials, on deep navy.
+ * The brand mark (mirrors the launcher icon): four ascending bars — the four
+ * ideologies as a stark brushed-chrome chart on a near-black field.
  */
 @Composable
 fun AppLogo(size: Dp = 56.dp, modifier: Modifier = Modifier) {
-    val navy = Color(0xFF101631)
-    val crownFill = Brush.verticalGradient(
-        0.0f to Color(0xFFFFF6D8), 0.34f to Color(0xFFF2D98C),
-        0.7f to Color(0xFFCE9F45), 1.0f to Color(0xFF8A6326),
-    )
-    val crownEdge = Color(0xFF6E4E1E)
-    val ringGold = Brush.verticalGradient(listOf(Color(0xFFF1DCA0), Color(0xFFC29A53)))
-    val peg = Color(0xFFFFFBEA)
+    val field = Color(0xFF0E1320)
+    val chrome = Brush.verticalGradient(listOf(Color(0xFFEDF2F8), Color(0xFFA6B2C0), Color(0xFF586574)))
+    val edge = Color(0xFF2C333F)
+    // bars as fractions of the 108 viewport: (xLeft, top) with width 10, base 80.
+    val bars = listOf(28f to 58f, 42f to 46f, 56f to 38f, 70f to 50f)
     Canvas(modifier.size(size)) {
         val s = this.size.minDimension
-        val cx = this.size.width / 2f
-        val cy = this.size.height / 2f
-        val ring = s * 0.30f
-        val u = ring / 28f // map 108-viewport units → canvas
-        fun p(dx: Float, dy: Float) = Offset(cx + dx * u, cy + dy * u)
-
-        drawRoundRect(color = navy, cornerRadius = CornerRadius(s * 0.28f, s * 0.28f))
-        drawCircle(brush = ringGold, radius = ring, center = Offset(cx, cy), style = Stroke(width = s * 0.034f))
-
-        val crown = Path().apply {
-            moveTo(p(-12f, 8f).x, p(-12f, 8f).y)
-            lineTo(p(-12f, -8f).x, p(-12f, -8f).y)
-            lineTo(p(-6f, 0f).x, p(-6f, 0f).y)
-            lineTo(p(0f, -12f).x, p(0f, -12f).y)
-            lineTo(p(6f, 0f).x, p(6f, 0f).y)
-            lineTo(p(12f, -8f).x, p(12f, -8f).y)
-            lineTo(p(12f, 8f).x, p(12f, 8f).y)
-            close()
+        val u = s / 108f
+        drawRoundRect(color = field, cornerRadius = CornerRadius(s * 0.28f, s * 0.28f))
+        // baseline
+        drawLine(Color(0xFF7E8A99), Offset(26f * u, 80f * u), Offset(82f * u, 80f * u), strokeWidth = 1.4f * u)
+        bars.forEach { (x, top) ->
+            val left = x * u
+            val t = top * u
+            val w = 10f * u
+            val h = (80f - top) * u
+            drawRect(brush = chrome, topLeft = Offset(left, t), size = Size(w, h))
+            drawRect(color = edge, topLeft = Offset(left, t), size = Size(w, h), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f * u))
         }
-        drawPath(crown, brush = crownFill)
-        drawPath(crown, color = crownEdge, style = Stroke(width = s * 0.012f))
-        drawCircle(peg, radius = 2f * u, center = p(-12f, -8f))
-        drawCircle(peg, radius = 2.4f * u, center = p(0f, -12f))
-        drawCircle(peg, radius = 2f * u, center = p(12f, -8f))
     }
 }

@@ -313,7 +313,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                         ?: Ideologies.NAMES.first()
                     val secondary = v.secondaryIdeology.takeIf { it in Ideologies.NAMES && it != primary }
                         ?: Ideologies.NAMES.first { it != primary }
-                    award(active, primary, secondary, v.strength.coerceIn(1, 10), v.reasoning, v.historicalOutcome)
+                    award(
+                        active, primary, secondary, v.strength.coerceIn(1, 10),
+                        v.reasoning, v.historicalOutcome, v.causalChain, v.tradeoff,
+                    )
                 }.onFailure { e ->
                     state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Judging failed")
                 }
@@ -344,6 +347,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         strength: Int,
         reasoning: String,
         history: String,
+        causalChain: List<com.azadishashn.app.model.CausalStep> = emptyList(),
+        tradeoff: String = "",
     ) {
         val held = active.counts[primary] ?: 0
         val tableAvg = state.players.map { it.counts[primary] ?: 0 }.average()
@@ -394,6 +399,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 reasoning = reasoning,
                 historicalNote = history,
                 explanation = explanation,
+                causalChain = causalChain,
+                tradeoff = tradeoff,
             ),
             screen = Screen.Result,
         )

@@ -53,6 +53,8 @@ import com.azadishashn.app.ui.components.SealMark
 import com.azadishashn.app.ui.components.SectionCard
 import com.azadishashn.app.ui.components.StatTile
 import com.azadishashn.app.ui.components.StrengthMeter
+import com.azadishashn.app.ui.components.causal.ConsequenceFlow
+import com.azadishashn.app.ui.components.causal.PathsFanOut
 import com.azadishashn.app.ui.theme.Dim
 import com.azadishashn.app.ui.theme.Elev
 import com.azadishashn.app.ui.theme.IdeologyTheme
@@ -160,6 +162,29 @@ fun ResultScreen(vm: GameViewModel) {
                 }
                 // Celebratory spark burst over the hero.
                 Particles(color = glow, modifier = Modifier.matchParentSize())
+            }
+
+            // Analyst exhibits — the consequence map of the chosen stance, and
+            // the four-paths recap with the chosen path lit.
+            val primaryBrand = IdeologyTheme.of(r.primary).brand
+            if (r.causalChain.isNotEmpty()) {
+                Spacer(Modifier.height(Dim.sectionGap))
+                ConsequenceFlow(
+                    chain = r.causalChain,
+                    historicalNote = r.historicalNote,
+                    tradeoff = r.tradeoff,
+                    accent = primaryBrand,
+                )
+            }
+            vm.state.current?.let { round ->
+                if (round.paths.isNotEmpty()) {
+                    Spacer(Modifier.height(Dim.itemGap))
+                    PathsFanOut(
+                        paths = round.paths,
+                        question = round.dilemma.question,
+                        chosen = r.primary,
+                    )
+                }
             }
 
             Spacer(Modifier.height(14.dp))

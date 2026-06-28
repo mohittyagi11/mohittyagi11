@@ -33,6 +33,26 @@ data class RoundData(
     val scenario: Scenario,
     val dilemma: Dilemma,
     val options: List<OptionCard>,
+    /** Forecast for each ideology — the "compare the four paths" fan-out. */
+    val paths: List<PathForecast> = emptyList(),
+)
+
+/** Where one ideology's stance plausibly leads — for the fan-out exhibit. */
+@Serializable
+data class PathForecast(
+    val ideology: String,
+    val stance: String = "",
+    val outcome: String = "",
+    val risk: String = "",
+)
+
+/** One link in a consequence chain — for the verdict's analyst exhibit. */
+@Serializable
+data class CausalStep(
+    val label: String,
+    val mechanism: String = "",
+    val horizon: String = "",   // immediate | short_term | long_term
+    val polarity: String = "",  // gain | cost | mixed
 )
 
 @Serializable
@@ -66,6 +86,10 @@ data class Verdict(
     val strength: Int, // 1..10 — how strongly the answer favoured the primary ideology
     val reasoning: String,
     @SerialName("historical_outcome") val historicalOutcome: String,
+    /** Analyst-grade consequence chain of the chosen stance. */
+    @SerialName("causal_chain") val causalChain: List<CausalStep> = emptyList(),
+    /** The central cost-of-power tradeoff. */
+    val tradeoff: String = "",
 )
 
 // ---------------------------------------------------------------------------
@@ -104,4 +128,7 @@ data class AwardResult(
     val reasoning: String = "",       // judge's reasoning, or "" offline
     val historicalNote: String = "",  // one-line real-world outcome, or ""
     val explanation: String = "",
+    /** The verdict's consequence chain + tradeoff, for the analyst exhibit. */
+    val causalChain: List<CausalStep> = emptyList(),
+    val tradeoff: String = "",
 )
