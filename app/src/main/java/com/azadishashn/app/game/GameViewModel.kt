@@ -90,7 +90,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val speaker = Speaker(app) { speaking -> mainHandler.post { isReading = speaking } }
 
-    fun readOut(text: String) = speaker.speak(text)
+    fun readOut(text: String) = speaker.speak(text, settings.language)
+    fun readOut(text: String, lang: String) = speaker.speak(text, lang)
     fun stopReadOut() = speaker.stop()
 
     override fun onCleared() {
@@ -109,6 +110,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     /** BCP-47 tag for the speech recogniser, auto-derived from [language]. */
     val speechTag: String get() = SettingsStore.bcp47(settings.language)
+
+    /** Read-aloud languages chosen in Settings, in the canonical en → hinglish → hi order. */
+    val readLangs: List<String>
+        get() = listOf("en", "hinglish", "hi").filter { it in settings.readLangs }
 
     val hasKey: Boolean get() = settings.hasKey
 
@@ -240,11 +245,18 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(screen = Screen.Settings)
     }
 
-    fun saveSettings(apiKey: String, model: String, context: String, language: String) {
+    fun saveSettings(
+        apiKey: String,
+        model: String,
+        context: String,
+        language: String,
+        readLangs: Set<String>,
+    ) {
         settings.apiKey = apiKey
         settings.model = model
         settings.context = context
         settings.language = language
+        settings.readLangs = readLangs
         speaker.setLanguage(language)
     }
 
@@ -310,7 +322,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             runCatching {
                 ClaudeClient(settings.apiKey, settings.model)
-                    .generateRound(themes, settings.context, avoid, SettingsStore.displayName(settings.language))
+                    .generateRound(themes, settings.context, avoid, settings.language, settings.readLangs.toList())
             }.onSuccess { round ->
                 val title = round.scenario.title.trim()
                 val dup = state.seenTitles.any { it.trim().equals(title, ignoreCase = true) }
@@ -374,7 +386,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(loading = true, loadingKind = "twist", error = null)
         viewModelScope.launch {
             runCatching {
-                ClaudeClient(settings.apiKey, settings.model).twistRound(round, SettingsStore.displayName(settings.language))
+                ClaudeClient(settings.apiKey, settings.model).twistRound(round, settings.language, settings.readLangs.toList())
             }.onSuccess { twisted ->
                 state = state.copy(
                     current = twisted,
@@ -400,7 +412,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             state = state.copy(loading = true, loadingKind = "judge", error = null)
             viewModelScope.launch {
                 runCatching {
-                    ClaudeClient(settings.apiKey, settings.model).judge(round, argument, SettingsStore.displayName(settings.language))
+                    ClaudeClient(settings.apiKey, settings.model).judge(round, argument, settings.language, settings.readLangs.toList())
                 }.onSuccess { v ->
                     val primary = v.primaryIdeology.takeIf { it in Ideologies.NAMES }
                         ?: Ideologies.NAMES.first()
@@ -408,7 +420,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                         ?: Ideologies.NAMES.first { it != primary }
                     award(
                         active, primary, secondary, v.strength.coerceIn(1, 10),
-                        v.reasoning, v.historicalOutcome, v.causalChain, v.tradeoff,
+                        v.reasoning, v.historicalOutcome, v.causalChain, v.tradeoff, v.narration,
                     )
                 }.onFailure { e ->
                     state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Judging failed")
@@ -442,6 +454,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         history: String,
         causalChain: List<com.azadishashn.app.model.CausalStep> = emptyList(),
         tradeoff: String = "",
+        narration: List<com.azadishashn.app.model.NarrationLine> = emptyList(),
     ) {
         val held = active.counts[primary] ?: 0
         val tableAvg = state.players.map { it.counts[primary] ?: 0 }.average()
@@ -494,6 +507,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 explanation = explanation,
                 causalChain = causalChain,
                 tradeoff = tradeoff,
+                narration = narration,
             ),
             screen = Screen.Result,
         )

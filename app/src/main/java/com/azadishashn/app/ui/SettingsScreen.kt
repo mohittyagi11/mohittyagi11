@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -38,6 +40,7 @@ fun SettingsScreen(vm: GameViewModel) {
     var model by remember { mutableStateOf(vm.model) }
     var context by remember { mutableStateOf(vm.context) }
     var language by remember { mutableStateOf(vm.language) }
+    var readLangs by remember { mutableStateOf(vm.readLangs.toSet()) }
 
     AzadiScaffold(title = "Settings", onBack = vm::closeSettings) { pad ->
         Column(
@@ -88,7 +91,7 @@ fun SettingsScreen(vm: GameViewModel) {
             SectionCard {
                 Text("Language", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Text(
-                    "Scenarios, the read-aloud narration, and your spoken answers all use this language.",
+                    "On-screen scenarios and your spoken answers use this language.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -101,6 +104,38 @@ fun SettingsScreen(vm: GameViewModel) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(selected = language == code, onClick = { language = code })
+                        Text(label, modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            SectionCard {
+                Text("Read aloud in", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Pick one or more languages for the narrator — each turn's read-aloud offers a button per language.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SettingsStore.LANGUAGES.forEach { (label, code) ->
+                    val checked = code in readLangs
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .toggleable(
+                                value = checked,
+                                onValueChange = { on ->
+                                    readLangs = if (on) {
+                                        readLangs + code
+                                    } else {
+                                        (readLangs - code).let { if (it.isEmpty()) setOf(code) else it }
+                                    }
+                                },
+                            )
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = checked, onCheckedChange = null)
                         Text(label, modifier = Modifier.padding(start = 4.dp))
                     }
                 }
@@ -127,7 +162,7 @@ fun SettingsScreen(vm: GameViewModel) {
             PrimaryCta(
                 text = "Save",
                 onClick = {
-                    vm.saveSettings(key, model, context, language)
+                    vm.saveSettings(key, model, context, language, readLangs)
                     vm.closeSettings()
                 },
             )

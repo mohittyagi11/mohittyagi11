@@ -51,7 +51,9 @@ import kotlinx.coroutines.delay
 fun ScenarioStory(
     round: RoundData,
     isReading: Boolean,
-    onNarrate: () -> Unit,
+    langs: List<String>,
+    textFor: (String) -> String,
+    onPlay: (lang: String, text: String) -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -127,26 +129,39 @@ fun ScenarioStory(
 
         Beat(visible = step >= 5) {
             Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = { if (isReading) onStop() else onNarrate() },
-                shape = MaterialTheme.shapes.large,
-                colors = if (isReading) {
-                    ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer)
-                } else {
-                    ButtonDefaults.buttonColors()
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (isReading) {
-                    Waveform(color = MaterialTheme.colorScheme.onErrorContainer)
-                    Spacer(Modifier.width(10.dp))
-                    Text("Narrating… tap to stop")
-                    Spacer(Modifier.width(8.dp))
-                    Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.height(18.dp))
-                } else {
-                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.height(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Narrate the story")
+            if (langs.size > 1) {
+                // Multiple narration languages — a button per language.
+                ReadAloudRow(
+                    langs = langs,
+                    isReading = isReading,
+                    textFor = textFor,
+                    onPlay = onPlay,
+                    onStop = onStop,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                val lang = langs.firstOrNull() ?: "en"
+                Button(
+                    onClick = { if (isReading) onStop() else onPlay(lang, textFor(lang)) },
+                    shape = MaterialTheme.shapes.large,
+                    colors = if (isReading) {
+                        ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer)
+                    } else {
+                        ButtonDefaults.buttonColors()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (isReading) {
+                        Waveform(color = MaterialTheme.colorScheme.onErrorContainer)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Narrating… tap to stop")
+                        Spacer(Modifier.width(8.dp))
+                        Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.height(18.dp))
+                    } else {
+                        Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.height(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Narrate the story")
+                    }
                 }
             }
         }

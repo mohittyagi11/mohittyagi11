@@ -53,6 +53,7 @@ import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.IdeologyDot
 import com.azadishashn.app.ui.components.Particles
 import com.azadishashn.app.ui.components.PrimaryCta
+import com.azadishashn.app.ui.components.ReadAloudRow
 import com.azadishashn.app.ui.components.SealMark
 import com.azadishashn.app.ui.components.SectionCard
 import com.azadishashn.app.ui.components.StatTile
@@ -240,37 +241,28 @@ fun ResultScreen(vm: GameViewModel) {
             }
 
             Spacer(Modifier.height(8.dp))
-            val reading = vm.isReading
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconActionButton(
-                    if (reading) Icons.Filled.Stop else Icons.AutoMirrored.Filled.VolumeUp,
-                    contentDescription = if (reading) "Stop" else "Read aloud",
-                    tint = if (reading) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                    onClick = {
-                        if (reading) {
-                            vm.stopReadOut()
-                        } else {
-                            val card = if (r.diverted) {
-                                "earns one $cardIdeo card, redirected from ${r.primary} because they are already accumulating it"
-                            } else {
-                                "earns one $cardIdeo card"
-                            }
-                            val strengthLine = if (r.strength >= 0) "Strength ${r.strength} of 10, needed ${r.required}. " else ""
-                            vm.readOut(
-                                "${r.playerName} $card. $strengthLine" +
-                                    "Resources: ${r.primary} plus two ${Ideologies.resourceOf(r.primary)}, " +
-                                    "and ${r.secondary} plus one ${Ideologies.resourceOf(r.secondary)}. " +
-                                    "${r.reasoning}. ${r.historicalNote}",
-                            )
-                        }
-                    },
-                )
-                Text(
-                    if (reading) "Stop" else "Read aloud",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (reading) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                )
+            // The verdict spoken in English (built from the fields) as a fallback.
+            val builtVerdict = run {
+                val card = if (r.diverted) {
+                    "earns one $cardIdeo card, redirected from ${r.primary} because they are already accumulating it"
+                } else {
+                    "earns one $cardIdeo card"
+                }
+                val strengthLine = if (r.strength >= 0) "Strength ${r.strength} of 10, needed ${r.required}. " else ""
+                "${r.playerName} $card. $strengthLine" +
+                    "Resources: ${r.primary} plus two ${Ideologies.resourceOf(r.primary)}, " +
+                    "and ${r.secondary} plus one ${Ideologies.resourceOf(r.secondary)}. " +
+                    "${r.reasoning}. ${r.historicalNote}"
             }
+            ReadAloudRow(
+                langs = vm.readLangs,
+                isReading = vm.isReading,
+                textFor = { lang ->
+                    r.narration.firstOrNull { it.lang == lang }?.text?.takeIf { it.isNotBlank() } ?: builtVerdict
+                },
+                onPlay = { lang, text -> vm.readOut(text, lang) },
+                onStop = vm::stopReadOut,
+            )
 
             Spacer(Modifier.height(16.dp))
             PrimaryCta(text = "Next player's turn", onClick = vm::nextTurn)

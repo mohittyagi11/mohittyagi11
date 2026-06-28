@@ -114,11 +114,21 @@ class Speaker(
     private fun isNeural(v: Voice): Boolean =
         v.name.contains("-x-") || v.quality >= Voice.QUALITY_VERY_HIGH
 
-    /** Set the narration language ("en" | "hi") and re-pick the best voice. */
+    /**
+     * Set the narration language and re-pick the best voice. Only true Devanagari
+     * Hindi ("hi") uses a Hindi voice; English and Hinglish (Romanised Hindi) both
+     * read best with an English (India) voice.
+     */
     fun setLanguage(code: String?) {
-        langCode = if (code?.startsWith("hi", ignoreCase = true) == true) "hi" else "en"
+        langCode = if (code == "hi") "hi" else "en"
         val engine = tts
         if (engine != null && ready) selectBestVoice(engine)
+    }
+
+    /** Speak [text] in a specific language ("en" | "hinglish" | "hi"). */
+    fun speak(text: String, langCode: String) {
+        setLanguage(langCode)
+        speak(text)
     }
 
     fun speak(text: String) {

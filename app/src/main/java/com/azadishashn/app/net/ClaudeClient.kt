@@ -55,7 +55,8 @@ class ClaudeClient(
         themes: List<String>,
         context: String,
         avoidTitles: List<String>,
-        language: String = "English",
+        language: String = "en",
+        readLangs: List<String> = listOf("en"),
     ): RoundData = withContext(Dispatchers.IO) {
         val avoid = if (avoidTitles.isEmpty()) "" else
             "\nDo NOT reuse these scenario titles: ${avoidTitles.joinToString(", ")}."
@@ -94,6 +95,7 @@ class ClaudeClient(
               think like a high-end policy analyst: stance (its one-line position), outcome (where
               that plausibly leads), risk (what it costs). Crisp, causal, non-partisan — one line each.$avoid
             ${languageLine(language)}
+            ${narrationLine(readLangs, "the scenario — the situation and the dilemma question")}
         """.trimIndent()
 
         val text = call(system = ROUND_SYSTEM, user = user, schema = roundSchema())
@@ -102,7 +104,11 @@ class ClaudeClient(
     }
 
     /** Re-cast a scenario with a complication that makes the easy answer costly. */
-    suspend fun twistRound(current: RoundData, language: String = "English"): RoundData = withContext(Dispatchers.IO) {
+    suspend fun twistRound(
+        current: RoundData,
+        language: String = "en",
+        readLangs: List<String> = listOf("en"),
+    ): RoundData = withContext(Dispatchers.IO) {
         val user = """
             Here is the current round:
             Title: ${current.scenario.title}
@@ -117,6 +123,7 @@ class ClaudeClient(
             $IDEOLOGY_BRIEF
             Keep every field punchy.
             ${languageLine(language)}
+            ${narrationLine(readLangs, "the scenario — the situation and the dilemma question")}
         """.trimIndent()
 
         val text = call(system = ROUND_SYSTEM, user = user, schema = roundSchema())
@@ -132,7 +139,8 @@ class ClaudeClient(
     suspend fun judge(
         round: RoundData,
         argument: String,
-        language: String = "English",
+        language: String = "en",
+        readLangs: List<String> = listOf("en"),
     ): Verdict = withContext(Dispatchers.IO) {
         val opts = round.options.joinToString("\n") { "- ${it.ideology}: ${it.label}" }
         val user = """
@@ -161,6 +169,7 @@ class ClaudeClient(
                (gain | cost | mixed). End at the long-run / historical echo.
             7. tradeoff: one sharp line naming the central cost-of-power tradeoff of this path.
             ${languageLine(language)}
+            ${narrationLine(readLangs, "the verdict — which ideology the answer served, the one-line reasoning, and the historical outcome")}
         """.trimIndent()
 
         val text = call(system = ADJUDICATE_SYSTEM, user = user, schema = judgeSchema())
@@ -278,24 +287,43 @@ class ClaudeClient(
             "- ${it.name} (earns ${it.resource}): ${it.blurb}"
         }
 
+        private const val KEEP_TOKENS =
+            "Do NOT translate the fixed token fields: keep every \"ideology\" value exactly as " +
+                "Capitalist, Supremo, Showstopper, or Idealist, keep \"horizon\" " +
+                "(immediate|short_term|long_term) and \"polarity\" (gain|cost|mixed) as their " +
+                "English enum values, and keep every \"lang\" value exactly as en, hinglish, or hi."
+
+        /** Human description of a read-aloud language code. */
+        private fun langDesc(code: String): String = when (code) {
+            "hi" -> "Hindi in Devanagari script"
+            "hinglish" -> "Hinglish — conversational Hindi written in the Roman/Latin alphabet (NOT Devanagari), mixing common English words as Indians naturally do"
+            else -> "natural, fluent English"
+        }
+
         /**
          * Force the output language for all natural-language fields, while keeping
-         * the schema-constrained token fields (ideology names, horizon/polarity
-         * enums) in their fixed English form so structured output still validates.
+         * the schema-constrained token fields in their fixed English form so the
+         * structured output still validates.
          */
-        private fun languageLine(language: String): String =
-            if (language.equals("English", ignoreCase = true)) {
-                "Write all output in natural, fluent English."
-            } else {
+        private fun languageLine(code: String): String = when (code) {
+            "en" -> "Write all natural-language output in natural, fluent English. $KEEP_TOKENS"
+            else ->
                 "IMPORTANT: write ALL natural-language fields — title, dimension, setting, era, " +
                     "situation, question, real_world_note, every option label and summary, every " +
                     "path stance/outcome/risk, reasoning, historical_outcome, every causal-chain " +
-                    "label/mechanism, and tradeoff — in fluent, natural $language (use $language " +
-                    "script). Do NOT translate the fixed token fields: keep every \"ideology\" value " +
-                    "exactly as Capitalist, Supremo, Showstopper, or Idealist, and keep \"horizon\" " +
-                    "(immediate|short_term|long_term) and \"polarity\" (gain|cost|mixed) as their " +
-                    "English enum values."
-            }
+                    "label/mechanism, and tradeoff — in ${langDesc(code)}. $KEEP_TOKENS"
+        }
+
+        /** Ask for read-aloud narration text in each selected language (folded into the call). */
+        private fun narrationLine(readLangs: List<String>, what: String): String {
+            if (readLangs.isEmpty()) return ""
+            val list = readLangs.joinToString(", ")
+            val perLang = readLangs.joinToString("; ") { "$it = ${langDesc(it)}" }
+            return "Also fill `narration`: a spoken, read-aloud version of $what — an ARRAY with " +
+                "exactly one entry per language in [$list]. Each entry has lang (one of: en, " +
+                "hinglish, hi) and text (2-3 natural spoken sentences in THAT language — $perLang). " +
+                "Keep ideology names in English inside the narration."
+        }
 
         private fun objSchema(required: List<String>, props: Map<String, JsonElement>): JsonObject =
             buildJsonObject {
@@ -304,6 +332,15 @@ class ClaudeClient(
                 put("required", buildJsonArray { required.forEach { add(it) } })
                 put("properties", buildJsonObject { props.forEach { (k, v) -> put(k, v) } })
             }
+
+        /** Schema for one read-aloud narration entry: { lang, text }. */
+        private fun narrationItemSchema(): JsonObject = objSchema(
+            listOf("lang", "text"),
+            mapOf(
+                "lang" to enumProp(listOf("en", "hinglish", "hi")),
+                "text" to strProp(),
+            ),
+        )
 
         private fun roundSchema(): JsonObject {
             val optionSchema = objSchema(
@@ -325,7 +362,7 @@ class ClaudeClient(
                 ),
             )
             return objSchema(
-                listOf("scenario", "dilemma", "options", "paths"),
+                listOf("scenario", "dilemma", "options", "paths", "narration"),
                 mapOf(
                     "scenario" to objSchema(
                         listOf("title", "dimension", "setting", "era", "situation"),
@@ -343,6 +380,7 @@ class ClaudeClient(
                     ),
                     "options" to arraySchema(optionSchema),
                     "paths" to arraySchema(pathSchema),
+                    "narration" to arraySchema(narrationItemSchema()),
                 ),
             )
         }
@@ -360,7 +398,7 @@ class ClaudeClient(
             return objSchema(
                 listOf(
                     "primary_ideology", "secondary_ideology", "strength", "reasoning",
-                    "historical_outcome", "causal_chain", "tradeoff",
+                    "historical_outcome", "causal_chain", "tradeoff", "narration",
                 ),
                 mapOf(
                     "primary_ideology" to ideologyEnumProp(),
@@ -370,6 +408,7 @@ class ClaudeClient(
                     "historical_outcome" to strProp(),
                     "causal_chain" to arraySchema(stepSchema),
                     "tradeoff" to strProp(),
+                    "narration" to arraySchema(narrationItemSchema()),
                 ),
             )
         }

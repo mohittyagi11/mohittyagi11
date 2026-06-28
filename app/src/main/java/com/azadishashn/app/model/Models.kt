@@ -35,7 +35,13 @@ data class RoundData(
     val options: List<OptionCard>,
     /** Forecast for each ideology — the "compare the four paths" fan-out. */
     val paths: List<PathForecast> = emptyList(),
+    /** Spoken read-aloud of the scenario, one entry per selected read-aloud language. */
+    val narration: List<NarrationLine> = emptyList(),
 )
+
+/** A read-aloud rendering of some text in a given language ("en" | "hinglish" | "hi"). */
+@Serializable
+data class NarrationLine(val lang: String, val text: String = "")
 
 /** Where one ideology's stance plausibly leads — for the fan-out exhibit. */
 @Serializable
@@ -90,6 +96,8 @@ data class Verdict(
     @SerialName("causal_chain") val causalChain: List<CausalStep> = emptyList(),
     /** The central cost-of-power tradeoff. */
     val tradeoff: String = "",
+    /** Spoken read-aloud of the verdict, one entry per selected read-aloud language. */
+    val narration: List<NarrationLine> = emptyList(),
 )
 
 // ---------------------------------------------------------------------------
@@ -131,4 +139,6 @@ data class AwardResult(
     /** The verdict's consequence chain + tradeoff, for the analyst exhibit. */
     val causalChain: List<CausalStep> = emptyList(),
     val tradeoff: String = "",
+    /** The verdict's spoken read-aloud per selected language. */
+    val narration: List<NarrationLine> = emptyList(),
 )

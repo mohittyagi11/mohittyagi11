@@ -224,10 +224,14 @@ private fun RoundBody(vm: GameViewModel) {
         ScenarioStory(
             round = round,
             isReading = vm.isReading,
-            onNarrate = {
-                val dim = round.scenario.dimension.takeIf { it.isNotBlank() }?.let { "$it. " } ?: ""
-                vm.readOut("$dim${round.scenario.title}. ${round.scenario.situation}  ${round.dilemma.question}")
+            langs = vm.readLangs,
+            textFor = { lang ->
+                round.narration.firstOrNull { it.lang == lang }?.text?.takeIf { it.isNotBlank() } ?: run {
+                    val dim = round.scenario.dimension.takeIf { it.isNotBlank() }?.let { "$it. " } ?: ""
+                    "$dim${round.scenario.title}. ${round.scenario.situation}  ${round.dilemma.question}"
+                }
             },
+            onPlay = { lang, text -> vm.readOut(text, lang) },
             onStop = vm::stopReadOut,
         )
 
