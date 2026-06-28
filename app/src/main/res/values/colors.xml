@@ -2,4 +2,6 @@
 <resources>
     <!-- Light window background (warm paper) — matches Compose LightColors.background. -->
     <color name="window_bg">#FFF7F4EC</color>
+    <!-- Adaptive launcher icon background (matches the illustration's black field). -->
+    <color name="ic_launcher_bg">#0A0A0C</color>
 </resources>
