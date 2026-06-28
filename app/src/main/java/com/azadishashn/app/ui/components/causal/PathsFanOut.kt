@@ -31,10 +31,22 @@ import com.azadishashn.app.model.PathForecast
 import com.azadishashn.app.ui.theme.IdeologyTheme
 import com.azadishashn.app.ui.theme.OverlineStyle
 
+/** Numerals for the anonymous path labels (and the reveal tag). */
+private val ROMAN = listOf("I", "II", "III", "IV", "V", "VI")
+
 /**
- * The "compare the four paths" fan-out — the dilemma, then one path card per
- * ideology (stance → outcome → risk). When [chosen] is set, that path is lit and
- * the others recede: the chosen-one-on-each-logic view.
+ * The "compare the four paths" fan-out — the dilemma, then one card per path
+ * (stance → outcome → risk).
+ *
+ * At QUESTION time ([reveal] = false) the paths are anonymous: neutral numerals
+ * ("Path I…IV") and grey dots, shuffled by a stable per-scenario seed so neither
+ * the name, the colour, nor the position gives the ideology away — the player
+ * has to read the dilemma and choose a framing themselves.
+ *
+ * On the VERDICT recap ([reveal] = true, [chosen] set) the same shuffled order
+ * is revealed with ideology names + brand colours, the chosen path lit and the
+ * rest receded, and each card keeps its numeral so the player can connect their
+ * pre-decision read to the answer.
  */
 @Composable
 fun PathsFanOut(
@@ -42,13 +54,25 @@ fun PathsFanOut(
     question: String,
     modifier: Modifier = Modifier,
     chosen: String? = null,
+    reveal: Boolean = chosen != null,
 ) {
     if (paths.isEmpty()) return
-    val accent = chosen?.let { IdeologyTheme.of(it).brand } ?: MaterialTheme.colorScheme.primary
-    val ordered = Ideologies.NAMES.mapNotNull { n -> paths.firstOrNull { it.ideology == n } }
+    val accent = if (reveal) {
+        chosen?.let { IdeologyTheme.of(it).brand } ?: MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
 
-    var shown by remember(paths, chosen) { mutableIntStateOf(0) }
-    LaunchedEffect(paths, chosen) {
+    // Deterministic shuffle by a per-scenario seed so card POSITION never leaks
+    // the ideology. String.hashCode() is stable, so the order is reproducible —
+    // and identical between the question view and the verdict reveal.
+    val ordered = remember(paths, question) {
+        val present = Ideologies.NAMES.mapNotNull { n -> paths.firstOrNull { it.ideology == n } }
+        present.sortedBy { ("$question|${it.ideology}").hashCode() }
+    }
+
+    var shown by remember(paths, reveal) { mutableIntStateOf(0) }
+    LaunchedEffect(paths, reveal) {
         shown = 0
         repeat(ordered.size + 1) {
             kotlinx.coroutines.delay(if (it == 0) 100 else 160)
@@ -56,8 +80,11 @@ fun PathsFanOut(
         }
     }
 
+    val title = if (reveal) "Compare the four paths" else "Four paths — you decide"
+    val grey = MaterialTheme.colorScheme.onSurfaceVariant
+
     BlueprintSurface(accent = accent, modifier = modifier) {
-        ExhibitHeader("Exhibit · paths", "Compare the four paths", accent)
+        ExhibitHeader("Exhibit · paths", title, accent)
         Spacer(Modifier.height(12.dp))
 
         Reveal(visible = shown > 0) {
@@ -67,25 +94,29 @@ fun PathsFanOut(
                     .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp))
                     .padding(12.dp),
             ) {
-                Text("THE DILEMMA", style = OverlineStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("THE DILEMMA", style = OverlineStyle, color = grey)
                 Spacer(Modifier.height(4.dp))
                 Text(question, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             }
         }
 
         ordered.forEachIndexed { i, p ->
+            val numeral = "Path ${ROMAN.getOrElse(i) { "${i + 1}" }}"
+            val isChosen = reveal && chosen != null && p.ideology == chosen
             Reveal(visible = shown > i + 1) {
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth()) {
-                    Text("↳", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                    Text("↳", color = grey, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(8.dp))
                     PathCard(
-                        name = p.ideology,
-                        dot = IdeologyTheme.of(p.ideology).brand,
+                        name = if (reveal) p.ideology else numeral,
+                        dot = if (reveal) IdeologyTheme.of(p.ideology).brand else grey,
                         stance = p.stance,
                         outcome = p.outcome,
                         risk = p.risk,
-                        chosen = chosen != null && p.ideology == chosen,
+                        chosen = isChosen,
+                        tag = if (reveal) numeral else "",
+                        dimmed = reveal && chosen != null && !isChosen,
                         modifier = Modifier.weight(1f),
                     )
                 }

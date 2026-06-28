@@ -27,10 +27,10 @@ import com.azadishashn.app.game.Screen
 
 @Composable
 fun AzadiApp(vm: GameViewModel = viewModel()) {
-    // Intercept system Back everywhere except the root Setup screen, so Back
+    // Intercept system Back everywhere except the root Library home, so Back
     // navigates within the app instead of closing it. Keyed on the live state —
     // AnimatedContent below only animates the swap, it never owns nav state.
-    BackHandler(enabled = vm.state.screen != Screen.Setup) { vm.onBack() }
+    BackHandler(enabled = vm.state.screen != Screen.Library) { vm.onBack() }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -59,6 +59,7 @@ fun AzadiApp(vm: GameViewModel = viewModel()) {
                 label = "screen",
             ) { screen ->
                 when (screen) {
+                    Screen.Library -> LibraryScreen(vm)
                     Screen.Setup -> SetupScreen(vm)
                     Screen.Settings -> SettingsScreen(vm)
                     Screen.Round -> RoundScreen(vm)

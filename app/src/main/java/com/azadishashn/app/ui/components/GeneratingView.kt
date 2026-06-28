@@ -66,7 +66,13 @@ fun GeneratingView(kind: String?, context: String, modifier: Modifier = Modifier
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        SealLoader(size = 140.dp)
+        Box(contentAlignment = Alignment.Center) {
+            com.azadishashn.app.ui.components.poster.Sunburst(
+                modifier = Modifier.size(220.dp),
+                intensity = 0.2f,
+            )
+            SealLoader(size = 140.dp)
+        }
         Spacer(Modifier.height(36.dp))
         AnimatedContent(
             targetState = captions[index % captions.size],

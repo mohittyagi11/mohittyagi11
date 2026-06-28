@@ -32,8 +32,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -55,6 +57,7 @@ import com.azadishashn.app.ui.components.StatTile
 import com.azadishashn.app.ui.components.StrengthMeter
 import com.azadishashn.app.ui.components.causal.ConsequenceFlow
 import com.azadishashn.app.ui.components.causal.PathsFanOut
+import com.azadishashn.app.ui.components.poster.PosterBurst
 import com.azadishashn.app.ui.theme.Dim
 import com.azadishashn.app.ui.theme.Elev
 import com.azadishashn.app.ui.theme.IdeologyTheme
@@ -92,6 +95,12 @@ fun ResultScreen(vm: GameViewModel) {
         ) {
             // Hero — the awarded card, lit by its ideology, with the seal stamp.
             Box {
+                // Ceremony sunburst burst in the winning ideology's colour, behind the card.
+                PosterBurst(
+                    accent = glow,
+                    intensity = 0.4f,
+                    modifier = Modifier.matchParentSize().clip(RoundedCornerShape(24.dp)),
+                )
                 SectionCard(glow = glow, elevation = Elev.hero) {
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {

@@ -25,11 +25,19 @@ import kotlinx.serialization.Serializable
 import kotlin.math.roundToInt
 
 @Serializable
-enum class Screen { Setup, Settings, Round, Result, Standings, Edit, Transfer }
+enum class Screen { Library, Setup, Settings, Round, Result, Standings, Edit, Transfer }
 
 @Serializable
 data class GameState(
     val screen: Screen = Screen.Setup,
+    /** Stable identity for the multi-game library (UUID). Empty for a brand-new, unsaved state. */
+    val id: String = "",
+    /** Display name shown in the library; defaults from the player names. */
+    val title: String = "",
+    val createdAt: Long = 0L,
+    val updatedAt: Long = 0L,
+    /** True once the game has been finished (so the library can mark it done). */
+    val finished: Boolean = false,
     val players: List<Player> = emptyList(),
     val activeIndex: Int = 0,
     val round: Int = 1,
@@ -103,22 +111,84 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private val twistLimit = 2
 
     init {
-        // Restore an in-progress game so app updates / restarts don't kill it.
-        val saved = store.load()
-        if (saved != null && saved.players.isNotEmpty()) {
-            nextPlayerId = (saved.players.maxOfOrNull { it.id } ?: -1) + 1
-            var restored = saved.copy(loading = false, loadingKind = null, error = null)
-            // If we were killed at the theme-pick stage, repopulate the chips.
-            if (restored.screen == Screen.Round && restored.current == null &&
-                settings.hasKey && restored.availableThemes.isEmpty()
-            ) {
-                restored = restored.copy(availableThemes = Themes.sample(12))
+        // Fold any pre-library single-slot game into the library (one-time).
+        store.migrateLegacyIfNeeded()
+
+        // Restore the active game so app updates / restarts don't kill it. When
+        // any games exist we land on the library (a games home); a clean first
+        // run starts at Setup.
+        val summaries = store.listSummaries()
+        if (summaries.isNotEmpty()) {
+            val activeId = store.activeId() ?: summaries.first().id
+            val saved = store.loadGame(activeId)
+            if (saved != null && saved.players.isNotEmpty()) {
+                nextPlayerId = (saved.players.maxOfOrNull { it.id } ?: -1) + 1
+                var restored = saved.copy(loading = false, loadingKind = null, error = null, screen = Screen.Library)
+                // If we were killed at the theme-pick stage, repopulate the chips.
+                if (restored.current == null && settings.hasKey && restored.availableThemes.isEmpty()) {
+                    restored = restored.copy(availableThemes = Themes.sample(12))
+                }
+                state = restored
+                store.setActive(activeId)
+            } else {
+                state = GameState(screen = Screen.Library)
             }
-            state = restored
         }
-        // Persist on every state change.
+        // Persist the active game on every change. The library view itself isn't
+        // game progress, so don't fold its screen into the saved blob.
         viewModelScope.launch {
-            snapshotFlow { state }.collect { store.save(it) }
+            snapshotFlow { state }.collect {
+                if (it.screen != Screen.Library && it.players.isNotEmpty()) store.saveGame(it)
+            }
+        }
+    }
+
+    // -- Library (multiple games) --------------------------------------------
+
+    /** Saved games for the library list, most-recently-updated first. */
+    fun librarySummaries(): List<com.azadishashn.app.data.GameSummary> = store.listSummaries()
+
+    /** Show the games home. Keeps the active game in memory so Resume is instant. */
+    fun openLibrary() {
+        state = state.copy(screen = Screen.Library)
+    }
+
+    /** Start configuring a brand-new game without disturbing the existing ones. */
+    fun newGame() {
+        val now = System.currentTimeMillis()
+        val id = store.newId()
+        nextPlayerId = 0
+        store.setActive(id)
+        state = GameState(screen = Screen.Setup, id = id, createdAt = now, updatedAt = now)
+    }
+
+    /** Re-open a saved game where it left off. */
+    fun resumeGame(id: String) {
+        val saved = store.loadGame(id)?.takeIf { it.players.isNotEmpty() } ?: return
+        nextPlayerId = (saved.players.maxOfOrNull { it.id } ?: -1) + 1
+        store.setActive(id)
+        var restored = saved.copy(loading = false, loadingKind = null, error = null)
+        if (restored.screen == Screen.Library) restored = restored.copy(screen = Screen.Round)
+        if (restored.screen == Screen.Round && restored.current == null &&
+            settings.hasKey && restored.availableThemes.isEmpty()
+        ) {
+            restored = restored.copy(availableThemes = Themes.sample(12))
+        }
+        state = restored
+    }
+
+    fun deleteGame(id: String) {
+        store.deleteGame(id)
+        // If we deleted the in-memory game, drop it so it can't be re-saved.
+        if (state.id == id) state = GameState(screen = Screen.Library)
+    }
+
+    fun renameGame(id: String, title: String) {
+        val clean = title.trim().ifEmpty { return }
+        if (state.id == id) {
+            state = state.copy(title = clean)
+        } else {
+            store.loadGame(id)?.let { store.saveGame(it.copy(title = clean)) }
         }
     }
 
@@ -138,7 +208,21 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun startGame(firstPlayerId: Int) {
         if (state.players.size < 2) return
         val idx = state.players.indexOfFirst { it.id == firstPlayerId }.coerceAtLeast(0)
-        state = state.copy(screen = Screen.Round, activeIndex = idx, round = 1, starterId = firstPlayerId)
+        // Ensure the game has an identity (a clean first run reaches Setup with none)
+        // and a title derived from the table.
+        val now = System.currentTimeMillis()
+        val id = state.id.ifBlank { store.newId() }
+        val title = state.title.ifBlank { state.players.joinToString(" · ") { it.name } }
+        if (state.id.isBlank()) store.setActive(id)
+        state = state.copy(
+            id = id,
+            title = title,
+            createdAt = if (state.createdAt == 0L) now else state.createdAt,
+            screen = Screen.Round,
+            activeIndex = idx,
+            round = 1,
+            starterId = firstPlayerId,
+        )
         beginTurn()
     }
 
@@ -429,7 +513,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun endGame() {
-        state = state.copy(screen = Screen.Standings, dashboardReturn = null)
+        state = state.copy(screen = Screen.Standings, dashboardReturn = null, finished = true)
     }
 
     // -- Manual repair (edit current game state) -----------------------------
@@ -466,10 +550,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    fun newGame() {
-        state = GameState(players = state.players.map { it.copy(counts = emptyMap()) })
-    }
-
     // -- Export / Import (take a copy, simulate, restore) --------------------
 
     fun openTransfer() {
@@ -497,11 +577,24 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         return store.export(snapshot)
     }
 
-    /** Load a pasted/exported game, replacing the current one. Returns false if it won't parse. */
+    /** Load a pasted/exported game as a NEW library entry. Returns false if it won't parse. */
     fun importState(raw: String): Boolean {
         val loaded = store.import(raw)?.takeIf { it.players.isNotEmpty() } ?: return false
         nextPlayerId = (loaded.players.maxOfOrNull { it.id } ?: -1) + 1
-        state = loaded.copy(loading = false, loadingKind = null, error = null, transferReturn = null, dashboardReturn = null)
+        val now = System.currentTimeMillis()
+        // Mint a fresh identity so an imported copy doesn't overwrite its origin.
+        val id = store.newId()
+        store.setActive(id)
+        state = loaded.copy(
+            id = id,
+            title = loaded.title.ifBlank { loaded.players.joinToString(" · ") { it.name } },
+            createdAt = now,
+            loading = false,
+            loadingKind = null,
+            error = null,
+            transferReturn = null,
+            dashboardReturn = null,
+        )
         return true
     }
 
@@ -513,12 +606,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun onBack() {
         state = when (state.screen) {
             Screen.Settings -> state.copy(screen = if (state.players.isEmpty()) Screen.Setup else Screen.Round)
-            Screen.Round -> state.copy(screen = Screen.Setup)
+            Screen.Round -> state.copy(screen = Screen.Library)
             Screen.Result -> state
-            Screen.Standings -> state.copy(screen = state.dashboardReturn ?: Screen.Setup, dashboardReturn = null)
+            Screen.Standings -> state.copy(screen = state.dashboardReturn ?: Screen.Library, dashboardReturn = null)
             Screen.Edit -> state.copy(screen = Screen.Standings)
-            Screen.Transfer -> state.copy(screen = state.transferReturn ?: Screen.Setup, transferReturn = null)
-            Screen.Setup -> state
+            Screen.Transfer -> state.copy(screen = state.transferReturn ?: Screen.Library, transferReturn = null)
+            Screen.Setup -> state.copy(screen = Screen.Library)
+            Screen.Library -> state
         }
     }
 }

@@ -112,7 +112,15 @@ fun NodeCard(
     }
 }
 
-/** A compact "where this ideology leads" card for the fan-out. */
+/**
+ * A compact "where this path leads" card for the fan-out.
+ *
+ * At question time the card is anonymous: [name] is a neutral numeral ("Path II")
+ * and [dot] a neutral grey, so the ideology identity isn't given away. On the
+ * verdict recap it's revealed: [name] becomes the ideology, [dot] its brand
+ * colour, [tag] carries the numeral as a small label, and the [chosen] path is
+ * lit while the rest [dimmed].
+ */
 @Composable
 fun PathCard(
     name: String,
@@ -122,9 +130,11 @@ fun PathCard(
     risk: String,
     chosen: Boolean,
     modifier: Modifier = Modifier,
+    tag: String = "",
+    dimmed: Boolean = false,
 ) {
     val border = if (chosen) dot else MaterialTheme.colorScheme.outlineVariant
-    val alpha = if (chosen) 1f else 0.62f
+    val alpha = if (dimmed) 0.62f else 1f
     Column(
         modifier
             .fillMaxWidth()
@@ -145,6 +155,8 @@ fun PathCard(
             )
             if (chosen) {
                 Text("YOUR CALL ✓", style = OverlineStyle, color = dot)
+            } else if (tag.isNotBlank()) {
+                Text(tag, style = OverlineStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (stance.isNotBlank()) {

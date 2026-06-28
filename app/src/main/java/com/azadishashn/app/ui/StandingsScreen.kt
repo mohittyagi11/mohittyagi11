@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
@@ -142,13 +143,13 @@ fun StandingsScreen(vm: GameViewModel) {
                 Text("Export / Import game")
             }
             OutlinedButton(
-                onClick = vm::newGame,
+                onClick = vm::openLibrary,
                 shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.height(18.dp))
+                Icon(Icons.Filled.Home, contentDescription = null, modifier = Modifier.height(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("New game (keep players)")
+                Text("Back to library")
             }
             Spacer(Modifier.height(8.dp))
         }

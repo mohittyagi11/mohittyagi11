@@ -277,7 +277,7 @@ private fun RoundBody(vm: GameViewModel) {
                         Text(if (showPaths) "Hide the four paths" else "Compare the four paths")
                     }
                     AnimatedVisibility(visible = showPaths) {
-                        PathsFanOut(paths = round.paths, question = round.dilemma.question)
+                        PathsFanOut(paths = round.paths, question = round.dilemma.question, reveal = false)
                     }
                 }
 

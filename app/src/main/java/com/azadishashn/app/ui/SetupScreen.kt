@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ImportExport
@@ -36,7 +37,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.game.GameViewModel
-import com.azadishashn.app.ui.components.AppLogo
 import com.azadishashn.app.ui.components.Avatar
 import com.azadishashn.app.ui.components.FlowBackground
 import com.azadishashn.app.ui.components.IconActionButton
@@ -44,6 +44,7 @@ import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.SealDivider
 import com.azadishashn.app.ui.components.SealWatermark
 import com.azadishashn.app.ui.components.SectionCard
+import com.azadishashn.app.ui.components.poster.PosterHero
 import com.azadishashn.app.ui.theme.Dim
 
 @Composable
@@ -68,23 +69,24 @@ fun SetupScreen(vm: GameViewModel) {
                 .fillMaxSize()
                 .padding(horizontal = Dim.screenH, vertical = Dim.screenV),
         ) {
-            // Hero
+            // Back to the games library.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AppLogo(size = 60.dp)
-                Spacer(Modifier.width(14.dp))
-                Column {
-                    Text(
-                        "Azadi Shashn",
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        "Argue your ideology, win the table.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                IconActionButton(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back to library",
+                    onClick = vm::openLibrary,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("New game", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
+            Spacer(Modifier.height(12.dp))
+
+            // Poster hero
+            PosterHero(
+                title = "Azadi Shashn",
+                kicker = "SHASN · Azadi",
+                subtitle = "Argue your ideology, win the table.",
+            )
             Spacer(Modifier.height(12.dp))
             SealDivider()
             Spacer(Modifier.height(12.dp))
