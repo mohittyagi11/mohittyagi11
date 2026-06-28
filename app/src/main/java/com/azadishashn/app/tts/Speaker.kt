@@ -114,13 +114,19 @@ class Speaker(
     private fun isNeural(v: Voice): Boolean =
         v.name.contains("-x-") || v.quality >= Voice.QUALITY_VERY_HIGH
 
+    /** True when the device has an installed Hindi voice (for natural Hinglish/Hindi audio). */
+    fun hindiAvailable(): Boolean {
+        val voices = runCatching { tts?.voices }.getOrNull() ?: return false
+        return voices.any { !isNotInstalled(it) && it.locale.language == "hi" }
+    }
+
     /**
-     * Set the narration language and re-pick the best voice. Only true Devanagari
-     * Hindi ("hi") uses a Hindi voice; English and Hinglish (Romanised Hindi) both
-     * read best with an English (India) voice.
+     * Set the narration language and re-pick the best voice. English uses an
+     * English voice; Hinglish and Hindi prefer a Hindi voice (they're fed
+     * Devanagari) when one is installed, else fall back to English.
      */
     fun setLanguage(code: String?) {
-        langCode = if (code == "hi") "hi" else "en"
+        langCode = if (code == "en" || code == null) "en" else if (hindiAvailable()) "hi" else "en"
         val engine = tts
         if (engine != null && ready) selectBestVoice(engine)
     }

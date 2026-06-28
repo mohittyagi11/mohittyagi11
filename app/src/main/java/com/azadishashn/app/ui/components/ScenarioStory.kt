@@ -56,6 +56,10 @@ fun ScenarioStory(
     onPlay: (lang: String, text: String) -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
+    // Display text — overridable so the scenario can be shown in another language.
+    titleText: String = round.scenario.title,
+    situationText: String = round.scenario.situation,
+    questionText: String = round.dilemma.question,
 ) {
     // Reveal beats: 1 ribbon, 2 title, 3 situation, 4 dilemma, 5 narrate.
     var step by remember(round) { mutableIntStateOf(0) }
@@ -96,34 +100,36 @@ fun ScenarioStory(
 
         Beat(visible = step >= 2) {
             Spacer(Modifier.height(10.dp))
-            Text(round.scenario.title, style = MaterialTheme.typography.headlineMedium)
+            Text(titleText, style = MaterialTheme.typography.headlineMedium)
         }
 
         Beat(visible = step >= 3) {
             Spacer(Modifier.height(12.dp))
             Text(
-                round.scenario.situation,
+                situationText,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
 
-        Beat(visible = step >= 4) {
-            Spacer(Modifier.height(16.dp))
-            Row(modifier = Modifier.height(IntrinsicSize.Min)) {
-                Box(
-                    Modifier
-                        .width(4.dp)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(MaterialTheme.colorScheme.secondary),
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    round.dilemma.question,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
+        if (questionText.isNotBlank()) {
+            Beat(visible = step >= 4) {
+                Spacer(Modifier.height(16.dp))
+                Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                    Box(
+                        Modifier
+                            .width(4.dp)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(MaterialTheme.colorScheme.secondary),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        questionText,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
         }
 

@@ -50,6 +50,7 @@ import com.azadishashn.app.ui.components.AzadiScaffold
 import com.azadishashn.app.ui.components.Collapsible
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
+import com.azadishashn.app.ui.components.LangChips
 import com.azadishashn.app.ui.components.IdeologyDot
 import com.azadishashn.app.ui.components.Particles
 import com.azadishashn.app.ui.components.PrimaryCta
@@ -221,26 +222,10 @@ fun ResultScreen(vm: GameViewModel) {
                 )
             }
 
-            if (r.reasoning.isNotBlank() || r.historicalNote.isNotBlank()) {
-                Spacer(Modifier.height(14.dp))
-                SectionCard {
-                    if (r.reasoning.isNotBlank()) {
-                        Text("Why", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
-                        Text(r.reasoning, style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (r.historicalNote.isNotBlank()) {
-                        Spacer(Modifier.height(8.dp))
-                        Text("History", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
-                        Text(
-                            r.historicalNote,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontStyle = FontStyle.Italic,
-                        )
-                    }
-                }
-            }
+            var displayLang by remember(r) { mutableStateOf(vm.language) }
+            val entry = r.narration.firstOrNull { it.lang == displayLang }
+            val translated = entry != null && displayLang != vm.language
 
-            Spacer(Modifier.height(8.dp))
             // The verdict spoken in English (built from the fields) as a fallback.
             val builtVerdict = run {
                 val card = if (r.diverted) {
@@ -254,12 +239,47 @@ fun ResultScreen(vm: GameViewModel) {
                     "and ${r.secondary} plus one ${Ideologies.resourceOf(r.secondary)}. " +
                     "${r.reasoning}. ${r.historicalNote}"
             }
+            val speakText: (String) -> String = { lang ->
+                val e = r.narration.firstOrNull { it.lang == lang }
+                val chosen = if (vm.prefersDevanagari(lang)) e?.speak else e?.text
+                chosen?.takeIf { it.isNotBlank() } ?: e?.text?.takeIf { it.isNotBlank() } ?: builtVerdict
+            }
+
+            if (translated || r.reasoning.isNotBlank() || r.historicalNote.isNotBlank()) {
+                Spacer(Modifier.height(14.dp))
+                LangChips(vm.readLangs, displayLang, { displayLang = it }, Modifier.padding(bottom = Dim.tight))
+                SectionCard {
+                    val e = entry
+                    if (translated && e != null) {
+                        if (e.title.isNotBlank()) {
+                            Text("Verdict", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
+                            Text(e.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        Text(e.text, style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        if (r.reasoning.isNotBlank()) {
+                            Text("Why", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
+                            Text(r.reasoning, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        if (r.historicalNote.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text("History", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
+                            Text(
+                                r.historicalNote,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontStyle = FontStyle.Italic,
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
             ReadAloudRow(
-                langs = vm.readLangs,
+                langs = listOf(displayLang),
                 isReading = vm.isReading,
-                textFor = { lang ->
-                    r.narration.firstOrNull { it.lang == lang }?.text?.takeIf { it.isNotBlank() } ?: builtVerdict
-                },
+                textFor = speakText,
                 onPlay = { lang, text -> vm.readOut(text, lang) },
                 onStop = vm::stopReadOut,
             )

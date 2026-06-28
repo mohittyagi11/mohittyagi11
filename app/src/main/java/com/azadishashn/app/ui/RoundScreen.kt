@@ -64,6 +64,7 @@ import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.ScenarioStory
 import com.azadishashn.app.ui.components.TurnProgress
 import com.azadishashn.app.ui.components.Collapsible
+import com.azadishashn.app.ui.components.LangChips
 import com.azadishashn.app.ui.components.causal.PathsFanOut
 import com.azadishashn.app.ui.theme.Dim
 import com.azadishashn.app.ui.theme.IdeologyTheme
@@ -221,18 +222,30 @@ private fun RoundBody(vm: GameViewModel) {
         )
         Spacer(Modifier.height(Dim.tight))
 
-        ScenarioStory(
-            round = round,
-            isReading = vm.isReading,
-            langs = vm.readLangs,
-            textFor = { lang ->
-                round.narration.firstOrNull { it.lang == lang }?.text?.takeIf { it.isNotBlank() } ?: run {
+        var displayLang by remember(round) { mutableStateOf(vm.language) }
+        val entry = round.narration.firstOrNull { it.lang == displayLang }
+        val translated = entry != null && displayLang != vm.language
+        val speakText: (String) -> String = { lang ->
+            val e = round.narration.firstOrNull { it.lang == lang }
+            val chosen = if (vm.prefersDevanagari(lang)) e?.speak else e?.text
+            chosen?.takeIf { it.isNotBlank() }
+                ?: e?.text?.takeIf { it.isNotBlank() }
+                ?: run {
                     val dim = round.scenario.dimension.takeIf { it.isNotBlank() }?.let { "$it. " } ?: ""
                     "$dim${round.scenario.title}. ${round.scenario.situation}  ${round.dilemma.question}"
                 }
-            },
+        }
+        LangChips(vm.readLangs, displayLang, { displayLang = it }, Modifier.padding(bottom = Dim.tight))
+        ScenarioStory(
+            round = round,
+            isReading = vm.isReading,
+            langs = listOf(displayLang),
+            textFor = speakText,
             onPlay = { lang, text -> vm.readOut(text, lang) },
             onStop = vm::stopReadOut,
+            titleText = if (translated) entry!!.title.ifBlank { round.scenario.title } else round.scenario.title,
+            situationText = if (translated) entry!!.text else round.scenario.situation,
+            questionText = if (translated) "" else round.dilemma.question,
         )
 
         when (phase) {

@@ -39,9 +39,20 @@ data class RoundData(
     val narration: List<NarrationLine> = emptyList(),
 )
 
-/** A read-aloud rendering of some text in a given language ("en" | "hinglish" | "hi"). */
+/**
+ * A localized rendering of a scenario/verdict in one language
+ * ("en" | "hinglish" | "hi"): [title] + [text] are shown on screen (Hinglish in
+ * Roman script); [speak] is what the TTS reads — for Hinglish/Hindi that's
+ * Devanagari so a Hindi voice pronounces it correctly instead of an English
+ * voice mangling Romanised words.
+ */
 @Serializable
-data class NarrationLine(val lang: String, val text: String = "")
+data class NarrationLine(
+    val lang: String,
+    val title: String = "",
+    val text: String = "",
+    val speak: String = "",
+)
 
 /** Where one ideology's stance plausibly leads — for the fan-out exhibit. */
 @Serializable

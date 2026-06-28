@@ -95,7 +95,7 @@ class ClaudeClient(
               think like a high-end policy analyst: stance (its one-line position), outcome (where
               that plausibly leads), risk (what it costs). Crisp, causal, non-partisan — one line each.$avoid
             ${languageLine(language)}
-            ${narrationLine(readLangs, "the scenario — the situation and the dilemma question")}
+            ${narrationLine(readLangs, "the scenario title", "the situation followed by the dilemma question")}
         """.trimIndent()
 
         val text = call(system = ROUND_SYSTEM, user = user, schema = roundSchema())
@@ -123,7 +123,7 @@ class ClaudeClient(
             $IDEOLOGY_BRIEF
             Keep every field punchy.
             ${languageLine(language)}
-            ${narrationLine(readLangs, "the scenario — the situation and the dilemma question")}
+            ${narrationLine(readLangs, "the scenario title", "the situation followed by the dilemma question")}
         """.trimIndent()
 
         val text = call(system = ROUND_SYSTEM, user = user, schema = roundSchema())
@@ -169,7 +169,7 @@ class ClaudeClient(
                (gain | cost | mixed). End at the long-run / historical echo.
             7. tradeoff: one sharp line naming the central cost-of-power tradeoff of this path.
             ${languageLine(language)}
-            ${narrationLine(readLangs, "the verdict — which ideology the answer served, the one-line reasoning, and the historical outcome")}
+            ${narrationLine(readLangs, "a short verdict headline naming which ideology the answer served", "the one-line reasoning and the historical outcome")}
         """.trimIndent()
 
         val text = call(system = ADJUDICATE_SYSTEM, user = user, schema = judgeSchema())
@@ -314,15 +314,22 @@ class ClaudeClient(
                     "label/mechanism, and tradeoff — in ${langDesc(code)}. $KEEP_TOKENS"
         }
 
-        /** Ask for read-aloud narration text in each selected language (folded into the call). */
-        private fun narrationLine(readLangs: List<String>, what: String): String {
+        /**
+         * Ask for a localized + read-aloud rendering in each selected language,
+         * folded into the call. Crucially, Hinglish DISPLAY is Roman script but its
+         * `speak` is Devanagari, so a Hindi TTS voice pronounces it naturally.
+         */
+        private fun narrationLine(readLangs: List<String>, titleDesc: String, bodyDesc: String): String {
             if (readLangs.isEmpty()) return ""
             val list = readLangs.joinToString(", ")
-            val perLang = readLangs.joinToString("; ") { "$it = ${langDesc(it)}" }
-            return "Also fill `narration`: a spoken, read-aloud version of $what — an ARRAY with " +
-                "exactly one entry per language in [$list]. Each entry has lang (one of: en, " +
-                "hinglish, hi) and text (2-3 natural spoken sentences in THAT language — $perLang). " +
-                "Keep ideology names in English inside the narration."
+            return "Also fill `narration`: an ARRAY with exactly one entry per language in [$list]. " +
+                "Each entry has: lang (en | hinglish | hi); title ($titleDesc, in that language); " +
+                "text ($bodyDesc, in that language, 2-3 sentences); speak (the title and text together " +
+                "as natural spoken sentences for text-to-speech). SCRIPT RULES — en: everything in " +
+                "English. hinglish: write title and text in ROMAN/Latin Hindi (Hinglish, casually " +
+                "mixing common English words), BUT write speak in DEVANAGARI Hindi (देवनागरी) so a Hindi " +
+                "voice reads it correctly. hi: write everything in Devanagari Hindi. Keep ideology " +
+                "names in English."
         }
 
         private fun objSchema(required: List<String>, props: Map<String, JsonElement>): JsonObject =
@@ -333,12 +340,14 @@ class ClaudeClient(
                 put("properties", buildJsonObject { props.forEach { (k, v) -> put(k, v) } })
             }
 
-        /** Schema for one read-aloud narration entry: { lang, text }. */
+        /** Schema for one localized narration entry: { lang, title, text, speak }. */
         private fun narrationItemSchema(): JsonObject = objSchema(
-            listOf("lang", "text"),
+            listOf("lang", "title", "text", "speak"),
             mapOf(
                 "lang" to enumProp(listOf("en", "hinglish", "hi")),
+                "title" to strProp(),
                 "text" to strProp(),
+                "speak" to strProp(),
             ),
         )
 

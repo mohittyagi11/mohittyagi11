@@ -94,6 +94,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun readOut(text: String, lang: String) = speaker.speak(text, lang)
     fun stopReadOut() = speaker.stop()
 
+    /** True when a non-English read-aloud should use the Devanagari `speak` text (a Hindi voice exists). */
+    fun prefersDevanagari(lang: String): Boolean = lang != "en" && speaker.hindiAvailable()
+
     override fun onCleared() {
         speaker.shutdown()
         super.onCleared()
