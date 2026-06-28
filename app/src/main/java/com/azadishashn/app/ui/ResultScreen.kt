@@ -47,19 +47,23 @@ import com.azadishashn.app.ui.components.AzadiScaffold
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.IdeologyDot
+import com.azadishashn.app.ui.components.Particles
 import com.azadishashn.app.ui.components.PrimaryCta
+import com.azadishashn.app.ui.components.SealMark
 import com.azadishashn.app.ui.components.SectionCard
 import com.azadishashn.app.ui.components.StatTile
 import com.azadishashn.app.ui.components.StrengthMeter
 import com.azadishashn.app.ui.theme.Dim
+import com.azadishashn.app.ui.theme.Elev
 import com.azadishashn.app.ui.theme.IdeologyTheme
+import com.azadishashn.app.ui.theme.OverlineStyle
 
 @Composable
 fun ResultScreen(vm: GameViewModel) {
     val r = vm.state.lastResult ?: return
     val cardIdeo = r.cardIdeology.ifBlank { r.primary }
 
-    // Bold reveal: the award badge pops in with a springy overshoot.
+    // The verdict ceremony: the seal stamps in, the colour blooms, sparks fly.
     var shown by remember(r) { mutableStateOf(false) }
     LaunchedEffect(r) { shown = true }
     val pop by animateFloatAsState(
@@ -67,6 +71,12 @@ fun ResultScreen(vm: GameViewModel) {
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
         label = "pop",
     )
+    val stamp by animateFloatAsState(
+        targetValue = if (shown) 1f else 1.8f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "stamp",
+    )
+    val reveal = ((pop - 0.55f) / 0.45f).coerceIn(0f, 1f)
     val glow = IdeologyTheme.of(cardIdeo).brand
 
     AzadiScaffold(title = "Verdict") { pad ->
@@ -78,62 +88,78 @@ fun ResultScreen(vm: GameViewModel) {
                 .padding(horizontal = Dim.screenH)
                 .padding(bottom = Dim.sectionGap),
         ) {
-            // Hero — the awarded card, tinted by its ideology.
-            SectionCard(containerColor = IdeologyTheme.container(cardIdeo)) {
-                Text(
-                    r.playerName,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    if (r.diverted) "Card redirected" else "Card won!",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(12.dp))
-                Box(contentAlignment = Alignment.CenterStart) {
-                    // Soft colored glow behind the awarded badge.
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .graphicsLayer { alpha = (pop - 0.55f) / 0.45f }
-                            .background(
-                                Brush.radialGradient(listOf(glow.copy(alpha = 0.45f), Color.Transparent)),
-                                MaterialTheme.shapes.large,
-                            ),
-                    )
-                    IdeologyBadge(
-                        cardIdeo,
-                        count = 1,
-                        modifier = Modifier.graphicsLayer {
-                            scaleX = pop; scaleY = pop
-                            transformOrigin = TransformOrigin(0f, 0.5f)
-                        },
-                    )
-                }
-
-                if (r.diverted) {
-                    Spacer(Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IdeologyDot(r.primary, size = 14.dp)
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "redirected to",
-                            modifier = Modifier.padding(horizontal = 8.dp).height(18.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        IdeologyDot(r.secondary, size = 14.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "didn't clear the bar for ${r.primary} — moved to ${r.secondary}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // Hero — the awarded card, lit by its ideology, with the seal stamp.
+            Box {
+                SectionCard(glow = glow, elevation = Elev.hero) {
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                r.playerName.uppercase(),
+                                style = OverlineStyle,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                if (r.diverted) "Card redirected" else "Card won!",
+                                style = MaterialTheme.typography.displaySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        SealMark(
+                            size = 48.dp,
+                            modifier = Modifier.graphicsLayer {
+                                scaleX = stamp; scaleY = stamp
+                                alpha = reveal
+                                rotationZ = (1f - reveal) * -12f
+                            },
                         )
                     }
-                }
+                    Spacer(Modifier.height(16.dp))
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        Box(
+                            Modifier
+                                .matchParentSize()
+                                .graphicsLayer { alpha = reveal }
+                                .background(
+                                    Brush.radialGradient(listOf(glow.copy(alpha = 0.45f), Color.Transparent)),
+                                    MaterialTheme.shapes.large,
+                                ),
+                        )
+                        IdeologyBadge(
+                            cardIdeo,
+                            count = 1,
+                            modifier = Modifier.graphicsLayer {
+                                scaleX = pop; scaleY = pop
+                                transformOrigin = TransformOrigin(0f, 0.5f)
+                            },
+                        )
+                    }
 
-                Spacer(Modifier.height(16.dp))
-                StrengthMeter(strength = r.strength, required = r.required, ideology = r.primary)
+                    if (r.diverted) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IdeologyDot(r.primary, size = 14.dp)
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "redirected to",
+                                modifier = Modifier.padding(horizontal = 8.dp).height(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            IdeologyDot(r.secondary, size = 14.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "didn't clear the bar for ${r.primary} — moved to ${r.secondary}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    StrengthMeter(strength = r.strength, required = r.required, ideology = r.primary)
+                }
+                // Celebratory spark burst over the hero.
+                Particles(color = glow, modifier = Modifier.matchParentSize())
             }
 
             Spacer(Modifier.height(14.dp))

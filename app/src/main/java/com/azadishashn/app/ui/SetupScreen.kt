@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,9 +37,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.ui.components.AppLogo
+import com.azadishashn.app.ui.components.Avatar
 import com.azadishashn.app.ui.components.FlowBackground
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.PrimaryCta
+import com.azadishashn.app.ui.components.SealDivider
+import com.azadishashn.app.ui.components.SealWatermark
 import com.azadishashn.app.ui.components.SectionCard
 import com.azadishashn.app.ui.theme.Dim
 
@@ -52,6 +56,13 @@ fun SetupScreen(vm: GameViewModel) {
 
     Box(Modifier.fillMaxSize()) {
         FlowBackground(Modifier.fillMaxSize())
+        SealWatermark(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 40.dp)
+                .size(280.dp),
+            alpha = 0.06f,
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -74,7 +85,9 @@ fun SetupScreen(vm: GameViewModel) {
                     )
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
+            SealDivider()
+            Spacer(Modifier.height(12.dp))
 
             SourceBanner(vm)
             Spacer(Modifier.height(16.dp))
@@ -125,6 +138,8 @@ fun SetupScreen(vm: GameViewModel) {
                                     selected = effectiveFirst == p.id,
                                     onClick = { firstId = p.id },
                                 )
+                                Avatar(p.name, seed = p.id, size = 32.dp)
+                                Spacer(Modifier.width(10.dp))
                                 Text(p.name, style = MaterialTheme.typography.titleMedium)
                             }
                             IconActionButton(
@@ -143,6 +158,7 @@ fun SetupScreen(vm: GameViewModel) {
                 else "Start — ${players.firstOrNull { it.id == effectiveFirst }?.name} plays first",
                 onClick = { effectiveFirst?.let { vm.startGame(it) } },
                 enabled = players.size >= 2,
+                gold = true,
             )
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 TextButton(onClick = vm::openSettings) {

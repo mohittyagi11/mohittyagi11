@@ -7,21 +7,23 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.material3.MaterialTheme
+import com.azadishashn.app.ui.theme.Abyss
+import com.azadishashn.app.ui.theme.DeepField
 import com.azadishashn.app.ui.theme.IdeologyTheme
 import kotlin.math.abs
 
 /**
- * The "edgy, dynamic flow": a single Canvas painting a handful of soft,
- * slowly-drifting radial blobs in the four ideology brand colours at very low
- * alpha over the theme background. GPU-cheap — one infinite transition, no
- * blur/shadow, ≤4 circles.
+ * The cinematic field: a layered deep gradient, ideology-coloured glow blobs
+ * drifting at two parallax speeds, and an edge vignette that focuses the centre.
+ * GPU-cheap — one infinite transition, alpha-capped, no blur. Background-only.
  */
 @Composable
 fun FlowBackground(modifier: Modifier = Modifier) {
@@ -30,29 +32,49 @@ fun FlowBackground(modifier: Modifier = Modifier) {
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 18000, easing = LinearEasing),
+            animation = tween(durationMillis = 20000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "phase",
     )
+    val dark = isSystemInDarkTheme()
     val background = MaterialTheme.colorScheme.background
     val seeds = IdeologyTheme.ALL.map { it.brand }
 
     Canvas(modifier) {
-        drawRect(background)
-        val radius = size.minDimension * 0.62f
+        // Layered base for depth.
+        if (dark) {
+            drawRect(Brush.verticalGradient(listOf(Abyss, DeepField, Abyss)))
+        } else {
+            drawRect(background)
+        }
+        val glowAlpha = if (dark) 0.13f else 0.10f
         seeds.forEachIndexed { i, color ->
-            val cx = size.width * (0.18f + 0.64f * triangle(phase + i * 0.25f))
-            val cy = size.height * (0.12f + 0.74f * triangle(phase * 0.7f + i * 0.4f))
+            // Parallax: even blobs drift faster than odd ones.
+            val speed = if (i % 2 == 0) 1f else 0.6f
+            val radius = size.minDimension * (0.58f + 0.08f * (i % 2))
+            val cx = size.width * (0.16f + 0.66f * triangle(phase * speed + i * 0.27f))
+            val cy = size.height * (0.10f + 0.78f * triangle(phase * 0.65f * speed + i * 0.41f))
             val center = Offset(cx, cy)
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(color.copy(alpha = 0.11f), Color.Transparent),
+                    colors = listOf(color.copy(alpha = glowAlpha), Color.Transparent),
                     center = center,
                     radius = radius,
                 ),
                 radius = radius,
                 center = center,
+            )
+        }
+        // Edge vignette.
+        if (dark) {
+            val c = Offset(size.width / 2f, size.height * 0.42f)
+            drawRect(
+                Brush.radialGradient(
+                    colors = listOf(Color.Transparent, Color(0xFF05060C).copy(alpha = 0.55f)),
+                    center = c,
+                    radius = size.maxDimension * 0.75f,
+                ),
             )
         }
     }

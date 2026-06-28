@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.BarChart
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.model.OptionCard
+import com.azadishashn.app.ui.components.Avatar
 import com.azadishashn.app.ui.components.AzadiScaffold
 import com.azadishashn.app.ui.components.GeneratingView
 import com.azadishashn.app.ui.components.IconActionButton
@@ -58,6 +60,7 @@ import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.IdeologyChip
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.ScenarioStory
+import com.azadishashn.app.ui.components.TurnProgress
 import com.azadishashn.app.ui.theme.Dim
 import com.azadishashn.app.ui.theme.IdeologyTheme
 
@@ -185,6 +188,28 @@ private fun RoundBody(vm: GameViewModel) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
+        // Roles + turn progress: who asks whom, and where we are in the round.
+        run {
+            val n = s.players.size
+            val starterIdx = s.players.indexOfFirst { it.id == s.starterId }.coerceAtLeast(0)
+            val turnInRound = if (n > 0) ((s.activeIndex - starterIdx + n) % n) + 1 else 1
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                s.questioner?.let { Avatar(it.name, seed = it.id, size = 28.dp) }
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "asks",
+                    modifier = Modifier.padding(horizontal = 6.dp).height(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                s.activePlayer?.let { Avatar(it.name, seed = it.id, size = 28.dp) }
+                Spacer(Modifier.weight(1f))
+                TurnProgress(total = n, current = turnInRound)
+            }
+        }
+        Spacer(Modifier.height(Dim.tight))
         Text(
             if (s.usingOffline) "Offline deck" else "Live · ${vm.model}",
             style = MaterialTheme.typography.labelSmall,

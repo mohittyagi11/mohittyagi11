@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -49,8 +51,10 @@ fun AzadiApp(vm: GameViewModel = viewModel()) {
                         dampingRatio = Spring.DampingRatioLowBouncy,
                         stiffness = Spring.StiffnessMediumLow,
                     )
-                    (fadeIn(tween(260)) + slideInHorizontally(enterSlide) { it / 6 }) togetherWith
-                        (fadeOut(tween(180)) + slideOutHorizontally(tween(180)) { -it / 8 })
+                    (fadeIn(tween(280)) + slideInHorizontally(enterSlide) { it / 6 } +
+                        scaleIn(initialScale = 0.94f, animationSpec = tween(280))) togetherWith
+                        (fadeOut(tween(180)) + slideOutHorizontally(tween(180)) { -it / 10 } +
+                            scaleOut(targetScale = 1.04f, animationSpec = tween(180)))
                 },
                 label = "screen",
             ) { screen ->

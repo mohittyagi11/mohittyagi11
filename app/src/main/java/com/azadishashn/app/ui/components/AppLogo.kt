@@ -20,9 +20,13 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun AppLogo(size: Dp = 56.dp, modifier: Modifier = Modifier) {
     val navy = Color(0xFF101631)
-    val gold = Brush.verticalGradient(listOf(Color(0xFFF4E2AC), Color(0xFFC9A156)))
+    val crownFill = Brush.verticalGradient(
+        0.0f to Color(0xFFFFF6D8), 0.34f to Color(0xFFF2D98C),
+        0.7f to Color(0xFFCE9F45), 1.0f to Color(0xFF8A6326),
+    )
+    val crownEdge = Color(0xFF6E4E1E)
     val ringGold = Brush.verticalGradient(listOf(Color(0xFFF1DCA0), Color(0xFFC29A53)))
-    val peg = Color(0xFFF6E7B6)
+    val peg = Color(0xFFFFFBEA)
     Canvas(modifier.size(size)) {
         val s = this.size.minDimension
         val cx = this.size.width / 2f
@@ -44,7 +48,8 @@ fun AppLogo(size: Dp = 56.dp, modifier: Modifier = Modifier) {
             lineTo(p(12f, 8f).x, p(12f, 8f).y)
             close()
         }
-        drawPath(crown, brush = gold)
+        drawPath(crown, brush = crownFill)
+        drawPath(crown, color = crownEdge, style = Stroke(width = s * 0.012f))
         drawCircle(peg, radius = 2f * u, center = p(-12f, -8f))
         drawCircle(peg, radius = 2.4f * u, center = p(0f, -12f))
         drawCircle(peg, radius = 2f * u, center = p(12f, -8f))

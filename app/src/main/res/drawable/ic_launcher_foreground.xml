@@ -23,18 +23,30 @@
         </aapt:attr>
     </path>
 
-    <!-- the crown -->
-    <path android:pathData="M42,62 L42,46 L48,54 L54,42 L60,54 L66,46 L66,62 Z">
+    <!-- the crown — multi-tone metallic: bright champagne highlight → gold →
+         deep bronze, with a darker bronze bevelled edge -->
+    <path
+        android:strokeColor="#6E4E1E"
+        android:strokeWidth="1"
+        android:pathData="M42,62 L42,46 L48,54 L54,42 L60,54 L66,46 L66,62 Z">
         <aapt:attr name="android:fillColor">
             <gradient android:type="linear"
-                android:startX="54" android:startY="42"
-                android:endX="54" android:endY="62"
-                android:startColor="#F4E2AC" android:endColor="#C9A156" />
+                android:startX="54" android:startY="40"
+                android:endX="54" android:endY="62">
+                <item android:offset="0.0" android:color="#FFF6D8" />
+                <item android:offset="0.34" android:color="#F2D98C" />
+                <item android:offset="0.7" android:color="#CE9F45" />
+                <item android:offset="1.0" android:color="#8A6326" />
+            </gradient>
         </aapt:attr>
     </path>
 
-    <!-- peg finials on the crown points -->
-    <path android:fillColor="#F6E7B6" android:pathData="M40,46 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 z" />
-    <path android:fillColor="#F6E7B6" android:pathData="M51.6,42 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0 z" />
-    <path android:fillColor="#F6E7B6" android:pathData="M64,46 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 z" />
+    <!-- bright highlight glint along the upper-left facets -->
+    <path android:strokeColor="#FFF8E2" android:strokeWidth="0.8" android:fillColor="#00000000"
+        android:pathData="M42,47 L42,60 M53,44 L49,52" />
+
+    <!-- peg finials on the crown points (bright glints) -->
+    <path android:fillColor="#FFFBEA" android:pathData="M40,46 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 z" />
+    <path android:fillColor="#FFFBEA" android:pathData="M51.6,42 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0 z" />
+    <path android:fillColor="#FFFBEA" android:pathData="M64,46 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 z" />
 </vector>

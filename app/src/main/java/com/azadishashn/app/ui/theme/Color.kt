@@ -18,6 +18,26 @@ internal val IdeoTeal = Color(0xFF2EE6C6)
 internal val IdeoPurple = Color(0xFF9E7BFF)
 
 // ---------------------------------------------------------------------------
+// Cinematic dark-glass vocabulary — the "situation room" sigil & surfaces.
+// ---------------------------------------------------------------------------
+internal val Gold = Color(0xFFE6C982)
+internal val GoldBright = Color(0xFFF4E2AC)
+internal val GoldDim = Color(0xFFC29A53)
+
+// Layered dark canvas stops (deep field; cards float above it).
+internal val Abyss = Color(0xFF070912)
+internal val DeepField = Color(0xFF0B0F1E)
+internal val RiseField = Color(0xFF161C39)
+
+// Frosted-glass fills (translucent — composited over whatever is behind).
+internal val GlassDarkTop = Color(0x24FFFFFF)     // ~14% white, pane top
+internal val GlassDarkBottom = Color(0x0FFFFFFF)  // ~6% white, pane bottom
+internal val GlassLightTop = Color(0xF2FFFFFF)    // frosted white, light mode
+internal val GlassLightBottom = Color(0xCCFFFFFF)
+internal val HairlineLight = Color(0x40FFFFFF)    // top edge highlight
+internal val HairlineDark = Color(0x14000000)     // bottom edge shadow
+
+// ---------------------------------------------------------------------------
 // LIGHT — warm editorial "paper", not pure white, so colour pops gently.
 // ---------------------------------------------------------------------------
 private val PaperBg = Color(0xFFF7F4EC)
@@ -61,9 +81,9 @@ val LightColors = lightColorScheme(
 // ---------------------------------------------------------------------------
 // DARK — deep navy-charcoal canvas; ideology colours read as neon accents.
 // ---------------------------------------------------------------------------
-private val InkBg = Color(0xFF101321)
-private val InkSurface = Color(0xFF161A2C)
-private val InkContainer = Color(0xFF1C2138)
+private val InkBg = Color(0xFF0B0F1E)        // deeper field so glass + glow pop
+private val InkSurface = Color(0xFF141A30)
+private val InkContainer = Color(0xFF1A2140)
 
 val DarkColors = darkColorScheme(
     primary = Color(0xFFB9C3FF),
@@ -84,10 +104,10 @@ val DarkColors = darkColorScheme(
     onSurface = Color(0xFFE8E6F0),
     surfaceVariant = Color(0xFF2A2F44),
     onSurfaceVariant = Color(0xFFC3C2D0),
-    surfaceContainerLowest = Color(0xFF0C0F1A),
-    surfaceContainerLow = Color(0xFF141828),
+    surfaceContainerLowest = Color(0xFF070912),
+    surfaceContainerLow = Color(0xFF111733),
     surfaceContainer = InkContainer,
-    surfaceContainerHigh = Color(0xFF232843),
+    surfaceContainerHigh = Color(0xFF232A4C),
     surfaceContainerHighest = Color(0xFF2C3252),
     outline = Color(0xFF565B73),
     outlineVariant = Color(0xFF2E3349),

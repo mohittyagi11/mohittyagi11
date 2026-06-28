@@ -28,13 +28,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.model.Ideologies
+import com.azadishashn.app.ui.components.AnimatedCounter
+import com.azadishashn.app.ui.components.Avatar
 import com.azadishashn.app.ui.components.AzadiScaffold
 import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.IdeologyDistributionBar
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.RankMedallion
+import com.azadishashn.app.ui.components.SealMark
 import com.azadishashn.app.ui.components.SectionCard
 import com.azadishashn.app.ui.theme.Dim
+import com.azadishashn.app.ui.theme.Gold
+import com.azadishashn.app.ui.theme.NumberStyle
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -59,22 +64,35 @@ fun StandingsScreen(vm: GameViewModel) {
                 verticalArrangement = Arrangement.spacedBy(Dim.itemGap),
             ) {
                 itemsIndexed(ranked) { index, player ->
-                    SectionCard {
+                    val leader = index == 0 && player.total > 0
+                    SectionCard(
+                        glow = if (leader) Gold else null,
+                        accent = if (leader) Gold else null,
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             RankMedallion(index + 1)
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                player.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(
-                                "${player.total}",
-                                style = MaterialTheme.typography.headlineSmall,
+                            Spacer(Modifier.width(10.dp))
+                            Avatar(player.name, seed = player.id, size = 34.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        player.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    if (leader) {
+                                        Spacer(Modifier.width(6.dp))
+                                        SealMark(size = 18.dp)
+                                    }
+                                }
+                            }
+                            AnimatedCounter(
+                                value = player.total,
+                                style = NumberStyle,
                                 color = MaterialTheme.colorScheme.primary,
                             )
                             Text(
@@ -83,7 +101,7 @@ fun StandingsScreen(vm: GameViewModel) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(12.dp))
                         IdeologyDistributionBar(player.counts)
                         Spacer(Modifier.height(10.dp))
                         FlowRow(

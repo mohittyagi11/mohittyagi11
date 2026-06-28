@@ -81,17 +81,17 @@ fun EditScreen(vm: GameViewModel) {
             )
             Spacer(Modifier.height(14.dp))
 
-            SectionCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+            SectionCard(accent = MaterialTheme.colorScheme.primary) {
                 Text(
                     "Round $round · turn $turnInRound of ${n.coerceAtLeast(1)}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     "$activeName answers next ★",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 

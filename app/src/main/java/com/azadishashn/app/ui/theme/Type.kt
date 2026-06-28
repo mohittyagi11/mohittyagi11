@@ -1,6 +1,7 @@
 package com.azadishashn.app.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -38,4 +39,18 @@ val AzadiTypography = base.copy(
     titleLarge = base.titleLarge.copy(
         fontFamily = Display, fontWeight = FontWeight.Medium,
     ),
+)
+
+/** Letter-spaced small-caps kicker for section labels / overlines. */
+val OverlineStyle: TextStyle = base.labelSmall.copy(
+    fontFamily = Display,
+    fontWeight = FontWeight.Bold,
+    letterSpacing = 1.6.sp,
+)
+
+/** Tabular figures so animated counters don't jitter as digits change. */
+val NumberStyle: TextStyle = base.headlineSmall.copy(
+    fontFamily = Display,
+    fontWeight = FontWeight.Bold,
+    fontFeatureSettings = "tnum",
 )
