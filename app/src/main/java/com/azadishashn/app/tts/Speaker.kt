@@ -27,7 +27,8 @@ class Speaker(
     private var ready = false
     private var pending: String? = null
 
-    /** Preferred English region (country code), nudged by the Settings voice choice. */
+    /** Target narration language ("en" | "hi") and preferred region, from Settings. */
+    private var langCode: String = "en"
     private var regionPref: String = "IN"
 
     // Track first/last chunk ids so the read/stop button doesn't flicker between
@@ -81,23 +82,25 @@ class Speaker(
     }
 
     /**
-     * Choose the most natural English voice: highest [Voice.quality]; among equal
-     * quality prefer LOCAL (offline-safe) over network, then the enhanced "-x-"
-     * neural voices, then the preferred region. Falls back to the best installed
-     * voice of any locale, else the engine default.
+     * Choose the most natural voice for [langCode]: highest [Voice.quality]; among
+     * equal quality prefer LOCAL (offline-safe) over network, then the enhanced
+     * "-x-" neural voices, then the preferred region. Falls back to English, then
+     * to the best installed voice of any locale, else the engine default.
      */
     private fun selectBestVoice(engine: TextToSpeech) {
         val voices: Set<Voice> = runCatching { engine.voices }.getOrNull() ?: return
         val installed = voices.filter { !isNotInstalled(it) }
+        val comparator = compareBy<Voice>(
+            { it.quality },
+            { if (!it.isNetworkConnectionRequired) 1 else 0 },
+            { if (isNeural(it)) 1 else 0 },
+            { if (it.locale.country.equals(regionPref, ignoreCase = true)) 1 else 0 },
+        )
+        val inLang = installed.filter { it.locale.language == langCode }
         val english = installed.filter { it.locale.language == "en" }
-        val best = english.maxWithOrNull(
-            compareBy(
-                { it.quality },
-                { if (!it.isNetworkConnectionRequired) 1 else 0 },
-                { if (isNeural(it)) 1 else 0 },
-                { if (it.locale.country.equals(regionPref, ignoreCase = true)) 1 else 0 },
-            ),
-        ) ?: installed.maxByOrNull { it.quality }
+        val best = inLang.maxWithOrNull(comparator)
+            ?: english.maxWithOrNull(comparator)
+            ?: installed.maxByOrNull { it.quality }
         best?.let { v ->
             runCatching { engine.voice = v }
             runCatching { engine.language = v.locale }
@@ -111,11 +114,9 @@ class Speaker(
     private fun isNeural(v: Voice): Boolean =
         v.name.contains("-x-") || v.quality >= Voice.QUALITY_VERY_HIGH
 
-    /** Nudge the narration accent from the Settings voice tag (English tags only). */
-    fun setEnglishRegionPreference(tag: String?) {
-        if (tag != null && tag.startsWith("en", ignoreCase = true)) {
-            tag.substringAfter('-', "").takeIf { it.isNotBlank() }?.let { regionPref = it.uppercase() }
-        }
+    /** Set the narration language ("en" | "hi") and re-pick the best voice. */
+    fun setLanguage(code: String?) {
+        langCode = if (code?.startsWith("hi", ignoreCase = true) == true) "hi" else "en"
         val engine = tts
         if (engine != null && ready) selectBestVoice(engine)
     }

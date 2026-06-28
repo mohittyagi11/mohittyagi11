@@ -63,6 +63,7 @@ import com.azadishashn.app.ui.components.IdeologyChip
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.ScenarioStory
 import com.azadishashn.app.ui.components.TurnProgress
+import com.azadishashn.app.ui.components.Collapsible
 import com.azadishashn.app.ui.components.causal.PathsFanOut
 import com.azadishashn.app.ui.theme.Dim
 import com.azadishashn.app.ui.theme.IdeologyTheme
@@ -173,8 +174,8 @@ private fun RoundBody(vm: GameViewModel) {
     fun startVoice() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, vm.voiceLang)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, vm.voiceLang)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, vm.speechTag)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, vm.speechTag)
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your answer")
         }
         try {
@@ -267,16 +268,7 @@ private fun RoundBody(vm: GameViewModel) {
 
                 if (round.paths.isNotEmpty()) {
                     Spacer(Modifier.height(Dim.itemGap))
-                    var showPaths by remember(round) { mutableStateOf(false) }
-                    TextButton(
-                        onClick = { showPaths = !showPaths },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Filled.AccountTree, contentDescription = null, modifier = Modifier.height(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (showPaths) "Hide the four paths" else "Compare the four paths")
-                    }
-                    AnimatedVisibility(visible = showPaths) {
+                    Collapsible("Compare the four paths", Icons.Filled.AccountTree, initiallyExpanded = false) {
                         PathsFanOut(paths = round.paths, question = round.dilemma.question, reveal = false)
                     }
                 }

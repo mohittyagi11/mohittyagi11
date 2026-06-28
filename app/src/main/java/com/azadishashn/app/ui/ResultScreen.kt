@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Stop
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.model.Ideologies
 import com.azadishashn.app.ui.components.AzadiScaffold
+import com.azadishashn.app.ui.components.Collapsible
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.IdeologyDot
@@ -178,21 +180,25 @@ fun ResultScreen(vm: GameViewModel) {
             val primaryBrand = IdeologyTheme.of(r.primary).brand
             if (r.causalChain.isNotEmpty()) {
                 Spacer(Modifier.height(Dim.sectionGap))
-                ConsequenceFlow(
-                    chain = r.causalChain,
-                    historicalNote = r.historicalNote,
-                    tradeoff = r.tradeoff,
-                    accent = primaryBrand,
-                )
+                Collapsible("Consequence map", Icons.Filled.AccountTree) {
+                    ConsequenceFlow(
+                        chain = r.causalChain,
+                        historicalNote = r.historicalNote,
+                        tradeoff = r.tradeoff,
+                        accent = primaryBrand,
+                    )
+                }
             }
             vm.state.current?.let { round ->
                 if (round.paths.isNotEmpty()) {
                     Spacer(Modifier.height(Dim.itemGap))
-                    PathsFanOut(
-                        paths = round.paths,
-                        question = round.dilemma.question,
-                        chosen = r.primary,
-                    )
+                    Collapsible("Compare the four paths", Icons.Filled.AccountTree) {
+                        PathsFanOut(
+                            paths = round.paths,
+                            question = round.dilemma.question,
+                            chosen = r.primary,
+                        )
+                    }
                 }
             }
 

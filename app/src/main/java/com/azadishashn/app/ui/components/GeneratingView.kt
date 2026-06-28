@@ -36,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.azadishashn.app.ui.components.poster.Sunburst
 import com.azadishashn.app.ui.theme.GoldBright
 import com.azadishashn.app.ui.theme.IdeologyTheme
 import com.azadishashn.app.ui.theme.OverlineStyle
@@ -77,10 +76,7 @@ fun GeneratingView(kind: String?, context: String, modifier: Modifier = Modifier
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Sunburst(modifier = Modifier.size(230.dp), intensity = 0.2f)
-            FistLoader(size = 150.dp)
-        }
+        FistLoader(size = 168.dp)
         Spacer(Modifier.height(36.dp))
 
         Text(kickerFor(kind), style = OverlineStyle, color = GoldBright)

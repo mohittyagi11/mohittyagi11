@@ -104,15 +104,20 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     val apiKey: String get() = settings.apiKey
     val model: String get() = settings.model
     val context: String get() = settings.context
-    val voiceLang: String get() = settings.voiceLang
+    /** App language code ("en" | "hi") — drives AI output, narration and voice input. */
+    val language: String get() = settings.language
+
+    /** BCP-47 tag for the speech recogniser, auto-derived from [language]. */
+    val speechTag: String get() = SettingsStore.bcp47(settings.language)
+
     val hasKey: Boolean get() = settings.hasKey
 
     private var nextPlayerId = 0
     private val twistLimit = 2
 
     init {
-        // Bias the narration accent to the chosen English voice (if any).
-        speaker.setEnglishRegionPreference(settings.voiceLang)
+        // Narrate in the chosen language.
+        speaker.setLanguage(settings.language)
 
         // Fold any pre-library single-slot game into the library (one-time).
         store.migrateLegacyIfNeeded()
@@ -235,12 +240,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(screen = Screen.Settings)
     }
 
-    fun saveSettings(apiKey: String, model: String, context: String, voiceLang: String) {
+    fun saveSettings(apiKey: String, model: String, context: String, language: String) {
         settings.apiKey = apiKey
         settings.model = model
         settings.context = context
-        settings.voiceLang = voiceLang
-        speaker.setEnglishRegionPreference(voiceLang)
+        settings.language = language
+        speaker.setLanguage(language)
     }
 
     fun closeSettings() {
@@ -305,7 +310,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             runCatching {
                 ClaudeClient(settings.apiKey, settings.model)
-                    .generateRound(themes, settings.context, avoid)
+                    .generateRound(themes, settings.context, avoid, SettingsStore.displayName(settings.language))
             }.onSuccess { round ->
                 val title = round.scenario.title.trim()
                 val dup = state.seenTitles.any { it.trim().equals(title, ignoreCase = true) }
@@ -369,7 +374,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(loading = true, loadingKind = "twist", error = null)
         viewModelScope.launch {
             runCatching {
-                ClaudeClient(settings.apiKey, settings.model).twistRound(round)
+                ClaudeClient(settings.apiKey, settings.model).twistRound(round, SettingsStore.displayName(settings.language))
             }.onSuccess { twisted ->
                 state = state.copy(
                     current = twisted,
@@ -395,7 +400,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             state = state.copy(loading = true, loadingKind = "judge", error = null)
             viewModelScope.launch {
                 runCatching {
-                    ClaudeClient(settings.apiKey, settings.model).judge(round, argument)
+                    ClaudeClient(settings.apiKey, settings.model).judge(round, argument, SettingsStore.displayName(settings.language))
                 }.onSuccess { v ->
                     val primary = v.primaryIdeology.takeIf { it in Ideologies.NAMES }
                         ?: Ideologies.NAMES.first()

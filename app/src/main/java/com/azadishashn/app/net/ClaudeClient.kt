@@ -55,6 +55,7 @@ class ClaudeClient(
         themes: List<String>,
         context: String,
         avoidTitles: List<String>,
+        language: String = "English",
     ): RoundData = withContext(Dispatchers.IO) {
         val avoid = if (avoidTitles.isEmpty()) "" else
             "\nDo NOT reuse these scenario titles: ${avoidTitles.joinToString(", ")}."
@@ -92,6 +93,7 @@ class ClaudeClient(
             - paths: EXACTLY 4 entries, ONE per ideology (use each ideology name once). For each,
               think like a high-end policy analyst: stance (its one-line position), outcome (where
               that plausibly leads), risk (what it costs). Crisp, causal, non-partisan — one line each.$avoid
+            ${languageLine(language)}
         """.trimIndent()
 
         val text = call(system = ROUND_SYSTEM, user = user, schema = roundSchema())
@@ -100,7 +102,7 @@ class ClaudeClient(
     }
 
     /** Re-cast a scenario with a complication that makes the easy answer costly. */
-    suspend fun twistRound(current: RoundData): RoundData = withContext(Dispatchers.IO) {
+    suspend fun twistRound(current: RoundData, language: String = "English"): RoundData = withContext(Dispatchers.IO) {
         val user = """
             Here is the current round:
             Title: ${current.scenario.title}
@@ -114,6 +116,7 @@ class ClaudeClient(
             Keep the same title. Produce EXACTLY 4 options, ONE for EACH ideology:
             $IDEOLOGY_BRIEF
             Keep every field punchy.
+            ${languageLine(language)}
         """.trimIndent()
 
         val text = call(system = ROUND_SYSTEM, user = user, schema = roundSchema())
@@ -129,6 +132,7 @@ class ClaudeClient(
     suspend fun judge(
         round: RoundData,
         argument: String,
+        language: String = "English",
     ): Verdict = withContext(Dispatchers.IO) {
         val opts = round.options.joinToString("\n") { "- ${it.ideology}: ${it.label}" }
         val user = """
@@ -156,6 +160,7 @@ class ClaudeClient(
                this one), horizon (immediate | short_term | long_term, roughly ordered), polarity
                (gain | cost | mixed). End at the long-run / historical echo.
             7. tradeoff: one sharp line naming the central cost-of-power tradeoff of this path.
+            ${languageLine(language)}
         """.trimIndent()
 
         val text = call(system = ADJUDICATE_SYSTEM, user = user, schema = judgeSchema())
@@ -272,6 +277,25 @@ class ClaudeClient(
         private val IDEOLOGY_BRIEF: String = Ideologies.ALL.joinToString("\n") {
             "- ${it.name} (earns ${it.resource}): ${it.blurb}"
         }
+
+        /**
+         * Force the output language for all natural-language fields, while keeping
+         * the schema-constrained token fields (ideology names, horizon/polarity
+         * enums) in their fixed English form so structured output still validates.
+         */
+        private fun languageLine(language: String): String =
+            if (language.equals("English", ignoreCase = true)) {
+                "Write all output in natural, fluent English."
+            } else {
+                "IMPORTANT: write ALL natural-language fields — title, dimension, setting, era, " +
+                    "situation, question, real_world_note, every option label and summary, every " +
+                    "path stance/outcome/risk, reasoning, historical_outcome, every causal-chain " +
+                    "label/mechanism, and tradeoff — in fluent, natural $language (use $language " +
+                    "script). Do NOT translate the fixed token fields: keep every \"ideology\" value " +
+                    "exactly as Capitalist, Supremo, Showstopper, or Idealist, and keep \"horizon\" " +
+                    "(immediate|short_term|long_term) and \"polarity\" (gain|cost|mixed) as their " +
+                    "English enum values."
+            }
 
         private fun objSchema(required: List<String>, props: Map<String, JsonElement>): JsonObject =
             buildJsonObject {

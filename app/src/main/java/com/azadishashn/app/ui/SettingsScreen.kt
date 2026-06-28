@@ -37,7 +37,7 @@ fun SettingsScreen(vm: GameViewModel) {
     var key by remember { mutableStateOf(vm.apiKey) }
     var model by remember { mutableStateOf(vm.model) }
     var context by remember { mutableStateOf(vm.context) }
-    var voice by remember { mutableStateOf(vm.voiceLang) }
+    var language by remember { mutableStateOf(vm.language) }
 
     AzadiScaffold(title = "Settings", onBack = vm::closeSettings) { pad ->
         Column(
@@ -86,16 +86,21 @@ fun SettingsScreen(vm: GameViewModel) {
 
             Spacer(Modifier.height(12.dp))
             SectionCard {
-                Text("Voice input language", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                SettingsStore.VOICE_LANGS.forEach { (label, tag) ->
+                Text("Language", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Scenarios, the read-aloud narration, and your spoken answers all use this language.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SettingsStore.LANGUAGES.forEach { (label, code) ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .selectable(selected = voice == tag, onClick = { voice = tag })
+                            .selectable(selected = language == code, onClick = { language = code })
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = voice == tag, onClick = { voice = tag })
+                        RadioButton(selected = language == code, onClick = { language = code })
                         Text(label, modifier = Modifier.padding(start = 4.dp))
                     }
                 }
@@ -122,7 +127,7 @@ fun SettingsScreen(vm: GameViewModel) {
             PrimaryCta(
                 text = "Save",
                 onClick = {
-                    vm.saveSettings(key, model, context, voice)
+                    vm.saveSettings(key, model, context, language)
                     vm.closeSettings()
                 },
             )
