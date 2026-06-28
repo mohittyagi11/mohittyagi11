@@ -4,14 +4,19 @@ import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
-import java.util.Locale
 
 /**
  * Text-to-Speech for reading questions, ideology cards, and rationale aloud.
- * Prefers Google's neural engine and the highest-quality available voice for a
- * more expressive read. [onSpeaking] reports start/stop so the UI can toggle a
- * read/stop button. Callbacks fire on a background thread — marshal to the UI
- * thread in the consumer.
+ *
+ * Stays fully built-in (Android [TextToSpeech] + Google engine — no cloud API),
+ * but picks the most natural voice available: it ranks the device's ENGLISH
+ * voices by quality and prefers the high-quality neural voices (local first for
+ * offline safety, then network), across all English regions, instead of the
+ * robotic "compact" en-IN voice. Sentences are spoken with a short breath
+ * between them so it reads like a narrator, not a machine.
+ *
+ * [onSpeaking] reports start/stop so the UI can toggle a read/stop button.
+ * Callbacks fire on a background thread — marshal to the UI thread in the consumer.
  */
 class Speaker(
     context: Context,
@@ -21,6 +26,14 @@ class Speaker(
     private var tts: TextToSpeech? = null
     private var ready = false
     private var pending: String? = null
+
+    /** Preferred English region (country code), nudged by the Settings voice choice. */
+    private var regionPref: String = "IN"
+
+    // Track first/last chunk ids so the read/stop button doesn't flicker between
+    // sentences — we only flip ON at the first chunk and OFF at the last.
+    private var firstUtteranceId: String? = null
+    private var lastUtteranceId: String? = null
 
     init {
         initEngine(GOOGLE_TTS)
@@ -43,14 +56,18 @@ class Speaker(
 
     private fun onReady() {
         val engine = tts ?: return
-        val locale = Locale("en", "IN")
-        runCatching { engine.language = locale }
-        selectBestVoice(engine, locale)
-        engine.setPitch(1.06f)
-        engine.setSpeechRate(0.95f)
+        selectBestVoice(engine)
+        engine.setPitch(1.0f)
+        engine.setSpeechRate(0.96f)
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) = onSpeaking(true)
-            override fun onDone(utteranceId: String?) = onSpeaking(false)
+            override fun onStart(utteranceId: String?) {
+                if (utteranceId == firstUtteranceId) onSpeaking(true)
+            }
+
+            override fun onDone(utteranceId: String?) {
+                if (utteranceId == lastUtteranceId) onSpeaking(false)
+            }
+
             override fun onStop(utteranceId: String?, interrupted: Boolean) = onSpeaking(false)
 
             @Deprecated("Deprecated in Java")
@@ -63,13 +80,44 @@ class Speaker(
         }
     }
 
-    private fun selectBestVoice(engine: TextToSpeech, locale: Locale) {
+    /**
+     * Choose the most natural English voice: highest [Voice.quality]; among equal
+     * quality prefer LOCAL (offline-safe) over network, then the enhanced "-x-"
+     * neural voices, then the preferred region. Falls back to the best installed
+     * voice of any locale, else the engine default.
+     */
+    private fun selectBestVoice(engine: TextToSpeech) {
         val voices: Set<Voice> = runCatching { engine.voices }.getOrNull() ?: return
-        val sameLang = voices.filter { it.locale.language == locale.language }
-        val best = sameLang.filter { !it.isNetworkConnectionRequired }.maxByOrNull { it.quality }
-            ?: sameLang.maxByOrNull { it.quality }
-            ?: voices.filter { !it.isNetworkConnectionRequired }.maxByOrNull { it.quality }
-        best?.let { runCatching { engine.voice = it } }
+        val installed = voices.filter { !isNotInstalled(it) }
+        val english = installed.filter { it.locale.language == "en" }
+        val best = english.maxWithOrNull(
+            compareBy(
+                { it.quality },
+                { if (!it.isNetworkConnectionRequired) 1 else 0 },
+                { if (isNeural(it)) 1 else 0 },
+                { if (it.locale.country.equals(regionPref, ignoreCase = true)) 1 else 0 },
+            ),
+        ) ?: installed.maxByOrNull { it.quality }
+        best?.let { v ->
+            runCatching { engine.voice = v }
+            runCatching { engine.language = v.locale }
+        }
+    }
+
+    private fun isNotInstalled(v: Voice): Boolean =
+        v.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) == true
+
+    /** Google's enhanced/neural voices use an "-x-" segment in the name. */
+    private fun isNeural(v: Voice): Boolean =
+        v.name.contains("-x-") || v.quality >= Voice.QUALITY_VERY_HIGH
+
+    /** Nudge the narration accent from the Settings voice tag (English tags only). */
+    fun setEnglishRegionPreference(tag: String?) {
+        if (tag != null && tag.startsWith("en", ignoreCase = true)) {
+            tag.substringAfter('-', "").takeIf { it.isNotBlank() }?.let { regionPref = it.uppercase() }
+        }
+        val engine = tts
+        if (engine != null && ready) selectBestVoice(engine)
     }
 
     fun speak(text: String) {
@@ -80,8 +128,25 @@ class Speaker(
             pending = clean
             return
         }
-        engine.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "azadi")
+        val sentences = splitSentences(clean)
+        if (sentences.isEmpty()) return
+        firstUtteranceId = "u0"
+        lastUtteranceId = "u${sentences.lastIndex}"
+        sentences.forEachIndexed { i, sentence ->
+            val mode = if (i == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+            engine.speak(sentence, mode, null, "u$i")
+            // A short breath between sentences — natural narration cadence.
+            if (i != sentences.lastIndex) {
+                engine.playSilentUtterance(140L, TextToSpeech.QUEUE_ADD, "sil$i")
+            }
+        }
     }
+
+    /** Split into sentences, keeping the punctuation, so each is spoken as a unit. */
+    private fun splitSentences(text: String): List<String> =
+        Regex("(?<=[.!?…])\\s+").split(text)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
 
     fun stop() {
         tts?.stop()

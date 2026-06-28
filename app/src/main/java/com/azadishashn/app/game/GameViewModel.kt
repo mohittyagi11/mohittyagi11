@@ -111,6 +111,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private val twistLimit = 2
 
     init {
+        // Bias the narration accent to the chosen English voice (if any).
+        speaker.setEnglishRegionPreference(settings.voiceLang)
+
         // Fold any pre-library single-slot game into the library (one-time).
         store.migrateLegacyIfNeeded()
 
@@ -237,6 +240,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         settings.model = model
         settings.context = context
         settings.voiceLang = voiceLang
+        speaker.setEnglishRegionPreference(voiceLang)
     }
 
     fun closeSettings() {
