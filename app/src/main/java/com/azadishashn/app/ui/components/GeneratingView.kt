@@ -9,55 +9,66 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.azadishashn.app.ui.components.poster.Sunburst
 import com.azadishashn.app.ui.theme.GoldBright
-import com.azadishashn.app.ui.theme.GoldDim
 import com.azadishashn.app.ui.theme.IdeologyTheme
+import com.azadishashn.app.ui.theme.OverlineStyle
 import kotlinx.coroutines.delay
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
- * Space-filling branded loader: the four ideology orbs orbit a glowing core
- * while storytelling captions cycle, so generation/judging never feels static.
+ * Space-filling branded loader: the raised fist clenches finger by finger over a
+ * sunburst while full-sentence captions — shuffled so they don't repeat within a
+ * wait — narrate what's happening, under a kicker and live ideology-colour dots.
  */
 @Composable
 fun GeneratingView(kind: String?, context: String, modifier: Modifier = Modifier) {
-    val captions = remember(kind, context) { captionsFor(kind, context) }
-    var index by remember(captions) { mutableIntStateOf(0) }
-    LaunchedEffect(captions) {
+    val pool = remember(kind, context) { captionsFor(kind, context) }
+
+    // Walk a shuffled order so no line repeats until the pool is exhausted; on
+    // exhaustion reshuffle while avoiding an immediate repeat of the last line.
+    var order by remember(pool) { mutableStateOf(pool.indices.shuffled()) }
+    var pos by remember(pool) { mutableIntStateOf(0) }
+    val caption = pool[order[pos % order.size]]
+
+    LaunchedEffect(pool) {
         while (true) {
-            delay(2000)
-            index = (index + 1) % captions.size
+            delay(2600)
+            if (pos + 1 >= order.size) {
+                val last = order[pos % order.size]
+                var next = pool.indices.shuffled()
+                if (next.size > 1 && next.first() == last) next = next.drop(1) + next.first()
+                order = next
+                pos = 0
+            } else {
+                pos += 1
+            }
         }
     }
 
@@ -67,101 +78,101 @@ fun GeneratingView(kind: String?, context: String, modifier: Modifier = Modifier
         verticalArrangement = Arrangement.Center,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            com.azadishashn.app.ui.components.poster.Sunburst(
-                modifier = Modifier.size(220.dp),
-                intensity = 0.2f,
-            )
-            SealLoader(size = 140.dp)
+            Sunburst(modifier = Modifier.size(230.dp), intensity = 0.2f)
+            FistLoader(size = 150.dp)
         }
         Spacer(Modifier.height(36.dp))
+
+        Text(kickerFor(kind), style = OverlineStyle, color = GoldBright)
+        Spacer(Modifier.height(10.dp))
         AnimatedContent(
-            targetState = captions[index % captions.size],
-            transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(300)) },
+            targetState = caption,
+            transitionSpec = {
+                (fadeIn(tween(420)) + slideInVertically(tween(420)) { it / 3 }) togetherWith
+                    fadeOut(tween(240))
+            },
             label = "caption",
-        ) { caption ->
+        ) { line ->
             Text(
-                caption,
-                style = MaterialTheme.typography.titleMedium,
+                line,
+                style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
             )
         }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "one moment…",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Spacer(Modifier.height(20.dp))
+        BreathingDots()
     }
 }
 
+/** Four ideology-coloured dots pulsing in sequence — a live "working" cue. */
 @Composable
-private fun SealLoader(size: androidx.compose.ui.unit.Dp) {
-    val transition = rememberInfiniteTransition(label = "seal")
-    val angle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart),
-        label = "angle",
-    )
-    val pulse by transition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Reverse),
-        label = "pulse",
-    )
-    val seeds = IdeologyTheme.ALL.map { it.brand }
-    val faint = MaterialTheme.colorScheme.onSurfaceVariant
-    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.matchParentSize()) {
-            val cx = this.size.width / 2f
-            val cy = this.size.height / 2f
-            val m = this.size.minDimension
-            // concentric guide rings
-            drawCircle(faint.copy(alpha = 0.12f), radius = m * 0.46f, center = Offset(cx, cy), style = Stroke(1.2f))
-            drawCircle(faint.copy(alpha = 0.08f), radius = m * 0.34f, center = Offset(cx, cy), style = Stroke(1f))
-            // faint ideology dots on the outer ring (colour cue, not the focus)
-            seeds.forEachIndexed { i, color ->
-                val a = i * (2f * Math.PI.toFloat() / seeds.size) - Math.PI.toFloat() / 2f
-                drawCircle(color.copy(alpha = 0.5f), radius = m * 0.018f, center = Offset(cx + m * 0.46f * cos(a), cy + m * 0.46f * sin(a)))
-            }
-            // rotating gold sweep
-            val r = m * 0.42f
-            rotate(angle, pivot = Offset(cx, cy)) {
-                drawArc(
-                    brush = Brush.sweepGradient(listOf(Color.Transparent, GoldDim, GoldBright, Color.Transparent), center = Offset(cx, cy)),
-                    startAngle = 0f,
-                    sweepAngle = 120f,
-                    useCenter = false,
-                    topLeft = Offset(cx - r, cy - r),
-                    size = Size(2 * r, 2 * r),
-                    style = Stroke(width = m * 0.03f, cap = StrokeCap.Round),
-                )
-            }
+private fun BreathingDots() {
+    val colors = IdeologyTheme.ALL.map { it.brand }
+    val transition = rememberInfiniteTransition(label = "dots")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        colors.forEachIndexed { i, c ->
+            val a by transition.animateFloat(
+                initialValue = 0.25f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    tween(700, delayMillis = i * 150, easing = LinearEasing),
+                    RepeatMode.Reverse,
+                ),
+                label = "dot$i",
+            )
+            Box(Modifier.size(9.dp).clip(CircleShape).background(c.copy(alpha = a)))
         }
-        SealMark(
-            size = size * 0.4f,
-            modifier = Modifier.graphicsLayer { scaleX = pulse; scaleY = pulse },
-        )
     }
+}
+
+private fun kickerFor(kind: String?): String = when (kind) {
+    "twist" -> "RAISING THE STAKES"
+    "judge" -> "DELIVERING THE VERDICT"
+    else -> "DRAFTING THE SCENARIO"
 }
 
 private fun captionsFor(kind: String?, context: String): List<String> = when (kind) {
     "twist" -> listOf(
-        "Twisting the card…",
-        "Raising the stakes…",
-        "Making the easy answer costly…",
+        "Twisting the knife — the easy answer just got expensive…",
+        "Raising the stakes until someone has to blink…",
+        "Rewriting the rules so comfort isn't an option…",
+        "Pulling the safe ground out from under the choice…",
+        "Forcing the cost of conviction into the open…",
+        "Turning a clean decision into a real sacrifice…",
+        "Adding the complication nobody wanted to face…",
+        "Making the principled path the costly one…",
+        "Tightening the screws on every comfortable answer…",
+        "Daring you to hold the line when it bites…",
+        "Loading the dilemma with a price you'll feel…",
+        "Escalating until neutrality is no longer free…",
     )
     "judge" -> listOf(
-        "Weighing your argument…",
-        "Reading between the lines…",
-        "Consulting history…",
-        "Naming the ideology…",
+        "Weighing your words against the cost of power…",
+        "Reading between the lines for the ideology underneath…",
+        "Consulting history for how this gamble has played before…",
+        "Tracing the consequences three moves ahead…",
+        "Naming the conviction your argument really served…",
+        "Measuring conviction against the resources it spends…",
+        "Separating the rhetoric from the real position…",
+        "Auditing who pays and who gains under your call…",
+        "Cross-examining your case like a tribunal…",
+        "Mapping where this stance leads in the long run…",
+        "Deciding which ideology your answer truly fed…",
+        "Tallying the political capital your argument earned…",
     )
     else -> listOf(
-        "Researching the dilemma…",
-        "Localising to $context…",
-        "Drafting the four ideologies…",
-        "Setting the scene…",
+        "Scouring the archives for a dilemma with no clean answer…",
+        "Translating the crisis onto the streets of $context…",
+        "Drawing the battle lines between the four ideologies…",
+        "Weighing whose freedom pays for whose order…",
+        "Stress-testing every side until only hard choices remain…",
+        "Casting the players, the stakes, and the ticking clock…",
+        "Hunting for the question that splits a room in two…",
+        "Sharpening the trade-off until it genuinely hurts…",
+        "Grounding the scenario in how power really moves…",
+        "Letting principle and pragmatism collide…",
+        "Setting the stage where conviction meets consequence…",
+        "Framing four futures, each with its own price…",
     )
 }
