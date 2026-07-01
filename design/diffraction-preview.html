@@ -6,8 +6,10 @@
 <title>Azadi Shashn — Diffraction Glass</title>
 <style>
   :root{
-    /* techno palette — electric neon, chrome not gold */
-    --mag:#ff1e7a; --cyan:#12f2ff; --lime:#9dff2e; --gold:#9dff2e; --violet:#8b3dff; --blue:#2b6bff;
+    /* ideology-laser palette — the four SHASN brand hues pushed to laser neon:
+       Supremo red · Capitalist green · Showstopper blue · Idealist amber */
+    --red:#ff3b52; --green:#2af08a; --blue:#3f86ff; --gold:#ffc21e; --amber:#ffc21e;
+    --mag:#ff3b52; --cyan:#3f86ff; --lime:#2af08a; --violet:#5b6bff;
     --mono:ui-monospace,SFMono-Regular,Menlo,"Roboto Mono",monospace;
     --metal:linear-gradient(135deg,#eafcff,#7fa9c9 24%,#cfe6f2 48%,#3d5f8f 72%,#e6fbff);
   }
@@ -20,17 +22,21 @@
   .bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
   .base{position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 2%, #10173a 0%, #0a0f22 42%, #05060c 100%)}
   .mesh{position:absolute;inset:-8%;background:
-      linear-gradient(180deg,rgba(43,107,255,.24),transparent 44%,rgba(255,30,122,.18)),
-      linear-gradient(90deg,rgba(18,242,255,.2),transparent 46%,rgba(139,61,255,.2));
+      linear-gradient(180deg,rgba(63,134,255,.24),transparent 44%,rgba(255,59,82,.18)),
+      linear-gradient(90deg,rgba(42,240,138,.18),transparent 46%,rgba(255,194,30,.16));
     filter:blur(34px);mix-blend-mode:screen}
-  .streak{position:absolute;left:-30%;top:9%;width:160%;height:180px;transform:rotate(-19deg);
-    background:linear-gradient(90deg,transparent 8%,var(--mag),var(--violet),var(--blue),var(--cyan),var(--lime),transparent 92%);
-    filter:blur(30px);opacity:.58;mix-blend-mode:screen}
+  /* laser beam — thin, sharp, bright core; the four ideology hues split across it */
+  .streak{position:absolute;left:-30%;top:8%;width:160%;height:96px;transform:rotate(-19deg);mix-blend-mode:screen}
+  .streak::before{content:"";position:absolute;inset:0;
+    background:linear-gradient(90deg,transparent 6%,var(--red),var(--gold),var(--green),var(--blue),transparent 94%);
+    filter:blur(13px);opacity:.72}
+  .streak::after{content:"";position:absolute;left:8%;right:8%;top:50%;height:2px;transform:translateY(-50%);
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.92),transparent);filter:blur(.5px)}
   .orb{position:absolute;left:50%;top:23%;width:300px;height:300px;transform:translate(-50%,-50%)}
   .orb::before{content:"";position:absolute;inset:0;border-radius:50%;
-    background:radial-gradient(circle at 50% 44%,rgba(233,252,255,.97),rgba(157,255,46,.34) 15%,transparent 58%);filter:blur(5px)}
+    background:radial-gradient(circle at 50% 44%,rgba(240,252,255,.98),rgba(63,134,255,.3) 14%,transparent 56%);filter:blur(4px)}
   .orb::after{content:"";position:absolute;inset:0;border-radius:50%;
-    background:radial-gradient(circle at 40% 40%,rgba(18,242,255,.5),transparent 55%),radial-gradient(circle at 62% 54%,rgba(255,30,122,.4),transparent 55%),radial-gradient(circle at 54% 66%,rgba(139,61,255,.36),transparent 58%);filter:blur(18px);mix-blend-mode:screen}
+    background:radial-gradient(circle at 38% 40%,rgba(63,134,255,.5),transparent 54%),radial-gradient(circle at 62% 52%,rgba(255,59,82,.42),transparent 54%),radial-gradient(circle at 52% 66%,rgba(42,240,138,.36),transparent 56%),radial-gradient(circle at 48% 30%,rgba(255,194,30,.32),transparent 52%);filter:blur(17px);mix-blend-mode:screen}
   /* topographic contour field — explicit, clearly visible; blended toward the light */
   .topo{position:absolute;inset:0;width:100%;height:100%;
     -webkit-mask:radial-gradient(135% 100% at 50% 14%,#000,rgba(0,0,0,.5) 55%,transparent 95%);
@@ -45,43 +51,43 @@
   .hero{margin:4px 0 20px}
   .hero .kick{color:#a2a8cc;margin-bottom:12px}
   .hero .kick b{color:var(--gold);font-weight:600}
-  .hero h1{margin:0;font-size:44px;line-height:.96;font-weight:700;letter-spacing:-1.2px;color:#f5f3fa;text-shadow:-1.7px 0 rgba(255,45,120,.6),1.7px 0 rgba(34,224,255,.55)}
+  .hero h1{margin:0;font-size:44px;line-height:.96;font-weight:700;letter-spacing:-1.2px;color:#f5f3fa;text-shadow:-1.8px 0 rgba(255,59,82,.62),1.8px 0 rgba(63,134,255,.58)}
   .hero p{margin:13px 0 0;max-width:30ch;font-size:14px;line-height:1.5;color:#c1c2d6}
   .rule{height:1px;margin:18px 0 20px;background:var(--metal);opacity:.7}
 
   .glass{position:relative;isolation:isolate;overflow:hidden;border-radius:18px;
-    background:linear-gradient(180deg,rgba(43,107,255,.15),transparent 46%,rgba(255,30,122,.11)),
-      linear-gradient(90deg,rgba(18,242,255,.13),transparent 50%,rgba(139,61,255,.14)),rgba(7,10,20,.14);
-    backdrop-filter:blur(6px) saturate(2.1) brightness(1.5) hue-rotate(-14deg) contrast(1.14);
-    -webkit-backdrop-filter:blur(6px) saturate(2.1) brightness(1.5) hue-rotate(-14deg) contrast(1.14);
+    background:linear-gradient(180deg,rgba(63,134,255,.15),transparent 46%,rgba(255,59,82,.11)),
+      linear-gradient(90deg,rgba(42,240,138,.12),transparent 50%,rgba(255,194,30,.12)),rgba(7,10,20,.14);
+    backdrop-filter:blur(6px) saturate(2.0) brightness(1.46) hue-rotate(-6deg) contrast(1.13);
+    -webkit-backdrop-filter:blur(6px) saturate(2.0) brightness(1.46) hue-rotate(-6deg) contrast(1.13);
     box-shadow:0 18px 48px rgba(0,0,0,.58),
-      inset 0 0 24px rgba(18,242,255,.10),
-      inset 4px 0 12px rgba(255,30,122,.4),inset -4px 0 12px rgba(18,242,255,.42),
-      inset 0 4px 14px rgba(157,255,46,.2),inset 0 -4px 14px rgba(255,30,122,.18),
-      inset 2px 2px 0 rgba(255,30,122,.6),inset -2px -2px 0 rgba(18,242,255,.58)}
+      inset 0 0 24px rgba(63,134,255,.1),
+      inset 4px 0 12px rgba(255,59,82,.42),inset -4px 0 12px rgba(63,134,255,.44),
+      inset 0 4px 14px rgba(42,240,138,.2),inset 0 -4px 14px rgba(255,194,30,.18),
+      inset 2px 2px 0 rgba(255,59,82,.6),inset -2px -2px 0 rgba(63,134,255,.58)}
   .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.5px;background:var(--metal);
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;z-index:5;opacity:.8}
   .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;z-index:4;pointer-events:none;
-    background:radial-gradient(150px 104px at 88% 0%,rgba(18,242,255,.72),rgba(139,61,255,.46) 32%,rgba(255,30,122,.34) 54%,transparent 72%),
-      radial-gradient(120px 90px at 6% 100%,rgba(157,255,46,.34),transparent 62%);mix-blend-mode:screen;opacity:.72}
+    background:radial-gradient(150px 104px at 88% 0%,rgba(63,134,255,.72),rgba(255,194,30,.42) 32%,rgba(255,59,82,.36) 54%,transparent 72%),
+      radial-gradient(120px 90px at 6% 100%,rgba(42,240,138,.36),transparent 62%);mix-blend-mode:screen;opacity:.72}
 
   .card{padding:18px}
   .card + .card{margin-top:15px}
   .card .idx{position:absolute;top:14px;right:15px;color:#666bp;color:#6a6f95;z-index:6}
-  .card .kick{color:#6ff0ff;position:relative;z-index:6}
+  .card .kick{color:#7fb0ff;position:relative;z-index:6}
   .card .kick i{font-style:normal;color:var(--cyan)}
   .card h3{margin:11px 0 7px;font-size:19px;letter-spacing:-.3px;max-width:23ch;position:relative;z-index:6}
   .card p{margin:0;font-size:13.5px;line-height:1.55;color:#c3c3d6;max-width:40ch;position:relative;z-index:6}
 
   .cta{display:flex;align-items:center;justify-content:center;width:100%;margin:24px 0 10px;padding:17px;
-    font:inherit;font-weight:700;font-size:16px;color:#04121a;border:0;border-radius:18px;
-    background:linear-gradient(115deg,#9dff2e,#12f2ff 46%,#8b3dff)}
-  .cta::after{background:radial-gradient(180px 104px at 84% 0%,rgba(255,255,255,.85),rgba(18,242,255,.5) 40%,rgba(255,30,122,.38) 62%,transparent 80%);mix-blend-mode:overlay;opacity:.9}
+    font:inherit;font-weight:700;font-size:16px;color:#050c04;border:0;border-radius:18px;
+    background:linear-gradient(115deg,#2af08a,#3f86ff 42%,#ff3b52 84%,#ffc21e)}
+  .cta::after{background:radial-gradient(180px 104px at 84% 0%,rgba(255,255,255,.85),rgba(63,134,255,.5) 40%,rgba(255,59,82,.38) 62%,transparent 80%);mix-blend-mode:overlay;opacity:.9}
   .cta span{position:relative;z-index:6}
 
   .chips{display:flex;gap:10px;margin:20px 0 6px}
   .chip{display:flex;align-items:center;padding:9px 15px;border-radius:12px;font-size:13px;font-weight:600;color:#e0e0f2}
-  .chip.on{color:#04121a;background:linear-gradient(150deg,#c9ffe0,#12f2ff 55%,#7fb0ff)}
+  .chip.on{color:#04120a;background:linear-gradient(150deg,#b6ffd6,#2af08a 50%,#3f86ff)}
   .chip .mono{font-size:9px;opacity:.6;margin-right:6px;position:relative;z-index:6}
   .chip b{position:relative;z-index:6;font-weight:600}
   .foot{margin-top:34px;color:#6a6f95}
@@ -99,41 +105,41 @@
         </filter>
       </defs>
       <g filter="url(#warp)">
-        <!-- peak A · top-right -->
-        <g transform="rotate(-17 300 250)" fill="none" stroke="#6ee0ff" stroke-opacity=".5" stroke-width=".9">
+        <!-- peak A · top-right — Showstopper blue, amber index -->
+        <g transform="rotate(-17 300 250)" fill="none" stroke="#79b0ff" stroke-opacity=".5" stroke-width=".9">
           <ellipse cx="300" cy="250" rx="20" ry="13"/><ellipse cx="300" cy="250" rx="40" ry="27"/>
           <ellipse cx="300" cy="250" rx="62" ry="42"/><ellipse cx="300" cy="250" rx="86" ry="58"/>
           <ellipse cx="300" cy="250" rx="150" ry="100"/><ellipse cx="300" cy="250" rx="188" ry="126"/>
           <ellipse cx="300" cy="250" rx="230" ry="154"/><ellipse cx="300" cy="250" rx="272" ry="182"/>
         </g>
-        <g transform="rotate(-17 300 250)" fill="none" stroke="#9dff2e" stroke-opacity=".5" stroke-width="1.4">
+        <g transform="rotate(-17 300 250)" fill="none" stroke="#ffc21e" stroke-opacity=".46" stroke-width="1.4">
           <ellipse cx="300" cy="250" rx="118" ry="79"/><ellipse cx="300" cy="250" rx="210" ry="140"/>
         </g>
-        <!-- peak B · mid-left -->
-        <g transform="rotate(14 120 640)" fill="none" stroke="#6ee0ff" stroke-opacity=".46" stroke-width=".9">
+        <!-- peak B · mid-left — Capitalist green -->
+        <g transform="rotate(14 120 640)" fill="none" stroke="#57e6a2" stroke-opacity=".44" stroke-width=".9">
           <ellipse cx="120" cy="640" rx="20" ry="13"/><ellipse cx="120" cy="640" rx="44" ry="30"/>
           <ellipse cx="120" cy="640" rx="72" ry="48"/><ellipse cx="120" cy="640" rx="120" ry="80"/>
           <ellipse cx="120" cy="640" rx="162" ry="108"/><ellipse cx="120" cy="640" rx="208" ry="138"/>
         </g>
-        <g transform="rotate(14 120 640)" fill="none" stroke="#9dff2e" stroke-opacity=".44" stroke-width="1.3">
+        <g transform="rotate(14 120 640)" fill="none" stroke="#2af08a" stroke-opacity=".46" stroke-width="1.3">
           <ellipse cx="120" cy="640" rx="96" ry="64"/><ellipse cx="120" cy="640" rx="182" ry="122"/>
         </g>
-        <!-- peak C · top-left ridge -->
-        <g transform="rotate(-8 40 120)" fill="none" stroke="#7d8fff" stroke-opacity=".42" stroke-width=".85">
+        <!-- peak C · top-left ridge — blue -->
+        <g transform="rotate(-8 40 120)" fill="none" stroke="#79b0ff" stroke-opacity=".42" stroke-width=".85">
           <ellipse cx="40" cy="120" rx="30" ry="22"/><ellipse cx="40" cy="120" rx="66" ry="48"/>
           <ellipse cx="40" cy="120" rx="108" ry="78"/><ellipse cx="40" cy="120" rx="156" ry="112"/>
         </g>
-        <!-- peak D · lower-right saddle -->
-        <g transform="rotate(22 380 900)" fill="none" stroke="#6ee0ff" stroke-opacity=".4" stroke-width=".85">
+        <!-- peak D · lower-right saddle — Supremo red -->
+        <g transform="rotate(22 380 900)" fill="none" stroke="#ff8493" stroke-opacity=".4" stroke-width=".85">
           <ellipse cx="380" cy="900" rx="26" ry="18"/><ellipse cx="380" cy="900" rx="58" ry="40"/>
           <ellipse cx="380" cy="900" rx="100" ry="70"/><ellipse cx="380" cy="900" rx="150" ry="104"/>
           <ellipse cx="380" cy="900" rx="200" ry="138"/>
         </g>
-        <g transform="rotate(22 380 900)" fill="none" stroke="#ff1e7a" stroke-opacity=".3" stroke-width="1.2">
+        <g transform="rotate(22 380 900)" fill="none" stroke="#ff3b52" stroke-opacity=".32" stroke-width="1.2">
           <ellipse cx="380" cy="900" rx="78" ry="54"/>
         </g>
-        <!-- peak E · lower-centre basin -->
-        <g transform="rotate(-4 180 870)" fill="none" stroke="#7d8fff" stroke-opacity=".36" stroke-width=".85">
+        <!-- peak E · lower-centre basin — blue -->
+        <g transform="rotate(-4 180 870)" fill="none" stroke="#79b0ff" stroke-opacity=".36" stroke-width=".85">
           <ellipse cx="180" cy="870" rx="40" ry="26"/><ellipse cx="180" cy="870" rx="92" ry="60"/>
           <ellipse cx="180" cy="870" rx="150" ry="98"/><ellipse cx="180" cy="870" rx="214" ry="140"/>
         </g>
