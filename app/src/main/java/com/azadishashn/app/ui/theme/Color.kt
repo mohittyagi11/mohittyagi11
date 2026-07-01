@@ -29,6 +29,22 @@ internal val Abyss = Color(0xFF070912)
 internal val DeepField = Color(0xFF0B0F1E)
 internal val RiseField = Color(0xFF161C39)
 
+// ---------------------------------------------------------------------------
+// Diffraction-glass (dark only) — the SHASN ideology brand hues pushed to laser
+// neon. Colour lives only in the light: the orb, the streak, and the glowing
+// contour illustration read through black glossy glass. See Diffraction.kt.
+// ---------------------------------------------------------------------------
+internal val LaserRed = Color(0xFFFF3B52)     // Supremo
+internal val LaserGreen = Color(0xFF2AF08A)   // Capitalist
+internal val LaserBlue = Color(0xFF3F86FF)    // Showstopper
+internal val LaserAmber = Color(0xFFFFC21E)   // Idealist
+internal val OrbCore = Color(0xFFEFFAFF)      // warm-cool white light source
+
+// Deep diffraction field stops (near-black so neon pops).
+internal val DiffField = Color(0xFF0A1030)
+internal val DiffMid = Color(0xFF05081A)
+internal val DiffAbyss = Color(0xFF010209)
+
 // Frosted-glass fills (translucent — composited over whatever is behind).
 internal val GlassDarkTop = Color(0x24FFFFFF)     // ~14% white, pane top
 internal val GlassDarkBottom = Color(0x0FFFFFFF)  // ~6% white, pane bottom

@@ -25,8 +25,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.ui.theme.Elev
-import com.azadishashn.app.ui.theme.GlassDarkBottom
-import com.azadishashn.app.ui.theme.GlassDarkTop
 
 /**
  * The keystone surface of the cinematic dark-glass look: a frosted, translucent
@@ -46,22 +44,12 @@ fun GlassSurface(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val dark = isSystemInDarkTheme()
-    val base = if (dark) {
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.58f)
-    } else {
-        Color.White.copy(alpha = 0.74f)
-    }
-    val sheen = if (dark) {
-        Brush.verticalGradient(listOf(GlassDarkTop, GlassDarkBottom, Color.Transparent))
-    } else {
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.55f), Color.Transparent))
-    }
-    val edge = Brush.verticalGradient(
-        listOf(
-            Color.White.copy(alpha = if (dark) 0.28f else 0.9f),
-            Color.White.copy(alpha = if (dark) 0.04f else 0.2f),
-        ),
-    )
+    // Black glossy glass (dark) — a deep translucent body so the fixed light
+    // field reads through, a top-lit convex sheen, a bright hairline lip, and a
+    // faint red/blue chromatic split at the vertical edges.
+    val base = glassBase(dark)
+    val sheen = glassSheen(dark)
+    val edge = glassEdge(dark)
 
     Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         if (glow != null) {
@@ -88,20 +76,17 @@ fun GlassSurface(
                 .background(base)
                 .background(sheen)
                 .border(1.dp, edge, shape)
-                .then(
+                .drawWithContent {
+                    drawContent()
+                    if (dark) drawChromaticEdge()
                     if (accent != null) {
-                        Modifier.drawWithContent {
-                            drawContent()
-                            drawRect(
-                                color = accent,
-                                topLeft = Offset.Zero,
-                                size = Size(4.dp.toPx(), this.size.height),
-                            )
-                        }
-                    } else {
-                        Modifier
-                    },
-                )
+                        drawRect(
+                            color = accent,
+                            topLeft = Offset.Zero,
+                            size = Size(4.dp.toPx(), this.size.height),
+                        )
+                    }
+                }
                 .padding(contentPadding),
             content = content,
         )

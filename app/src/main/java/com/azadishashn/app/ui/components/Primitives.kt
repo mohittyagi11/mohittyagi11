@@ -2,6 +2,7 @@ package com.azadishashn.app.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -29,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -72,21 +74,31 @@ fun PrimaryCta(
     gold: Boolean = false,
 ) {
     val source = rememberPressSource()
+    val dark = isSystemInDarkTheme()
     val primary = MaterialTheme.colorScheme.primary
-    val brush = if (gold) {
-        Brush.verticalGradient(listOf(GoldBright, GoldDim))
-    } else {
-        Brush.verticalGradient(listOf(primary, androidx.compose.ui.graphics.lerp(primary, Color.Black, 0.22f)))
+    // In dark mode the flagship button is black glossy glass too — colour comes
+    // only from the contour field reading through and the chromatic edge. The
+    // gold ceremony variant and the clean light-mode fill are unchanged.
+    val glossy = dark && !gold
+    val brush = when {
+        gold -> Brush.verticalGradient(listOf(GoldBright, GoldDim))
+        dark -> glassSheen(true)
+        else -> Brush.verticalGradient(listOf(primary, androidx.compose.ui.graphics.lerp(primary, Color.Black, 0.22f)))
     }
-    val contentColor = if (gold) Color(0xFF2A1E00) else MaterialTheme.colorScheme.onPrimary
+    val contentColor = when {
+        gold -> Color(0xFF2A1E00)
+        dark -> Color(0xFFEDF2FF)
+        else -> MaterialTheme.colorScheme.onPrimary
+    }
     val alpha = if (enabled) 1f else 0.45f
     Surface(
         onClick = onClick,
         enabled = enabled,
         interactionSource = source,
         shape = MaterialTheme.shapes.large,
-        color = Color.Transparent,
-        shadowElevation = if (enabled) 8.dp else 0.dp,
+        color = if (glossy) glassBase(true) else Color.Transparent,
+        shadowElevation = if (enabled) 10.dp else 0.dp,
+        border = if (glossy) BorderStroke(1.dp, glassEdge(true)) else null,
         modifier = modifier
             .fillMaxWidth()
             .pressScale(source),
@@ -94,7 +106,8 @@ fun PrimaryCta(
         Box(
             Modifier
                 .background(brush)
-                .padding(vertical = 16.dp, horizontal = 20.dp),
+                .then(if (glossy) Modifier.drawWithContent { drawContent(); drawChromaticEdge() } else Modifier)
+                .padding(vertical = 17.dp, horizontal = 20.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
