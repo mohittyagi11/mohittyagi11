@@ -10,14 +10,17 @@
     --violet:#b06bff; --blue:#5a7bff;
     --mono:ui-monospace,SFMono-Regular,Menlo,"Roboto Mono",monospace;
     --metal:linear-gradient(135deg,#f6f1e4 0%,#9aa0b2 24%,#e9d6a3 48%,#5f6577 70%,#f2ecdd 100%);
-    /* fine engine-turned tiles: a connected diamond mesh w/ node+micro-contour, and a dot field */
-    --mesh:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cg fill='none' stroke='%237e8bbf' stroke-width='.7' stroke-opacity='.55'%3E%3Cpath d='M0 0 40 40 M40 0 0 40'/%3E%3C/g%3E%3Ccircle cx='20' cy='20' r='3.2' fill='none' stroke='%23e9d6a3' stroke-width='.7' stroke-opacity='.4'/%3E%3Ccircle cx='20' cy='20' r='1.3' fill='%230a0c14' stroke='%23cfd6e6' stroke-width='.6' stroke-opacity='.6'/%3E%3C/svg%3E");
-    --dots:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15'%3E%3Ccircle cx='7.5' cy='7.5' r='.9' fill='%238792bf' fill-opacity='.5'/%3E%3C/svg%3E");
+    /* ONE coherent topographic contour field (nested flowing lines, two peaks + ridge) */
+    --topo:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='520' height='940' viewBox='0 0 520 940'%3E%3Cdefs%3E%3Cpath id='c' d='M0,-38 C22,-40 40,-14 36,4 C33,24 16,42 -2,38 C-22,36 -42,16 -38,-4 C-36,-24 -18,-38 0,-38 Z'/%3E%3C/defs%3E%3Cg fill='none' stroke='%237e8bbf' stroke-opacity='.5' stroke-width='.8'%3E%3Cuse xlink:href='%23c' transform='translate(340,250) scale(.5)'/%3Cuse xlink:href='%23c' transform='translate(340,250) scale(.95)'/%3Cuse xlink:href='%23c' transform='translate(340,250) scale(1.4)'/%3Cuse xlink:href='%23c' transform='translate(340,250) scale(2.3)'/%3Cuse xlink:href='%23c' transform='translate(340,250) scale(2.75)'/%3Cuse xlink:href='%23c' transform='translate(340,250) scale(3.2)'/%3Cuse xlink:href='%23c' transform='translate(340,250) scale(4.05)'/%3Cuse xlink:href='%23c' transform='translate(340,250) scale(4.5)'/%3Cuse xlink:href='%23c' transform='translate(150,650) scale(.5)'/%3Cuse xlink:href='%23c' transform='translate(150,650) scale(.95)'/%3Cuse xlink:href='%23c' transform='translate(150,650) scale(1.4)'/%3Cuse xlink:href='%23c' transform='translate(150,650) scale(2.3)'/%3Cuse xlink:href='%23c' transform='translate(150,650) scale(2.75)'/%3Cuse xlink:href='%23c' transform='translate(150,650) scale(3.5)'/%3Cuse xlink:href='%23c' transform='translate(430,820) scale(.6)'/%3Cuse xlink:href='%23c' transform='translate(430,820) scale(1.2)'/%3Cuse xlink:href='%23c' transform='translate(430,820) scale(1.9)'/%3C/g%3E%3Cg fill='none' stroke='%23e9d6a3' stroke-opacity='.42' stroke-width='1.1'%3E%3Cuse xlink:href='%23c' transform='translate(340,250) scale(1.85)'/%3Cuse xlink:href='%23c' transform='translate(340,250) scale(3.6)'/%3Cuse xlink:href='%23c' transform='translate(150,650) scale(1.85)'/%3Cuse xlink:href='%23c' transform='translate(150,650) scale(3.1)'/%3C/g%3E%3Cpath d='M300,300 C270,420 210,500 180,560' fill='none' stroke='%237e8bbf' stroke-opacity='.35' stroke-width='.8'/%3E%3C/svg%3E");
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{background:#04050a;color:#efedf6;overflow-x:hidden;
     font-family:"Space Grotesk",ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+
+  /* the shared, viewport-locked topo field — every layer that uses it ALIGNS */
+  .topo{background-image:var(--topo);background-repeat:no-repeat;background-attachment:fixed;
+    background-position:center -30px;background-size:560px auto}
 
   .field{position:relative;min-height:100%;
     background:radial-gradient(120% 78% at 50% 4%, #0e1433 0%, #080b18 44%, #04050a 100%);
@@ -27,15 +30,14 @@
     background:linear-gradient(180deg,rgba(90,123,255,.16),transparent 42%,rgba(255,45,120,.12) 100%),
       linear-gradient(90deg,rgba(34,224,255,.14),transparent 45%,rgba(233,214,163,.12));
     filter:blur(30px);mix-blend-mode:screen;opacity:.9}
-  /* fine connected-topography micro-texture across the whole field (graded) */
-  .texbg{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
-    background-image:var(--mesh),var(--dots);background-size:56px 56px,20px 20px;
-    -webkit-mask:radial-gradient(125% 100% at 50% 16%,#000,rgba(0,0,0,.35) 58%,transparent 94%);
-            mask:radial-gradient(125% 100% at 50% 16%,#000,rgba(0,0,0,.35) 58%,transparent 94%)}
+  /* background contour field (faint, blended toward the light) */
+  .texbg{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.42;
+    -webkit-mask:radial-gradient(130% 105% at 50% 15%,#000,rgba(0,0,0,.4) 55%,transparent 92%);
+            mask:radial-gradient(130% 105% at 50% 15%,#000,rgba(0,0,0,.4) 55%,transparent 92%)}
   .orb{position:fixed;left:50%;top:24%;width:290px;height:290px;transform:translate(-50%,-50%);z-index:0;pointer-events:none;animation:float 13s ease-in-out infinite}
   .orb::before,.orb::after{content:"";position:absolute;inset:0;border-radius:50%}
   .orb::before{background:radial-gradient(circle at 50% 44%,rgba(255,248,231,.8),rgba(240,222,180,.28) 16%,transparent 60%);filter:blur(6px)}
-  .orb::after{background:radial-gradient(circle at 44% 42%,rgba(90,123,255,.26),transparent 55%),radial-gradient(circle at 58% 50%,rgba(255,45,120,.20),transparent 55%);filter:blur(20px);mix-blend-mode:screen}
+  .orb::after{background:radial-gradient(circle at 44% 42%,rgba(90,123,255,.26),transparent 55%),radial-gradient(circle at 58% 50%,rgba(255,45,120,.2),transparent 55%);filter:blur(20px);mix-blend-mode:screen}
   .streak{position:fixed;left:-30%;top:10%;width:160%;height:150px;z-index:0;pointer-events:none;transform:rotate(-19deg);
     background:linear-gradient(90deg,transparent 8%,var(--mag),var(--violet),var(--blue),var(--cyan),var(--lime),transparent 92%);
     filter:blur(40px);opacity:.32;mix-blend-mode:screen;animation:slide 18s ease-in-out infinite}
@@ -58,15 +60,14 @@
 
   .glass{--lift:0;position:relative;isolation:isolate;overflow:hidden;border-radius:18px;
     background:linear-gradient(180deg,rgba(90,123,255,.12),transparent 46%,rgba(255,45,120,.08)),
-      linear-gradient(90deg,rgba(34,224,255,.10),transparent 50%,rgba(233,214,163,.10)),rgba(8,10,18,.62);
+      linear-gradient(90deg,rgba(34,224,255,.10),transparent 50%,rgba(233,214,163,.10)),rgba(8,10,18,.6);
     backdrop-filter:blur(11px) saturate(1.06);
     box-shadow:0 16px 44px rgba(0,0,0,.55),inset 1.2px 1.2px 0 rgba(255,45,120,.30),inset -1.2px -1.2px 0 rgba(34,224,255,.28);
     transition:transform .28s cubic-bezier(.2,.7,.2,1),box-shadow .3s ease}
-  /* the fine texture, GRADED so it's richest at the light-facing (top-right) edge */
-  .glass .tex{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.9;
-    background-image:var(--mesh),var(--dots);background-size:34px 34px,14px 14px;
-    -webkit-mask:linear-gradient(212deg,#000,rgba(0,0,0,.3) 58%,transparent 92%);
-            mask:linear-gradient(212deg,#000,rgba(0,0,0,.3) 58%,transparent 92%)}
+  /* the SAME topo field, viewport-locked → contours flow through the glass, aligned with the background */
+  .glass .tex{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.72;
+    -webkit-mask:linear-gradient(212deg,#000,rgba(0,0,0,.32) 60%,transparent 92%);
+            mask:linear-gradient(212deg,#000,rgba(0,0,0,.32) 60%,transparent 92%)}
   .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.4px;background:var(--metal);
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
     z-index:5;pointer-events:none;opacity:calc(.62 + .38*var(--lift));filter:brightness(calc(1 + .3*var(--lift)))}
@@ -74,7 +75,7 @@
     background:radial-gradient(130px 90px at 88% 0%,rgba(34,224,255,.5),rgba(176,107,255,.32) 34%,rgba(255,45,120,.22) 56%,transparent 72%);
     mix-blend-mode:screen;opacity:calc(.3 + .7*var(--lift));transition:opacity .3s ease}
   .glass:hover,.glass:active{--lift:1;transform:translateY(-3px)}
-  .glass:hover .tex{opacity:1}
+  .glass:hover .tex{opacity:.95}
   .glass:hover{box-shadow:0 22px 56px rgba(0,0,0,.6),inset 1.4px 1.4px 0 rgba(255,45,120,.5),inset -1.4px -1.4px 0 rgba(34,224,255,.48),0 0 30px rgba(90,123,255,.16)}
 
   .card{padding:18px 18px}
@@ -88,8 +89,7 @@
   .cta{display:flex;align-items:center;justify-content:center;width:100%;margin:26px 0 10px;padding:17px;cursor:pointer;
     font:inherit;font-weight:700;font-size:16px;letter-spacing:.2px;color:#221803;border:0;border-radius:18px;background:linear-gradient(180deg,#efdcac,#c09c54)}
   .cta::after{background:radial-gradient(160px 90px at 84% 0%,rgba(255,255,255,.7),rgba(34,224,255,.4) 40%,rgba(255,45,120,.3) 62%,transparent 78%);mix-blend-mode:overlay}
-  .cta .tex{opacity:.4;mix-blend-mode:multiply;
-    -webkit-mask:linear-gradient(90deg,transparent,#000 30%,#000 70%,transparent);mask:linear-gradient(90deg,transparent,#000 30%,#000 70%,transparent)}
+  .cta .tex{opacity:.3;mix-blend-mode:multiply;-webkit-mask:linear-gradient(90deg,transparent,#000 30%,#000 70%,transparent);mask:linear-gradient(90deg,transparent,#000 30%,#000 70%,transparent)}
   .cta span.t{position:relative;z-index:6}
 
   .chips{display:flex;gap:10px;margin:22px 0 6px}
@@ -103,7 +103,7 @@
 </head>
 <body>
   <div class="mesh"></div>
-  <div class="texbg"></div>
+  <div class="texbg topo"></div>
   <div class="orb"></div>
   <div class="streak"></div>
 
@@ -120,7 +120,7 @@
       <div class="rule"></div>
 
       <div class="glass card">
-        <span class="tex"></span>
+        <span class="tex topo"></span>
         <div class="idx mono">01 / 04</div>
         <div class="kick mono">ROUND 1 <i>·</i> SURVEILLANCE</div>
         <h3>The city wants eyes on every street</h3>
@@ -129,22 +129,22 @@
       </div>
 
       <div class="glass card">
-        <span class="tex"></span>
+        <span class="tex topo"></span>
         <div class="idx mono">02 / 04</div>
         <div class="kick mono">CONSEQUENCE <i>·</i> MAP</div>
         <h3>Where this path leads</h3>
         <p>Short-term calm, long-term chill on dissent — the cost of power.</p>
       </div>
 
-      <button class="glass cta"><span class="tex"></span><span class="t">Begin the game →</span></button>
+      <button class="glass cta"><span class="tex topo"></span><span class="t">Begin the game →</span></button>
 
       <div class="chips">
         <span class="glass chip on"><span class="mono">01</span><b>English</b></span>
-        <span class="glass chip"><span class="tex"></span><span class="mono">02</span><b>Hinglish</b></span>
-        <span class="glass chip"><span class="tex"></span><span class="mono">03</span><b>हिंदी</b></span>
+        <span class="glass chip"><span class="tex topo"></span><span class="mono">02</span><b>Hinglish</b></span>
+        <span class="glass chip"><span class="tex topo"></span><span class="mono">03</span><b>हिंदी</b></span>
       </div>
 
-      <div class="foot mono">◤ CUT-GLASS · ENGINE-TURNED TOPOGRAPHY · TAP TO CATCH THE LIGHT</div>
+      <div class="foot mono">◤ CUT-GLASS · ALIGNED TOPOGRAPHY · TAP TO CATCH THE LIGHT</div>
     </div>
   </div>
   <div class="grain"></div>
