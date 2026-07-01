@@ -22,9 +22,9 @@
   .bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;filter:saturate(1.35) contrast(1.06)}
   .base{position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 2%, #0c1230 0%, #05081a 44%, #010209 100%)}
   .mesh{position:absolute;inset:-8%;background:
-      linear-gradient(180deg,rgba(63,134,255,.36),transparent 46%,rgba(255,59,82,.28)),
-      linear-gradient(90deg,rgba(42,240,138,.28),transparent 48%,rgba(255,194,30,.24));
-    filter:blur(30px);mix-blend-mode:screen}
+      linear-gradient(180deg,rgba(63,134,255,.22),transparent 48%,rgba(255,59,82,.16)),
+      linear-gradient(90deg,rgba(42,240,138,.16),transparent 50%,rgba(255,194,30,.14));
+    filter:blur(38px);mix-blend-mode:screen}
   /* laser beam — thin, sharp, bright core; the four ideology hues split across it */
   .streak{position:absolute;left:-30%;top:8%;width:160%;height:96px;transform:rotate(-19deg);mix-blend-mode:screen}
   .streak::before{content:"";position:absolute;inset:0;
@@ -39,6 +39,7 @@
     background:radial-gradient(circle at 38% 40%,rgba(63,134,255,.7),transparent 54%),radial-gradient(circle at 62% 52%,rgba(255,59,82,.6),transparent 54%),radial-gradient(circle at 52% 66%,rgba(42,240,138,.5),transparent 56%),radial-gradient(circle at 48% 30%,rgba(255,194,30,.46),transparent 52%);filter:blur(16px);mix-blend-mode:screen}
   /* topographic contour field — explicit, clearly visible; blended toward the light */
   .topo{position:absolute;inset:0;width:100%;height:100%;mix-blend-mode:screen;
+    filter:drop-shadow(0 0 2.4px rgba(150,190,255,.55)) saturate(1.25);
     -webkit-mask:radial-gradient(150% 108% at 50% 16%,#000,rgba(0,0,0,.86) 62%,rgba(0,0,0,.4) 100%);
             mask:radial-gradient(150% 108% at 50% 16%,#000,rgba(0,0,0,.86) 62%,rgba(0,0,0,.4) 100%)}
   /* depth: directional relief shades the terrain (lit near the orb, dark far) so
@@ -63,26 +64,26 @@
   .rule{height:1px;margin:18px 0 20px;background:var(--metal);opacity:.7}
 
   .glass{position:relative;isolation:isolate;overflow:hidden;border-radius:18px;
-    /* convex face sheen (top-lit) + controlled ideology tints + a darker glass body so
-       the interior reads clean and text sits on real dark glass, not a rainbow smear */
-    background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.03) 16%,transparent 34%,rgba(0,0,0,.22)),
-      radial-gradient(150% 120% at 84% -8%,rgba(63,134,255,.3),transparent 46%),
-      radial-gradient(150% 120% at 8% 108%,rgba(255,59,82,.24),transparent 48%),
-      linear-gradient(120deg,rgba(42,240,138,.16),transparent 42%,rgba(255,194,30,.16)),rgba(6,9,18,.42);
-    backdrop-filter:blur(7px) saturate(1.7) brightness(1.22) hue-rotate(-4deg) contrast(1.08);
-    -webkit-backdrop-filter:blur(7px) saturate(1.7) brightness(1.22) hue-rotate(-4deg) contrast(1.08);
+    /* BLACK glossy glass — no colour wash; the vibrant ideology colour comes only
+       from the contour illustration reading through the pane. Just a top-lit gloss
+       sheen, a faint corner specular, and a deep near-black body. */
+    background:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.03) 13%,transparent 30%,rgba(0,0,0,.34)),
+      radial-gradient(120% 74% at 82% -8%,rgba(214,226,255,.09),transparent 42%),
+      rgba(4,6,13,.40);
+    backdrop-filter:blur(7px) saturate(1.8) brightness(1.42) contrast(1.06);
+    -webkit-backdrop-filter:blur(7px) saturate(1.8) brightness(1.42) contrast(1.06);
     box-shadow:
-      0 28px 60px -16px rgba(0,0,0,.75),          /* cast elevation shadow */
-      0 10px 22px -8px rgba(0,0,0,.6),             /* tight contact shadow */
+      0 30px 62px -16px rgba(0,0,0,.78),          /* cast elevation shadow */
+      0 10px 22px -8px rgba(0,0,0,.62),            /* tight contact shadow */
       inset 0 1.6px 0 rgba(255,255,255,.5),        /* top lip catching the light */
-      inset 0 -16px 30px -12px rgba(0,0,0,.55),    /* bottom thickness / inner shade */
-      inset 3px 0 11px rgba(255,59,82,.34),inset -3px 0 11px rgba(63,134,255,.4),
-      inset 1.5px 1.5px 0 rgba(255,59,82,.5),inset -1.5px -1.5px 0 rgba(63,134,255,.46)}
+      inset 0 -18px 32px -13px rgba(0,0,0,.6),     /* bottom thickness / inner shade */
+      inset 0 0 0 1px rgba(255,255,255,.07),       /* fine glass hairline */
+      inset 2px 0 9px rgba(255,59,82,.16),inset -2px 0 9px rgba(63,134,255,.18)}
   .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.5px;background:var(--metal);
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;z-index:5;opacity:.8}
   .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;z-index:4;pointer-events:none;
-    background:radial-gradient(150px 104px at 88% 0%,rgba(63,134,255,.72),rgba(255,194,30,.42) 32%,rgba(255,59,82,.36) 54%,transparent 72%),
-      radial-gradient(120px 90px at 6% 100%,rgba(42,240,138,.36),transparent 62%);mix-blend-mode:screen;opacity:.72}
+    background:radial-gradient(150px 96px at 86% -4%,rgba(226,236,255,.42),rgba(120,176,255,.18) 42%,transparent 70%);
+    mix-blend-mode:screen;opacity:.7}
 
   .card{padding:18px}
   .card + .card{margin-top:15px}
@@ -92,17 +93,21 @@
   .card h3{margin:11px 0 7px;font-size:19px;letter-spacing:-.3px;max-width:23ch;position:relative;z-index:6}
   .card p{margin:0;font-size:13.5px;line-height:1.55;color:#c3c3d6;max-width:40ch;position:relative;z-index:6}
 
-  .cta{display:flex;align-items:center;justify-content:center;width:100%;margin:24px 0 10px;padding:17px;
-    font:inherit;font-weight:700;font-size:16px;color:#050c04;border:0;border-radius:18px;
-    background:linear-gradient(115deg,#2af08a,#3f86ff 42%,#ff3b52 84%,#ffc21e)}
-  .cta::after{background:radial-gradient(180px 104px at 84% 0%,rgba(255,255,255,.85),rgba(63,134,255,.5) 40%,rgba(255,59,82,.38) 62%,transparent 80%);mix-blend-mode:overlay;opacity:.9}
-  .cta span{position:relative;z-index:6}
+  .cta{display:flex;align-items:center;justify-content:center;width:100%;margin:24px 0 10px;padding:18px;
+    font:inherit;font-weight:700;font-size:16px;letter-spacing:.2px;color:#eef3ff;border:0;border-radius:18px;
+    background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.04) 14%,transparent 32%,rgba(0,0,0,.42)),
+      rgba(5,7,15,.5)}
+  .cta::after{background:radial-gradient(200px 108px at 84% -6%,rgba(238,244,255,.6),rgba(120,176,255,.24) 44%,transparent 74%);mix-blend-mode:screen;opacity:.85}
+  .cta span{position:relative;z-index:6;text-shadow:0 1px 10px rgba(63,134,255,.5)}
 
   .chips{display:flex;gap:10px;margin:20px 0 6px}
   .chip{display:flex;align-items:center;padding:9px 15px;border-radius:12px;font-size:13px;font-weight:600;color:#e0e0f2;
     box-shadow:0 8px 18px -6px rgba(0,0,0,.6),inset 0 1.2px 0 rgba(255,255,255,.42),
       inset 1px 0 6px rgba(255,59,82,.28),inset -1px 0 6px rgba(63,134,255,.3)}
-  .chip.on{color:#04120a;background:linear-gradient(150deg,#b6ffd6,#2af08a 50%,#3f86ff)}
+  .chip.on{color:#eef3ff;
+    background:linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,.05) 15%,transparent 34%,rgba(0,0,0,.28)),rgba(8,11,22,.55);
+    box-shadow:0 9px 20px -6px rgba(0,0,0,.62),inset 0 1.5px 0 rgba(255,255,255,.6),
+      inset 0 -8px 16px -6px rgba(63,134,255,.55),inset 0 0 0 1px rgba(120,176,255,.4)}
   .chip .mono{font-size:9px;opacity:.6;margin-right:6px;position:relative;z-index:6}
   .chip b{position:relative;z-index:6;font-weight:600}
   .foot{margin-top:34px;color:#6a6f95}
