@@ -114,6 +114,8 @@ fun DrawScope.drawChromaticEdge(intensity: Float = 1f) {
 private data class Peak(
     val cx: Float, val cy: Float, val rot: Float,
     val color: Color, val index: Color?, val rings: Int, val spacing: Float,
+    /** A minority of peaks are vibrant and "feel out"; the rest are faint and recede. */
+    val vibrant: Boolean,
 )
 
 /** Cheap deterministic pseudo-noise in [-1,1] from two ints. */
@@ -148,12 +150,16 @@ private val PEAKS: List<Peak> = run {
                 cls > 0.05f -> (8 + s % 3) to (0.017f + 0.004f * kotlin.math.abs(jitter(s, 13)))
                 else -> (5 + s % 2) to (0.0095f + 0.003f * kotlin.math.abs(jitter(s, 14)))
             }
+            // Only ~1 in 4 peaks is vibrant (stands out); the rest recede as a
+            // faint under-texture. Bias vibrant peaks toward the mid/large sizes.
+            val vibrant = jitter(s, 30) > 0.52f
             add(
                 Peak(
                     cx = cx, cy = cy,
                     rot = 34f * jitter(s, 10),
-                    color = hue, index = index,
+                    color = hue, index = if (vibrant) index else null,
                     rings = rings, spacing = spacing,
+                    vibrant = vibrant,
                 ),
             )
         }
@@ -170,20 +176,22 @@ fun DrawScope.drawDiffractionBase() {
     // 1) Deep base.
     drawRect(Brush.verticalGradient(listOf(DiffField, DiffMid, DiffAbyss)))
 
-    // 2) Glowing ideology contours. Each peak has an organic blob outline (a few
-    //    harmonics) shared by all its nested rings, so the rings read as a
-    //    topographic hill rather than a radar target. Small + many + dim → an
-    //    allover woven texture. Each ring: a faint wide glow under a thin core.
-    val glowW = 2.4.dp.toPx()
-    val coreW = 0.85.dp.toPx()
-    val idxW = 1.25.dp.toPx()
-    PEAKS.forEachIndexed { pi, pk ->
+    // 2) Ideology contours. Each peak is an organic blob outline (a few harmonics)
+    //    shared by all its nested rings, so the rings read as a topographic hill.
+    //    Depth via hierarchy: MOST peaks are a faint, fine "under" texture; a
+    //    minority (pk.vibrant) glow and "feel out" above the rest. Lines are fine.
+    val glowW = 1.8.dp.toPx()
+    val coreW = 0.7.dp.toPx()
+    val idxW = 1.0.dp.toPx()
+    // Draw faint peaks first, vibrant ones last, so vibrant reads on top.
+    PEAKS.withIndex().sortedBy { it.value.vibrant }.forEach { (pi, pk) ->
         val center = Offset(size.width * pk.cx, size.height * pk.cy)
         val ratio = 0.82f + 0.08f * jitter(pi, 99)
         // per-peak organic shape harmonics (same for every ring of this peak)
         val a2 = 0.14f * jitter(pi, 1); val p2 = jitter(pi, 2) * TWO_PI
         val a3 = 0.09f * jitter(pi, 3); val p3 = jitter(pi, 4) * TWO_PI
         val a5 = 0.05f * jitter(pi, 5); val p5 = jitter(pi, 6) * TWO_PI
+        val baseA = if (pk.vibrant) 0.5f else 0.085f
         withTransform({ rotate(pk.rot, center) }) {
             for (r in 1..pk.rings) {
                 val f = r / pk.rings.toFloat()
@@ -200,8 +208,9 @@ fun DrawScope.drawDiffractionBase() {
                 path.close()
                 val isIndex = pk.index != null && r == (pk.rings + 1) / 2
                 val col = if (isIndex) pk.index!! else pk.color
-                val a = 0.2f * (1f - 0.26f * f)
-                drawPath(path, col.copy(alpha = a * 0.32f), style = Stroke(glowW))
+                val a = baseA * (1f - 0.24f * f)
+                // Only vibrant peaks get the wide glow halo that lifts them out.
+                if (pk.vibrant) drawPath(path, col.copy(alpha = a * 0.3f), style = Stroke(glowW))
                 drawPath(path, col.copy(alpha = a), style = Stroke(if (isIndex) idxW else coreW))
             }
         }

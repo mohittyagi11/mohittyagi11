@@ -10,6 +10,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,6 +59,7 @@ import com.azadishashn.app.model.OptionCard
 import com.azadishashn.app.ui.components.Avatar
 import com.azadishashn.app.ui.components.AzadiScaffold
 import com.azadishashn.app.ui.components.GeneratingView
+import com.azadishashn.app.ui.components.drawDiffractionBase
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.GlassChip
@@ -398,11 +400,15 @@ private fun RoundBody(vm: GameViewModel) {
     }
 
         if (s.loading) {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .background(MaterialTheme.colorScheme.background),
-            ) {
+            val darkLoad = isSystemInDarkTheme()
+            Box(Modifier.matchParentSize()) {
+                // Cover the live round with the diffraction field (dark) instead of a
+                // flat opaque block, so the loader sits on the same glassy light field.
+                if (darkLoad) {
+                    Canvas(Modifier.matchParentSize()) { drawDiffractionBase() }
+                } else {
+                    Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.background))
+                }
                 GeneratingView(s.loadingKind, vm.context)
             }
         }
