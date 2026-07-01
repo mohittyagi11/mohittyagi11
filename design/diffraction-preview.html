@@ -3,143 +3,156 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>Azadi Shashn — diffraction glass (luxe)</title>
+<title>Azadi Shashn — Diffraction Glass</title>
 <style>
-  :root{ --gold:#e9d6a3; --golddim:#b9974e; }
+  :root{
+    --mag:#ff2d78; --cyan:#22e0ff; --lime:#b6ff3d; --gold:#e9d6a3;
+    --violet:#b06bff; --blue:#5a7bff;
+    --mono:ui-monospace,SFMono-Regular,Menlo,"Roboto Mono",monospace;
+  }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{
-    background:#04050a; color:#ece9f2;
+    background:#04050a; color:#efedf6; overflow-x:hidden;
     font-family:"Space Grotesk",ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
   }
-  /* ---------- deep field + one refined light orb ---------- */
-  .field{
-    position:relative; min-height:100%;
-    background:radial-gradient(115% 80% at 50% 6%, #0c1126 0%, #080b16 46%, #04050a 100%);
-    padding:30px 20px 64px; overflow:hidden;
-  }
-  .orb,.halo{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);
-    pointer-events:none;z-index:0;animation:float 12s ease-in-out infinite}
-  .orb{width:230px;height:230px;border-radius:50%;
-    background:radial-gradient(circle at 50% 44%,
-      rgba(255,247,228,.72) 0%, rgba(240,222,180,.34) 18%,
-      rgba(150,170,220,.14) 42%, transparent 68%);
-    filter:blur(8px)}
-  .halo{width:430px;height:430px;border-radius:50%;
-    background:conic-gradient(from 0deg,#caa8ff,#a8d8ff,#a8e6c8,#f0d9a0,#e9b8c0,#caa8ff);
-    filter:blur(70px);opacity:.07;mix-blend-mode:screen;
-    animation:float 12s ease-in-out infinite, spin 60s linear infinite}
-  @keyframes float{0%,100%{margin-top:0}50%{margin-top:-12px}}
-  @keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+  /* ---------------- layered field ---------------- */
+  .field{position:relative;min-height:100%;
+    background:radial-gradient(120% 78% at 50% 4%, #0d1330 0%, #080b18 44%, #04050a 100%);
+    padding:22px 20px 70px;overflow:hidden}
+  /* light orb with a chromatic bloom (light itself fringing into colour) */
+  .orb{position:fixed;left:50%;top:26%;width:300px;height:300px;transform:translate(-50%,-50%);
+    z-index:0;pointer-events:none;animation:float 13s ease-in-out infinite}
+  .orb::before,.orb::after{content:"";position:absolute;inset:0;border-radius:50%}
+  .orb::before{background:radial-gradient(circle at 50% 44%,
+      rgba(255,248,231,.85) 0%, rgba(240,222,180,.34) 16%, transparent 60%);filter:blur(6px)}
+  .orb::after{background:
+      radial-gradient(circle at 44% 42%, rgba(90,123,255,.30), transparent 55%),
+      radial-gradient(circle at 58% 50%, rgba(255,45,120,.24), transparent 55%);
+    filter:blur(20px);mix-blend-mode:screen}
+  /* one bold diagonal spectral streak refracting across the top */
+  .streak{position:fixed;left:-30%;top:14%;width:160%;height:150px;z-index:0;pointer-events:none;
+    transform:rotate(-19deg);
+    background:linear-gradient(90deg,transparent 8%,
+      var(--mag),var(--violet),var(--blue),var(--cyan),var(--lime),transparent 92%);
+    filter:blur(38px);opacity:.42;mix-blend-mode:screen;
+    animation:slide 18s ease-in-out infinite}
+  @keyframes float{0%,100%{margin-top:0}50%{margin-top:-14px}}
+  @keyframes slide{0%,100%{transform:rotate(-19deg) translateX(-16px)}50%{transform:rotate(-19deg) translateX(16px)}}
+  /* film grain */
+  .grain{position:fixed;inset:0;z-index:6;pointer-events:none;opacity:.08;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
-  .wrap{position:relative;z-index:1;max-width:460px;margin:0 auto}
-  .brand{display:flex;align-items:center;gap:13px;margin:6px 2px 28px}
-  .brand .mark{width:46px;height:46px;border-radius:13px;
-    background:radial-gradient(circle at 50% 38%,#141621,#0a0a0e);
-    border:1px solid rgba(233,214,163,.42);display:grid;place-items:center;font-size:22px}
-  .brand h1{font-size:22px;margin:0;letter-spacing:-.3px;font-weight:700}
-  .brand p{margin:3px 0 0;font-size:12px;color:#9195b6;letter-spacing:.3px}
-  .hint{font-size:12.5px;color:#7f83a4;text-align:center;margin:0 0 24px;letter-spacing:.2px}
+  .wrap{position:relative;z-index:2;max-width:470px;margin:0 auto}
+  .mono{font-family:var(--mono);font-size:10.5px;letter-spacing:2.4px;text-transform:uppercase}
+  .top{display:flex;justify-content:space-between;align-items:center;color:#7f84a6;margin:2px 0 30px}
+  .top .dot{color:var(--cyan)}
 
-  /* ---------- black-glass, gold hairline, single travelling flash ---------- */
-  .holo{
-    --hue:0deg;      /* where this element's flash sits */
-    --lift:0;        /* 0 idle .. 1 caught the light */
-    position:relative;isolation:isolate;border-radius:20px;
-    background:
-      linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.012)),
-      rgba(10,12,20,.55);
-    backdrop-filter:blur(10px) saturate(1.05);
-    transition:transform .28s cubic-bezier(.2,.7,.2,1), box-shadow .35s ease;
-    box-shadow:0 14px 40px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.10);
-  }
-  /* constant luxury cue: a fine gold hairline */
-  .holo{border:1px solid rgba(233,214,163,.20)}
-  /* the flash: a NARROW soft-pastel spectral arc that slowly orbits the edge */
-  .holo::before{
-    content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1.4px;
-    background:conic-gradient(from var(--hue),
-      transparent 0deg, transparent 58deg,
-      rgba(255,205,170,.85) 82deg, rgba(175,215,255,.9) 100deg,
-      rgba(205,180,255,.85) 118deg, transparent 142deg, transparent 360deg);
-    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite:xor;mask-composite:exclude;
-    opacity:calc(.32 + .68*var(--lift));
-    filter:blur(.3px) brightness(calc(1 + .35*var(--lift)));
-    animation:orbit 22s linear infinite;z-index:2;pointer-events:none;
-  }
-  /* labradorite face flash: one soft colour that shifts, very low key */
-  .holo::after{
-    content:"";position:absolute;inset:0;border-radius:inherit;
-    background:linear-gradient(120deg, transparent 30%,
-      rgba(190,210,255,.16), rgba(225,205,255,.12), rgba(255,220,190,.14),
-      transparent 72%);
-    background-size:220% 100%;mix-blend-mode:screen;
-    opacity:calc(.16 + .5*var(--lift));
-    animation:drift 14s ease-in-out infinite;z-index:1;pointer-events:none;
-  }
-  @keyframes orbit{to{--hue:360deg}}
-  @keyframes drift{0%,100%{background-position:0% 0}50%{background-position:100% 0}}
-  @property --hue{syntax:'<angle>';inherits:false;initial-value:0deg}
+  .hero{margin:6px 0 30px;position:relative}
+  .hero .kick{color:#9aa0c4;margin-bottom:14px}
+  .hero .kick b{color:var(--gold);font-weight:600}
+  .hero h1{margin:0;font-size:44px;line-height:.98;font-weight:700;letter-spacing:-1.2px;
+    color:#f3f1f8;text-shadow:-1.6px 0 rgba(255,45,120,.55), 1.6px 0 rgba(34,224,255,.5)}
+  .hero p{margin:14px 0 0;max-width:33ch;font-size:14px;line-height:1.5;color:#b7b8cb}
+  .rule{height:1px;margin:26px 0;background:linear-gradient(90deg,transparent,rgba(233,214,163,.4),transparent)}
 
-  .holo:hover,.holo:active{--lift:1;transform:translateY(-2px)}
-  .holo:hover{box-shadow:0 20px 52px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.18)}
+  /* ---------------- black-glass cut material ---------------- */
+  .glass{
+    --lift:0; position:relative;isolation:isolate;border-radius:18px;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012)), rgba(8,10,18,.6);
+    backdrop-filter:blur(11px) saturate(1.06);
+    border:1px solid rgba(233,214,163,.22);
+    /* chromatic-aberration split at the edges (red one way, cyan the other) */
+    box-shadow:
+      0 16px 44px rgba(0,0,0,.55),
+      inset 1.2px 1.2px 0 rgba(255,45,120,.32),
+      inset -1.2px -1.2px 0 rgba(34,224,255,.30);
+    transition:transform .28s cubic-bezier(.2,.7,.2,1), box-shadow .3s ease;
+  }
+  /* vibrant diffraction flare concentrated at the light-facing (top-right) facet */
+  .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;z-index:2;pointer-events:none;
+    background:radial-gradient(120px 90px at 88% 0%,
+      rgba(34,224,255,.5), rgba(176,107,255,.34) 34%, rgba(255,45,120,.24) 55%, transparent 72%);
+    mix-blend-mode:screen;opacity:calc(.34 + .66*var(--lift));transition:opacity .3s ease}
+  /* a faint travelling oil-slick on the face */
+  .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;z-index:1;pointer-events:none;
+    background:linear-gradient(118deg,transparent 34%,
+      rgba(90,123,255,.14),rgba(176,107,255,.12),rgba(182,255,61,.10),transparent 70%);
+    background-size:220% 100%;mix-blend-mode:screen;opacity:calc(.2 + .5*var(--lift));
+    animation:drift 15s ease-in-out infinite}
+  @keyframes drift{0%,100%{background-position:0 0}50%{background-position:100% 0}}
+  .glass:hover,.glass:active{--lift:1;transform:translateY(-3px)}
+  .glass:hover{box-shadow:0 22px 56px rgba(0,0,0,.6),
+    inset 1.4px 1.4px 0 rgba(255,45,120,.5), inset -1.4px -1.4px 0 rgba(34,224,255,.48),
+    0 0 30px rgba(90,123,255,.16)}
 
   .card{padding:18px 18px}
-  .card + .card{margin-top:15px}
-  .kick{font-size:11px;letter-spacing:1.6px;color:#c7ad68;font-weight:700;text-transform:uppercase}
-  .card h3{margin:9px 0 6px;font-size:18px;letter-spacing:-.2px}
-  .card p{margin:0;font-size:13.5px;line-height:1.55;color:#bcbccd}
+  .card + .card{margin-top:16px}
+  .card .idx{position:absolute;top:14px;right:16px;color:#565b7e}
+  .card .kick{color:#c7ad68}
+  .card .kick i{font-style:normal;color:var(--cyan)}
+  .card h3{margin:11px 0 7px;font-size:19px;letter-spacing:-.3px;max-width:26ch}
+  .card p{margin:0;font-size:13.5px;line-height:1.55;color:#bcbccd;max-width:40ch}
 
-  .cta{display:block;width:100%;margin:24px 0 8px;padding:17px;cursor:pointer;
-    font:inherit;font-weight:700;font-size:16px;color:#241a02;border:1px solid rgba(233,214,163,.5);
-    border-radius:20px;background:linear-gradient(180deg,#ecd9a6,#bd9a52)}
-  .cta.holo::after{mix-blend-mode:overlay;opacity:calc(.28 + .5*var(--lift))}
-  .cta.holo::before{opacity:calc(.24 + .7*var(--lift))}
+  .cta{display:block;width:100%;margin:26px 0 10px;padding:17px;cursor:pointer;
+    font:inherit;font-weight:700;font-size:16px;letter-spacing:.2px;color:#221803;
+    border:1px solid rgba(233,214,163,.55);border-radius:18px;
+    background:linear-gradient(180deg,#efdcac,#c09c54)}
+  .cta::after{background:radial-gradient(150px 90px at 84% 0%,
+    rgba(255,255,255,.7), rgba(34,224,255,.4) 40%, rgba(255,45,120,.3) 62%, transparent 78%);
+    mix-blend-mode:overlay}
+  .cta::before{display:none}
 
   .chips{display:flex;gap:10px;margin:22px 0 6px}
-  .chip{padding:9px 15px;border-radius:13px;font-size:13px;font-weight:600;color:#d7d7ea;
-    background:rgba(255,255,255,.04)}
-  .chip.on{color:#0c1022;background:linear-gradient(180deg,#e6ebff,#aeb9f0);border-color:transparent}
+  .chip{padding:9px 15px;border-radius:12px;font-size:13px;font-weight:600;color:#dadaee}
+  .chip.on{color:#0c1022;border-color:transparent;background:linear-gradient(180deg,#e6ebff,#aeb9f0)}
+  .chip .mono{font-size:9px;opacity:.6;margin-right:6px}
 
-  .foot{margin-top:36px;text-align:center;font-size:11px;color:#63678a}
+  .foot{margin-top:38px;color:#5f6488}
 </style>
 </head>
 <body>
   <div class="orb"></div>
-  <div class="halo"></div>
+  <div class="streak"></div>
   <div class="field">
     <div class="wrap">
-      <div class="brand">
-        <div class="mark">✊</div>
-        <div><h1>Azadi Shashn</h1><p>diffraction glass · luxe</p></div>
-      </div>
-      <p class="hint">Black glass, a gold hairline, and a single flash of colour that catches the light. Tap an element.</p>
+      <div class="top mono"><span>AZADI&nbsp;SHASHN</span><span><span class="dot">●</span> DARK / v1.14</span></div>
 
-      <div class="holo card" style="--hue:200deg">
-        <div class="kick">Round 1 · Surveillance</div>
+      <div class="hero">
+        <div class="kick mono">EXH.01 — <b>THE LIGHT</b></div>
+        <h1>DIFFRACTION<br>GLASS</h1>
+        <p>Black glass, cut like a gemstone. It holds the light — and splits it.</p>
+      </div>
+
+      <div class="rule"></div>
+
+      <div class="glass card">
+        <div class="idx mono">01 / 04</div>
+        <div class="kick mono">ROUND 1 <i>·</i> SURVEILLANCE</div>
         <h3>The city wants eyes on every street</h3>
-        <p>A wave of unrest has the capital on edge. The interior ministry proposes
-           blanket facial-recognition cameras. Do you trade privacy for order?</p>
+        <p>Unrest has the capital on edge. The ministry proposes blanket facial-recognition.
+           Trade privacy for order — or hold the line?</p>
       </div>
 
-      <div class="holo card" style="--hue:320deg">
-        <div class="kick">Consequence map</div>
+      <div class="glass card">
+        <div class="idx mono">02 / 04</div>
+        <div class="kick mono">CONSEQUENCE <i>·</i> MAP</div>
         <h3>Where this path leads</h3>
         <p>Short-term calm, long-term chill on dissent — the cost of power.</p>
       </div>
 
-      <button class="holo cta" style="--hue:40deg">Begin the game</button>
+      <button class="glass cta">Begin the game →</button>
 
       <div class="chips">
-        <span class="holo chip on" style="--hue:210deg">English</span>
-        <span class="holo chip" style="--hue:150deg">Hinglish</span>
-        <span class="holo chip" style="--hue:280deg">हिंदी</span>
+        <span class="glass chip on"><span class="mono">01</span>English</span>
+        <span class="glass chip"><span class="mono">02</span>Hinglish</span>
+        <span class="glass chip"><span class="mono">03</span>हिंदी</span>
       </div>
 
-      <p class="foot">Concept mock · rendered in Jetpack Compose in the real app</p>
+      <div class="foot mono">◤ CUT-GLASS MATERIAL · TAP TO CATCH THE LIGHT</div>
     </div>
   </div>
+  <div class="grain"></div>
 </body>
 </html>
