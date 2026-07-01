@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+ html,body{margin:0;width:340px;height:340px;overflow:hidden;
+   background:radial-gradient(120% 90% at 50% 34%,#0a1030,#05081a 60%,#010209)}
+ canvas{display:block;width:340px;height:340px}
+</style></head><body>
+<canvas id="a" width="680" height="680"></canvas>
+<script>
+const R='#ff3b52',G='#2af08a',B='#3f86ff',A='#ffc21e';const hues=[B,G,R,A,B];
+function hex(c,al){const n=parseInt(c.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${al})`;}
+const cv=document.getElementById('a'),x=cv.getContext('2d');const W=cv.width,H=cv.height,DP=2;
+const cx=W/2,cy=H/2,maxR=Math.min(W,H)*0.46;const emit=0.34,spin=emit*300,pulse=0.7;
+let bl=x.createRadialGradient(cx,cy,0,cx,cy,maxR*1.1);bl.addColorStop(0,hex(B,.16));bl.addColorStop(1,hex(B,0));x.fillStyle=bl;x.beginPath();x.arc(cx,cy,maxR*1.1,0,7);x.fill();
+for(let k=0;k<hues.length;k++){const local=(emit+k/hues.length)%1;const eased=local*(2-local);const r=maxR*(0.1+0.92*eased);
+ const fi=Math.min(local/0.1,1);const fade=1-local;const a=fi*fade*fade*0.95;if(a<=0.01)continue;const col=hues[k];
+ const a2=.10,a3=.06,p2=k*1.7,p3=k*2.9;x.save();x.translate(cx,cy);x.rotate((spin+k*34)*Math.PI/180);x.translate(-cx,-cy);
+ const steps=54;x.beginPath();for(let i=0;i<=steps;i++){const ang=i/steps*2*Math.PI;const wob=1+a2*Math.sin(2*ang+p2)+a3*Math.sin(3*ang+p3);const px=cx+r*wob*Math.cos(ang),py=cy+r*wob*0.92*Math.sin(ang);i?x.lineTo(px,py):x.moveTo(px,py);}x.closePath();
+ x.strokeStyle=hex(col,a*.35);x.lineWidth=3.4*DP;x.stroke();x.strokeStyle=hex(col,a);x.lineWidth=1.4*DP;x.stroke();x.restore();}
+x.save();x.translate(cx,cy);x.rotate(-spin*1.6*Math.PI/180);x.translate(-cx,-cy);const rr=maxR*0.34;let tg=x.createRadialGradient(cx+rr,cy,0,cx+rr,cy,maxR*0.12);tg.addColorStop(0,'rgba(255,255,255,.55)');tg.addColorStop(.5,hex(B,.22));tg.addColorStop(1,hex(B,0));x.fillStyle=tg;x.beginPath();x.arc(cx+rr,cy,maxR*0.12,0,7);x.fill();x.restore();
+const coreR=maxR*(0.17+0.03*Math.sin(pulse*Math.PI));let cg=x.createRadialGradient(cx,cy,0,cx,cy,coreR);cg.addColorStop(0,'rgba(240,251,255,.98)');cg.addColorStop(.45,'rgba(240,251,255,.4)');cg.addColorStop(1,'rgba(240,251,255,0)');x.fillStyle=cg;x.beginPath();x.arc(cx,cy,coreR,0,7);x.fill();
+</script></body></html>

@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -76,7 +77,11 @@ fun GeneratingView(kind: String?, context: String, modifier: Modifier = Modifier
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        FistLoader(size = 168.dp)
+        if (isSystemInDarkTheme()) {
+            DiffractionLoader(size = 176.dp)
+        } else {
+            FistLoader(size = 168.dp)
+        }
         Spacer(Modifier.height(36.dp))
 
         Text(kickerFor(kind), style = OverlineStyle, color = GoldBright)

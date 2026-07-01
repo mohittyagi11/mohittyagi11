@@ -36,7 +36,7 @@ let bg=x.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#0a1030');bg.addColorS
 x.fillStyle=bg;x.fillRect(0,0,W,H);
 const TWO=6.2831855;
 const HUES=[B,G,R,B,G];
-const peaks=[];{const cols=4,rows=9;for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){const s=gy*cols+gx;const stag=gy%2===0?0:0.5/cols;let cx=(gx+.5)/cols+stag+0.16/cols*jit(s,7);cx=Math.max(-.05,Math.min(1.05,cx));const cy=(gy+.5)/rows+0.16/rows*jit(s,8);const hue=HUES[(gx+gy)%HUES.length];const idx=jit(s,9)>0.55?A:null;peaks.push([cx,cy,34*jit(s,10),hue,idx,7+(s%3),0.017+0.004*jit(s,11)]);}}
+const peaks=[];{const cols=4,rows=9;for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){const s=gy*cols+gx;const stag=gy%2===0?0:0.5/cols;let cx=(gx+.5)/cols+stag+0.16/cols*jit(s,7);cx=Math.max(-.05,Math.min(1.05,cx));const cy=(gy+.5)/rows+0.16/rows*jit(s,8);const hue=HUES[(gx+gy)%HUES.length];const idx=jit(s,9)>0.55?A:null;const cls=jit(s,20);let rings,sp;if(cls>0.5){rings=12+(s%4);sp=0.028+0.007*Math.abs(jit(s,12));}else if(cls>0.05){rings=8+(s%3);sp=0.017+0.004*Math.abs(jit(s,13));}else{rings=5+(s%2);sp=0.0095+0.003*Math.abs(jit(s,14));}peaks.push([cx,cy,34*jit(s,10),hue,idx,rings,sp]);}}
 function hex(c,al){const n=parseInt(c.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${al})`;}
 peaks.forEach((pk,pi)=>{const[cxf,cyf,rot,col,idx,rings,sp]=pk;const cx0=W*cxf,cy0=H*cyf;const ratio=.82+.08*jit(pi,99);
  const a2=.14*jit(pi,1),p2=jit(pi,2)*TWO,a3=.09*jit(pi,3),p3=jit(pi,4)*TWO,a5=.05*jit(pi,5),p5=jit(pi,6)*TWO;

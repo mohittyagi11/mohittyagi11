@@ -139,13 +139,21 @@ private val PEAKS: List<Peak> = run {
             val cy = ((gy + 0.5f) / rows + 0.16f / rows * jitter(s, 8))
             val hue = BASE_HUES[(gx + gy) % BASE_HUES.size]
             val index = if (jitter(s, 9) > 0.55f) LaserAmber else null
+            // Size class: a real topographic map mixes broad gentle rises, mid
+            // hills and tight little knolls. Bias toward small so a few big ones
+            // stand out. Larger hills carry more rings; small ones stay tight.
+            val cls = jitter(s, 20)
+            val (rings, spacing) = when {
+                cls > 0.5f -> (12 + s % 4) to (0.028f + 0.007f * kotlin.math.abs(jitter(s, 12)))
+                cls > 0.05f -> (8 + s % 3) to (0.017f + 0.004f * kotlin.math.abs(jitter(s, 13)))
+                else -> (5 + s % 2) to (0.0095f + 0.003f * kotlin.math.abs(jitter(s, 14)))
+            }
             add(
                 Peak(
                     cx = cx, cy = cy,
                     rot = 34f * jitter(s, 10),
                     color = hue, index = index,
-                    rings = 7 + (s % 3),
-                    spacing = 0.017f + 0.004f * jitter(s, 11),
+                    rings = rings, spacing = spacing,
                 ),
             )
         }
