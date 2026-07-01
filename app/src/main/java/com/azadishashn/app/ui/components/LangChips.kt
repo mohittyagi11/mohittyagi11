@@ -62,12 +62,12 @@ fun LangChips(
     }
 }
 
-/** A single black glossy glass chip (dark mode). */
+/** A single black glossy glass chip (dark mode) — reused by the theme picker. */
 @Composable
-private fun GlassChip(label: String, selected: Boolean, onClick: () -> Unit) {
+fun GlassChip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     Row(
-        Modifier
+        modifier
             .shadow(if (selected) 9.dp else 6.dp, shape, clip = false)
             .clip(shape)
             .background(glassBase(true))

@@ -10,6 +10,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +60,7 @@ import com.azadishashn.app.ui.components.AzadiScaffold
 import com.azadishashn.app.ui.components.GeneratingView
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
+import com.azadishashn.app.ui.components.GlassChip
 import com.azadishashn.app.ui.components.IdeologyChip
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.ScenarioStory
@@ -124,12 +126,21 @@ private fun ThemePicker(vm: GameViewModel) {
             horizontalArrangement = Arrangement.spacedBy(Dim.tight),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            val darkThemePicker = isSystemInDarkTheme()
             s.availableThemes.forEach { theme ->
-                FilterChip(
-                    selected = theme in s.selectedThemes,
-                    onClick = { vm.toggleTheme(theme) },
-                    label = { Text(theme) },
-                )
+                if (darkThemePicker) {
+                    GlassChip(
+                        label = theme,
+                        selected = theme in s.selectedThemes,
+                        onClick = { vm.toggleTheme(theme) },
+                    )
+                } else {
+                    FilterChip(
+                        selected = theme in s.selectedThemes,
+                        onClick = { vm.toggleTheme(theme) },
+                        label = { Text(theme) },
+                    )
+                }
             }
         }
         Spacer(Modifier.height(Dim.sectionGap))

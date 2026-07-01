@@ -2,17 +2,19 @@ package com.azadishashn.app.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 /**
  * The cinematic field. In dark mode this is the "diffraction glass" light field:
- * a central light orb, a diagonal laser streak, glowing ideology contours with
- * directional relief, and an edge vignette — all drawn in screen space so the
- * translucent black-glass panes above read as windows onto the light. In light
- * mode it stays the clean editorial paper background. GPU-cheap: one shared
- * infinite transition, no blur. Background-only.
+ * glowing organic ideology contours over a deep base (static layer), plus a
+ * central light orb and a diagonal laser streak that gently animate (thin overlay
+ * layer). Splitting static from animated keeps the many contour paths off the
+ * per-frame path so scrolling stays smooth. Light mode stays the clean paper
+ * background. Background-only.
  */
 @Composable
 fun FlowBackground(modifier: Modifier = Modifier) {
@@ -20,11 +22,14 @@ fun FlowBackground(modifier: Modifier = Modifier) {
     val background = MaterialTheme.colorScheme.background
     val phase = rememberDiffractionPhase()
 
-    Canvas(modifier) {
+    Box(modifier) {
+        // Static base — no animation state read, so drawn once.
+        Canvas(Modifier.fillMaxSize()) {
+            if (dark) drawDiffractionBase() else drawRect(background)
+        }
+        // Animated light — only the orb + streak repaint each frame.
         if (dark) {
-            drawDiffractionField(phase)
-        } else {
-            drawRect(background)
+            Canvas(Modifier.fillMaxSize()) { drawDiffractionLight(phase) }
         }
     }
 }

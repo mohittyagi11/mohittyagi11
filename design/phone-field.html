@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+  html,body{margin:0;background:#010209}
+  .wrap{position:relative;width:411px;height:915px}
+  canvas{position:absolute;inset:0}
+  .ui{position:absolute;inset:0;padding:22px 18px;font-family:system-ui,sans-serif;color:#eef1fb}
+  .h{font-size:30px;font-weight:700;margin:8px 0 2px}
+  .sub{font-size:13px;color:#aeb2c8;margin-bottom:16px;line-height:1.4}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{padding:9px 14px;border-radius:12px;font-size:13px;font-weight:600;color:#cfd3e6;
+    background:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.03) 13%,transparent 30%,rgba(0,0,0,.34)),rgba(5,7,15,.5);
+    box-shadow:0 6px 16px -6px rgba(0,0,0,.6),inset 0 1.4px 0 rgba(255,255,255,.4),inset 2px 0 6px rgba(255,59,82,.16),inset -2px 0 6px rgba(63,134,255,.18)}
+  .chip.on{color:#eef2ff;box-shadow:0 9px 20px -6px rgba(0,0,0,.62),inset 0 1.5px 0 rgba(255,255,255,.55),inset 0 -8px 16px -6px rgba(63,134,255,.5),inset 0 0 0 1px rgba(120,176,255,.4)}
+  .cta{margin-top:22px;padding:17px;text-align:center;border-radius:16px;font-weight:700;color:#eef2ff;
+    background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.03) 14%,transparent 32%,rgba(0,0,0,.42)),rgba(5,7,15,.5);
+    box-shadow:0 20px 44px -14px rgba(0,0,0,.7),inset 0 1.6px 0 rgba(255,255,255,.5),inset 2px 0 8px rgba(255,59,82,.2),inset -2px 0 8px rgba(63,134,255,.22)}
+</style></head><body>
+<div class="wrap"><canvas id="c" width="822" height="1830"></canvas>
+<div class="ui">
+  <div class="h">Round 1</div>
+  <div class="sub">Pick a theme — or a few — then Generate. Skip the picks to roll a random one.</div>
+  <div class="chips">
+    <span class="chip on">Colonial legacy</span><span class="chip">Genetic engineering</span>
+    <span class="chip">Revolution</span><span class="chip">Coup &amp; succession</span><span class="chip">Dark &amp; grim</span>
+    <span class="chip">AI &amp; automation</span><span class="chip">Privacy vs security</span>
+    <span class="chip">Political power</span><span class="chip">Famine</span><span class="chip">Refugees</span>
+  </div>
+  <div class="cta">Surprise me — generate</div>
+</div></div>
+<script>
+const cv=document.getElementById('c'),x=cv.getContext('2d');const W=cv.width,H=cv.height,DP=2;
+const R='#ff3b52',G='#2af08a',B='#3f86ff',A='#ffc21e';
+const unit=Math.min(W,H);
+function jit(a,b){let s=Math.sin(a*12.9898+b*78.233)*43758.547;return (s-Math.floor(s))*2-1;}
+// base
+let bg=x.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#0a1030');bg.addColorStop(.5,'#05081a');bg.addColorStop(1,'#010209');
+x.fillStyle=bg;x.fillRect(0,0,W,H);
+const TWO=6.2831855;
+const HUES=[B,G,R,B,G];
+const peaks=[];{const cols=4,rows=9;for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){const s=gy*cols+gx;const stag=gy%2===0?0:0.5/cols;let cx=(gx+.5)/cols+stag+0.16/cols*jit(s,7);cx=Math.max(-.05,Math.min(1.05,cx));const cy=(gy+.5)/rows+0.16/rows*jit(s,8);const hue=HUES[(gx+gy)%HUES.length];const idx=jit(s,9)>0.55?A:null;peaks.push([cx,cy,34*jit(s,10),hue,idx,7+(s%3),0.017+0.004*jit(s,11)]);}}
+function hex(c,al){const n=parseInt(c.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${al})`;}
+peaks.forEach((pk,pi)=>{const[cxf,cyf,rot,col,idx,rings,sp]=pk;const cx0=W*cxf,cy0=H*cyf;const ratio=.82+.08*jit(pi,99);
+ const a2=.14*jit(pi,1),p2=jit(pi,2)*TWO,a3=.09*jit(pi,3),p3=jit(pi,4)*TWO,a5=.05*jit(pi,5),p5=jit(pi,6)*TWO;
+ x.save();x.translate(cx0,cy0);x.rotate(rot*Math.PI/180);x.translate(-cx0,-cy0);
+ for(let r=1;r<=rings;r++){const f=r/rings;const base=unit*sp*r;const isI=idx&&r===((rings+1)>>1);const c=isI?idx:col;const a=.2*(1-.26*f);
+  const steps=46;x.beginPath();for(let i=0;i<=steps;i++){const ang=i/steps*TWO;const wob=1+a2*Math.sin(2*ang+p2)+a3*Math.sin(3*ang+p3)+a5*Math.sin(5*ang+p5);const px=cx0+base*wob*Math.cos(ang),py=cy0+base*wob*ratio*Math.sin(ang);i?x.lineTo(px,py):x.moveTo(px,py);}x.closePath();
+  x.strokeStyle=hex(c,a*.32);x.lineWidth=2.4*DP;x.stroke();
+  x.strokeStyle=hex(c,a);x.lineWidth=(isI?1.25:0.85)*DP;x.stroke();}
+ x.restore();});
+// orb
+const orb=[W*.5,H*.19];
+function rad(cx,cy,r,c,al){let g=x.createRadialGradient(cx,cy,0,cx,cy,r);g.addColorStop(0,hex(c,al));g.addColorStop(1,hex(c,0));x.fillStyle=g;x.beginPath();x.arc(cx,cy,r,0,7);x.fill();}
+rad(orb[0],orb[1],unit*.52,B,.42);rad(orb[0]+unit*.07,orb[1]+unit*.03,unit*.4,R,.32);rad(orb[0]-unit*.05,orb[1]+unit*.06,unit*.36,G,.24);
+let og=x.createRadialGradient(orb[0],orb[1],0,orb[0],orb[1],unit*.12);og.addColorStop(0,'rgba(239,250,255,.85)');og.addColorStop(.4,'rgba(239,250,255,.22)');og.addColorStop(1,'rgba(239,250,255,0)');x.fillStyle=og;x.beginPath();x.arc(orb[0],orb[1],unit*.12,0,7);x.fill();
+// laser
+x.save();const bb=H*.13;x.translate(W*.5,bb);x.rotate(-19*Math.PI/180);x.translate(-W*.5,-bb);
+[[22,.08],[12,.14],[5,.24]].forEach(([h,al])=>{const lg=x.createLinearGradient(-W*.3,0,W*1.3,0);lg.addColorStop(.06,'rgba(0,0,0,0)');lg.addColorStop(.2,hex(R,al));lg.addColorStop(.4,hex(A,al));lg.addColorStop(.6,hex(G,al));lg.addColorStop(.8,hex(B,al));lg.addColorStop(.94,'rgba(0,0,0,0)');x.fillStyle=lg;x.fillRect(-W*.3,bb-h*DP/2,W*1.6,h*DP);});
+x.fillStyle='rgba(255,255,255,.6)';x.fillRect(-W*.15,bb-0.7*DP,W*1.3,1.4*DP);x.restore();
+// vignette
+let vg=x.createRadialGradient(W*.5,H*.2,0,W*.5,H*.2,W*1.6);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(.5,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(1,2,9,.86)');x.fillStyle=vg;x.fillRect(0,0,W,H);
+</script></body></html>

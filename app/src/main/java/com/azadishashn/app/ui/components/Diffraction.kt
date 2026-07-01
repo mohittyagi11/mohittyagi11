@@ -12,10 +12,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.unit.dp
+import kotlin.math.cos
 import com.azadishashn.app.ui.theme.DiffAbyss
 import com.azadishashn.app.ui.theme.DiffField
 import com.azadishashn.app.ui.theme.DiffMid
@@ -111,48 +113,109 @@ fun DrawScope.drawChromaticEdge(intensity: Float = 1f) {
 
 private data class Peak(
     val cx: Float, val cy: Float, val rot: Float,
-    val color: Color, val index: Color?, val rings: Int, val maxR: Float,
+    val color: Color, val index: Color?, val rings: Int, val spacing: Float,
 )
 
-// Five ridge centres spread across the canvas (fractional coords), ideology-hued.
-private val PEAKS = listOf(
-    Peak(0.70f, 0.15f, -17f, LaserBlue, LaserAmber, 8, 0.64f),
-    Peak(0.27f, 0.52f, 14f, LaserGreen, LaserGreen, 6, 0.54f),
-    Peak(0.08f, 0.09f, -8f, LaserBlue, null, 4, 0.42f),
-    Peak(0.86f, 0.80f, 22f, LaserRed, LaserRed, 5, 0.54f),
-    Peak(0.42f, 0.93f, -4f, LaserBlue, null, 4, 0.58f),
-)
+/** Cheap deterministic pseudo-noise in [-1,1] from two ints. */
+private fun jitter(a: Int, b: Int): Float {
+    val s = sin(a * 12.9898f + b * 78.233f) * 43758.547f
+    return (s - kotlin.math.floor(s)) * 2f - 1f
+}
+
+private const val TWO_PI = 6.2831855f
+
+// A jittered grid of ridge centres covering the whole canvas — enough overlap
+// that the organic contours weave a continuous allover topographic texture with
+// no voids or lonely "radar" blobs. Portrait-tall, so more rows than columns.
+private val BASE_HUES = listOf(LaserBlue, LaserGreen, LaserRed, LaserBlue, LaserGreen)
+private val PEAKS: List<Peak> = run {
+    val cols = 4; val rows = 9
+    buildList {
+        for (gy in 0 until rows) for (gx in 0 until cols) {
+            val s = gy * cols + gx
+            // brick-offset every other row + jitter, so rows don't line up
+            val stagger = if (gy % 2 == 0) 0f else 0.5f / cols
+            val cx = ((gx + 0.5f) / cols + stagger + 0.16f / cols * jitter(s, 7)).coerceIn(-0.05f, 1.05f)
+            val cy = ((gy + 0.5f) / rows + 0.16f / rows * jitter(s, 8))
+            val hue = BASE_HUES[(gx + gy) % BASE_HUES.size]
+            val index = if (jitter(s, 9) > 0.55f) LaserAmber else null
+            add(
+                Peak(
+                    cx = cx, cy = cy,
+                    rot = 34f * jitter(s, 10),
+                    color = hue, index = index,
+                    rings = 7 + (s % 3),
+                    spacing = 0.017f + 0.004f * jitter(s, 11),
+                ),
+            )
+        }
+    }
+}
 
 /**
- * Draws the whole diffraction field into this DrawScope (call on a full-screen
- * Canvas). [phase] 0..1 drives a gentle orb bob. Layer order back→front:
- * deep base, glowing contours, directional relief, light orb, laser streak,
- * vignette.
+ * The STATIC half of the field — deep base, glowing organic contours, vignette.
+ * Reads no animation state, so on its own Canvas it's drawn once, not per frame.
  */
-fun DrawScope.drawDiffractionField(phase: Float) {
+fun DrawScope.drawDiffractionBase() {
     val unit = size.minDimension
 
     // 1) Deep base.
     drawRect(Brush.verticalGradient(listOf(DiffField, DiffMid, DiffAbyss)))
 
-    // 2) Glowing ideology contours (each ring: a wide faint glow + a bright core).
-    PEAKS.forEach { pk ->
+    // 2) Glowing ideology contours. Each peak has an organic blob outline (a few
+    //    harmonics) shared by all its nested rings, so the rings read as a
+    //    topographic hill rather than a radar target. Small + many + dim → an
+    //    allover woven texture. Each ring: a faint wide glow under a thin core.
+    val glowW = 2.4.dp.toPx()
+    val coreW = 0.85.dp.toPx()
+    val idxW = 1.25.dp.toPx()
+    PEAKS.forEachIndexed { pi, pk ->
         val center = Offset(size.width * pk.cx, size.height * pk.cy)
+        val ratio = 0.82f + 0.08f * jitter(pi, 99)
+        // per-peak organic shape harmonics (same for every ring of this peak)
+        val a2 = 0.14f * jitter(pi, 1); val p2 = jitter(pi, 2) * TWO_PI
+        val a3 = 0.09f * jitter(pi, 3); val p3 = jitter(pi, 4) * TWO_PI
+        val a5 = 0.05f * jitter(pi, 5); val p5 = jitter(pi, 6) * TWO_PI
         withTransform({ rotate(pk.rot, center) }) {
             for (r in 1..pk.rings) {
                 val f = r / pk.rings.toFloat()
-                val rx = unit * pk.maxR * f
-                val ry = rx * 0.66f
+                val base = unit * pk.spacing * r
+                val path = Path()
+                val steps = 46
+                for (i in 0..steps) {
+                    val ang = i / steps.toFloat() * TWO_PI
+                    val wob = 1f + a2 * sin(2f * ang + p2) + a3 * sin(3f * ang + p3) + a5 * sin(5f * ang + p5)
+                    val px = center.x + base * wob * cos(ang)
+                    val py = center.y + base * wob * ratio * sin(ang)
+                    if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                path.close()
                 val isIndex = pk.index != null && r == (pk.rings + 1) / 2
                 val col = if (isIndex) pk.index!! else pk.color
-                val a = 0.44f * (1f - 0.34f * f)
-                val topLeft = Offset(center.x - rx, center.y - ry)
-                val ovalSize = Size(rx * 2f, ry * 2f)
-                drawOval(col.copy(alpha = a * 0.28f), topLeft, ovalSize, style = Stroke(3.4.dp.toPx()))
-                drawOval(col.copy(alpha = a), topLeft, ovalSize, style = Stroke(if (isIndex) 1.5.dp.toPx() else 1.1.dp.toPx()))
+                val a = 0.2f * (1f - 0.26f * f)
+                drawPath(path, col.copy(alpha = a * 0.32f), style = Stroke(glowW))
+                drawPath(path, col.copy(alpha = a), style = Stroke(if (isIndex) idxW else coreW))
             }
         }
     }
+
+    // 6) Vignette — edges recede into space (also fades the contours gracefully).
+    drawRect(
+        Brush.radialGradient(
+            listOf(Color.Transparent, Color.Transparent, DiffAbyss.copy(alpha = 0.86f)),
+            center = Offset(size.width * 0.5f, size.height * 0.2f),
+            radius = size.maxDimension * 0.82f,
+        ),
+    )
+}
+
+/**
+ * The ANIMATED half — the light orb (chromatic bloom + warm-white core, gentle
+ * [phase] bob) and the diagonal laser streak. Drawn on a thin overlay Canvas
+ * above the static base, so only these few cheap draws repaint each frame.
+ */
+fun DrawScope.drawDiffractionLight(phase: Float) {
+    val unit = size.minDimension
 
     // 3) Orb position — high centre, gentle vertical bob.
     val orb = Offset(size.width * 0.5f, size.height * (0.19f + 0.012f * sin(phase * 6.2832f)))
@@ -178,19 +241,20 @@ fun DrawScope.drawDiffractionField(phase: Float) {
     )
     drawCircle(
         Brush.radialGradient(
-            listOf(OrbCore.copy(alpha = 0.95f), OrbCore.copy(alpha = 0.28f), Color.Transparent),
-            orb, unit * 0.17f,
+            listOf(OrbCore.copy(alpha = 0.85f), OrbCore.copy(alpha = 0.22f), Color.Transparent),
+            orb, unit * 0.12f,
         ),
-        unit * 0.17f, orb,
+        unit * 0.12f, orb,
     )
 
-    // 5) Laser streak — a thin diagonal beam, ideology-split, bright white core.
-    val bandBase = size.height * 0.15f
+    // 5) Laser streak — a thin diagonal beam, ideology-split, faint white core.
+    //    Kept slim and low-alpha so it's an accent, not a banner.
+    val bandBase = size.height * 0.13f
     withTransform({ rotate(-19f, Offset(size.width * 0.5f, bandBase)) }) {
         val left = -size.width * 0.3f
         val bandW = size.width * 1.6f
         // stacked glow bands (no blur available → fake it with decreasing alpha)
-        listOf(46f to 0.12f, 26f to 0.20f, 12f to 0.34f).forEach { (h, a) ->
+        listOf(22f to 0.08f, 12f to 0.14f, 5f to 0.24f).forEach { (h, a) ->
             drawRect(
                 brush = Brush.horizontalGradient(
                     listOf(Color.Transparent, LaserRed, LaserAmber, LaserGreen, LaserBlue, Color.Transparent),
@@ -201,23 +265,14 @@ fun DrawScope.drawDiffractionField(phase: Float) {
                 alpha = a,
             )
         }
-        // bright core line
+        // faint bright core line
         drawRect(
             brush = Brush.horizontalGradient(
-                listOf(Color.Transparent, Color.White.copy(alpha = 0.9f), Color.White.copy(alpha = 0.9f), Color.Transparent),
-                startX = left + bandW * 0.08f, endX = left + bandW * 0.92f,
+                listOf(Color.Transparent, Color.White.copy(alpha = 0.6f), Color.White.copy(alpha = 0.6f), Color.Transparent),
+                startX = left + bandW * 0.1f, endX = left + bandW * 0.9f,
             ),
-            topLeft = Offset(left, bandBase - 1.1.dp.toPx()),
-            size = Size(bandW, 2.2.dp.toPx()),
+            topLeft = Offset(left, bandBase - 0.7.dp.toPx()),
+            size = Size(bandW, 1.4.dp.toPx()),
         )
     }
-
-    // 6) Vignette — edges recede into space (also fades the contours gracefully).
-    drawRect(
-        Brush.radialGradient(
-            listOf(Color.Transparent, Color.Transparent, DiffAbyss.copy(alpha = 0.86f)),
-            center = Offset(size.width * 0.5f, size.height * 0.2f),
-            radius = size.maxDimension * 0.82f,
-        ),
-    )
 }
