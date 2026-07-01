@@ -47,6 +47,30 @@ object ReviewDigestSkill {
     /** No-model fallback straight from the web results — distinct domains, no SLM call. */
     fun fallback(web: List<WebSearch.WebResult>): ReportBlock.Reviews = fallbackFromSources(distinctDomains(web))
 
+    /**
+     * MODEL-FREE review block for the consolidated profile path: the takeaway + loved/watch
+     * phrases already came from the single [ProfileSkill.fillAll] pass, so there is NO generation
+     * here — we just assemble the [ReportBlock.Reviews] over the fetched web domains. Falls back
+     * to the honest source-only read when the fill gave nothing usable.
+     */
+    fun fromFill(
+        web: List<WebSearch.WebResult>,
+        takeaway: String,
+        loved: List<String>,
+        watch: List<String>,
+    ): ReportBlock.Reviews {
+        val sources = distinctDomains(web)
+        val clean = takeaway.trim()
+        if (clean.isBlank() && loved.isEmpty() && watch.isEmpty()) return fallbackFromSources(sources)
+        return ReportBlock.Reviews(
+            takeaway = clean.ifBlank { "People's reports are mixed — weigh the source." }.take(160),
+            loved = loved,
+            watch = watch,
+            sources = sources,
+            state = inferState(loved, watch),
+        )
+    }
+
     /** No-model / empty-web read: honest about the thin evidence, still lists sources. */
     fun fallbackFromSources(sources: List<String>): ReportBlock.Reviews = ReportBlock.Reviews(
         takeaway = "Limited independent reviews found — weigh the source.",

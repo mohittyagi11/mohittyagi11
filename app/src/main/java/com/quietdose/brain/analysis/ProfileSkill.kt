@@ -1,6 +1,25 @@
 package com.quietdose.brain.analysis
 
 import com.quietdose.brain.LlmEngine
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * The consolidated result of the SINGLE profile-path model call. Carries the
+ * curated-first [CategoryProfile] plus everything the rest of the profile path used
+ * to spend separate generations on: the verdict [rationale], the key [ingredients]
+ * (name → role), the substantive [claims] (claim, status, basis) and the distilled
+ * review read ([reviewTakeaway], [reviewLoved], [reviewWatch]). One call, one JSON.
+ */
+data class ProfileFill(
+    val profile: CategoryProfile,
+    val rationale: String,
+    val ingredients: List<Pair<String, String>>,
+    val claims: List<Triple<String, String, String>>,
+    val reviewTakeaway: String,
+    val reviewLoved: List<String>,
+    val reviewWatch: List<String>,
+)
 
 /**
  * The brain's workflow for profiling ANY item it doesn't have curated facts for.
@@ -35,6 +54,118 @@ object ProfileSkill {
             // Trust the deterministic kind unless the model clearly disagrees with reason.
             if (p.kind == ItemKind.OTHER && kindHint != ItemKind.OTHER) p.copy(kind = kindHint) else p
         }
+    }
+
+    /**
+     * The CONSOLIDATED profile fill — the profile path's ONLY model generation. In a single
+     * [engine.complete] call it returns everything the page needs: the [CategoryProfile] fields
+     * PLUS the verdict rationale, the key actives, the substantive marketing claims, and the
+     * distilled review read — all in one JSON object. Curated ground truth still wins for the
+     * profile fields (via [mergeCuratedFirst]); the enrichment fields come straight from the fill.
+     *
+     * Tolerant of ```json fences and truncation (reuses [JsonRepair]/[ProfileCodec]); returns
+     * null only when there is no usable object at all. Never throws.
+     */
+    suspend fun fillAll(
+        engine: LlmEngine,
+        name: String,
+        sourceMaterial: String,
+        kindHint: ItemKind,
+        currentItems: List<String> = emptyList(),
+    ): ProfileFill? {
+        val raw = runCatching { engine.complete(promptAll(name, sourceMaterial, kindHint, currentItems)) }
+            .getOrNull()?.trim()
+        if (raw.isNullOrBlank()) return null
+        val obj = JsonRepair.objectFrom(raw) ?: return null
+        val json = runCatching { JSONObject(obj) }.getOrNull() ?: return null
+
+        // Profile fields, decoded via the same forgiving codec used everywhere else.
+        val modelProfile = ProfileCodec.decode(obj)?.let { p ->
+            if (p.kind == ItemKind.OTHER && kindHint != ItemKind.OTHER) p.copy(kind = kindHint) else p
+        } ?: return null
+        // Curated ground truth FIRST — the model only fills fields the curated entry left blank.
+        val curated = CuratedProfiles.match(name, kindHint)
+        val profile = if (curated != null) mergeCuratedFirst(curated, modelProfile) else modelProfile
+
+        val rationale = json.optString("rationale").trim()
+        val ingredients = parseIngredients(json.optJSONArray("ingredients"))
+        val claims = parseClaims(json.optJSONArray("claims"))
+        val reviewTakeaway = json.optString("reviewTakeaway").trim()
+        val reviewLoved = json.optJSONArray("reviewLoved").toPhrases()
+        val reviewWatch = json.optJSONArray("reviewWatch").toPhrases()
+
+        return ProfileFill(profile, rationale, ingredients, claims, reviewTakeaway, reviewLoved, reviewWatch)
+    }
+
+    private fun parseIngredients(arr: JSONArray?): List<Pair<String, String>> {
+        if (arr == null) return emptyList()
+        val seen = LinkedHashSet<String>()
+        return (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val n = o.optString("name").trim()
+            if (n.isBlank() || !seen.add(n.lowercase())) null else n to o.optString("role").trim()
+        }.take(8)
+    }
+
+    private fun parseClaims(arr: JSONArray?): List<Triple<String, String, String>> {
+        if (arr == null) return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val claim = o.optString("claim").trim()
+            if (claim.isBlank()) return@mapNotNull null
+            Triple(claim, o.optString("status").trim().uppercase(), o.optString("basis").trim())
+        }.take(4)
+    }
+
+    private fun JSONArray?.toPhrases(): List<String> {
+        if (this == null) return emptyList()
+        return (0 until length())
+            .mapNotNull { optString(it).trim().ifBlank { null } }
+            .map { it.take(40) }
+            .distinct()
+            .take(6)
+    }
+
+    /** The consolidated fill prompt — one JSON object with the profile fields + all enrichment. */
+    private fun promptAll(name: String, sourceMaterial: String, kindHint: ItemKind, currentItems: List<String>): String = buildString {
+        appendLine("You profile a product for a personal-care + supplement tracker. You reason like a careful person:")
+        appendLine("what it's for, who it suits, how well it's absorbed, how AND when to use it, its safety, and what it clashes with —")
+        appendLine("but you SCOPE everything to the category (a skincare item has a per-use amount + skin absorption + don't-layer-with,")
+        appendLine("not a 'dose / bioavailability / drug interaction'). Return ONLY a JSON object, no prose.")
+        appendLine()
+        appendLine("Keys:")
+        appendLine("  kind: one of SUPPLEMENT, SKINCARE, HAIRCARE, DEVICE, FOOD, OTHER")
+        appendLine("  brand: the maker/brand name if the material states it, else \"\"")
+        appendLine("  categoryLabel: the product TYPE, NOT the brand — e.g. \"Hydrating toner\", \"Vitamin C serum\", \"LED mask\"")
+        appendLine("  whatItIs: one plain sentence")
+        appendLine("  goodFor: array of short phrases — what it genuinely helps with")
+        appendLine("  fitsWho: array — who it suits (skin/hair types, situations) and who should skip it")
+        appendLine("  usage: how AND when — AM/PM, where in the routine, frequency, apply vs take")
+        appendLine("  routineStep: where it sits in a skincare/haircare routine, e.g. \"After toner, before serum; AM and PM\" or \"Last step, AM\". This is routine PLACEMENT, NOT supplement timing (never fasted/with-food). Empty when it doesn't apply (devices, food).")
+        appendLine("  recommendedAmount + recommendedUnit: the amount PER USE, read from the directions — e.g. 2 + \"drops\", 1 + \"pump\", 0.5 + \"ml\". The 'how much' answer. NEVER use the pack/bottle volume (e.g. \"100 ml\") as the per-use amount. Use a sensible amount for this product type; omit only if truly unknowable.")
+        appendLine("  absorption: how it works / how well it sinks in — the 'quality' lens, scoped to the category")
+        appendLine("  safety: array — irritation, allergens, pregnancy, who should avoid")
+        appendLine("  dontCombine: array — what NOT to layer/combine it with (e.g. retinol + AHA), especially against the user's current routine below")
+        appendLine("  verify: array — concrete things the user should check")
+        appendLine("  confidence: 0-100, low when you're guessing")
+        appendLine("  rationale: 2-3 plain sentences — whether it's worth using and how to fit it in. Separate what's verified from what to check. Label marketing as a claim. No medical claims, no invented numbers.")
+        appendLine("  ingredients: array (at most 8) of {name, role} for the KEY actives ONLY — role is ONE plain word (Humectant, Active, Soothing, Preservative, Emollient, Antioxidant, Exfoliant). Only ingredients the material actually names; [] if none.")
+        appendLine("  claims: array (at most 4) of {claim, status, basis} for the SUBSTANTIVE marketing claims only — SKIP vacuous hype like \"real results\" or \"new-gen molecule\". status is one of SUPPORTED, PLAUSIBLE, UNVERIFIED, OVERREACH. basis is ONE plain line (max 18 words) across mechanism + evidence + reports. Do NOT invent studies or numbers; use UNVERIFIED when unsure. [] if none substantive.")
+        appendLine("  reviewTakeaway: ONE short calm sentence (max 22 words) summarising what people report from the web snippets. \"\" if nothing to go on.")
+        appendLine("  reviewLoved: array of SHORT keyword phrases (2-4 words) for recurring praise — e.g. \"absorbs fast\". Empty if none.")
+        appendLine("  reviewWatch: array of SHORT keyword phrases for recurring complaints / watch-outs — e.g. \"pricey\". Empty if none.")
+        appendLine()
+        appendLine("Use ONLY the material below. Plain words, no jargon. Label marketing as claims. Do NOT invent certifications or fake numbers.")
+        appendLine()
+        appendLine("Item: $name")
+        appendLine("Likely kind: ${kindHint.name}")
+        if (currentItems.isNotEmpty()) {
+            appendLine("User's current routine (flag anything that clashes in dontCombine): ${currentItems.take(12).joinToString(", ")}")
+        }
+        appendLine("Material (product's own text + web — treat marketing as claims):")
+        appendLine(capSourceMaterial(sourceMaterial).ifBlank { name })
+        appendLine()
+        appendLine("Return ONLY a JSON object — no markdown fences, no prose, no trailing commentary.")
     }
 
     /**
@@ -239,7 +370,7 @@ object ProfileSkill {
         return (head.take(budgetForHead).trimEnd() + "\n\n" + tail).trim()
     }
 
-    private const val MAX_SOURCE_CHARS = 1400
+    private const val MAX_SOURCE_CHARS = 1500
 
     /**
      * Pull the JSON object out of the model's reply and decode it. Tolerant of the two

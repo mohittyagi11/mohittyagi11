@@ -163,7 +163,7 @@ object StackAnalyzer {
 
         emit("Mapping it out", "Laying out what matters, chapter by chapter…", Mood.CALM, 0.32f)
         // --- Aspect chapters: small grounded contexts, one per AnalysisAspect ---
-        var aspectBlocks = buildAspectBlocks(
+        val aspectBlocks = buildAspectBlocks(
             matched, goodLines, fitLines, safety, safetyClear, source, goal, concern,
             currentDoseAmount, currentDoseUnit, dependencies, product, stackIng, alreadyHave,
             webResults, brandTake,
@@ -180,18 +180,13 @@ object StackAnalyzer {
         val placement = matched?.let { placementText(it) }
         var rationale = buildRationale(matched, goal, dependencies, cautions)
         var byModel = false
-        // Walk the chapters out loud: emit each as a "thought", and on a capable
-        // model let it write that chapter's prose (small contexts) as it goes.
+        // Walk the chapters out loud: emit each as a "thought". The per-chapter prose stays the
+        // grounded, DETERMINISTIC summary already built in buildAspectBlocks — no per-chapter
+        // generation (that loop cost up to ~8 serialized model calls). The single verdict
+        // synthesis below is where the model reasons over the whole picture.
         val total = aspectBlocks.size.coerceAtLeast(1)
-        aspectBlocks = aspectBlocks.mapIndexed { i, block ->
+        aspectBlocks.forEachIndexed { i, block ->
             emit(block.aspect.title, chapterCommentary(block), moodFor(block), 0.35f + 0.5f * (i.toFloat() / total))
-            // REVIEWS is rendered via the distilled Reviews block, so don't spend a model call enriching it.
-            if (engineUp && tier == ModelTier.CAPABLE && block.state != AspectState.NOT_ASSESSED && block.aspect != AnalysisAspect.REVIEWS) {
-                val enriched = runCatching {
-                    BrainProvider.engine(app).complete(aspectPrompt(name, matched, block, goal, concern, sourceMaterial)).trim()
-                }.getOrNull()?.let { sanitize(it) }
-                if (!enriched.isNullOrBlank()) { byModel = true; block.copy(summary = enriched) } else block
-            } else block
         }
         // …then step back and synthesize the larger picture from those contexts.
         emit("The big picture", "Stepping back to weigh it all together…", Mood.REFLECTIVE, 0.9f)
@@ -824,19 +819,18 @@ object StackAnalyzer {
         // Curated ground truth FIRST — the validated KB is the trusted base (same as a
         // supplement leans on IngredientCatalog). The model only fills gaps / unknowns.
         val curated = CuratedProfiles.match(name, kind)
-        val modelProfile = if (engineUp) runCatching { ProfileSkill.fill(BrainProvider.engine(app), name, sourceMaterial, kind, routineNames) }.getOrNull() else null
-        val profile = modelProfile ?: curated ?: ProfileSkill.fallback(name, kind)
+        // THE SINGLE model generation for the whole profile path: one consolidated fill that
+        // returns the profile fields PLUS the rationale, key actives, substantive claims and the
+        // distilled review read. Everything downstream is deterministic (no further model calls).
+        val fill = if (engineUp) runCatching { ProfileSkill.fillAll(BrainProvider.engine(app), name, sourceMaterial, kind, routineNames) }.getOrNull() else null
+        val profile = fill?.profile ?: curated ?: ProfileSkill.fallback(name, kind)
         // Only a genuine model fill (not curated, not the deterministic fallback) counts as byModel.
-        var byModel = modelProfile != null && curated == null && profile.confidence >= 30
+        var byModel = fill != null && curated == null && profile.confidence >= 30
 
         emit("The big picture", "Weighing it up the way you would…", Mood.REFLECTIVE, 0.85f)
+        // Rationale comes from the same single fill — no separate verdict-synthesis generation.
         var rationale = profile.whatItIs.ifBlank { "A ${kind.label.lowercase()} you're tracking." }
-        if (engineUp) {
-            val syn = runCatching {
-                BrainProvider.engine(app).complete(profileVerdictPrompt(name, profile, source, goal, concern, webResults, tier)).trim()
-            }.getOrNull()?.let { sanitize(it) }
-            if (!syn.isNullOrBlank()) { rationale = syn; byModel = true }
-        }
+        fill?.rationale?.let { it2 -> sanitize(it2) }?.let { syn -> rationale = syn; byModel = true }
 
         val grounded = mutableListOf<String>()
         webResults.take(4).forEach { grounded += "Web/${it.domain}: ${it.title}" }
@@ -881,26 +875,37 @@ object StackAnalyzer {
             if (kind.isIngested) "" else "Note whether it's an AM or PM step and where it sits in your routine."
         }
 
-        // Distilled review intelligence (replaces the old "Trust & reviews" chapter).
-        val reviews = if (engineUp) ReviewDigestSkill.digest(BrainProvider.engine(app), name, webResults)
-        else ReviewDigestSkill.fallback(webResults)
+        // Distilled review intelligence (replaces the old "Trust & reviews" chapter). Built
+        // MODEL-FREE from the single fill's review read + the fetched web domains; degrades to the
+        // honest source-only fallback with no model.
+        val reviews = if (fill != null) {
+            ReviewDigestSkill.fromFill(webResults, fill.reviewTakeaway, fill.reviewLoved, fill.reviewWatch)
+        } else ReviewDigestSkill.fallback(webResults)
 
-        // The product's KEY actives — a focused SLM pass over the real text, grounded against
-        // the curated KB (or, with no model, a deterministic alias scan). Populates the persisted
-        // AnalysisReport.ingredients so they stick when the item is saved.
-        val ingredientLines = runCatching {
-            IngredientSkill.extract(BrainProvider.engine(app), name, sourceMaterial)
-        }.getOrDefault(emptyList())
+        // The product's KEY actives — taken from the single fill and GROUNDED (note + severity)
+        // against the curated KB with NO extra model call; with no model, a deterministic alias
+        // scan still surfaces recognised actives. Populates the persisted AnalysisReport.ingredients.
+        val ingredientLines = if (fill != null && fill.ingredients.isNotEmpty()) {
+            val seen = LinkedHashSet<String>()
+            fill.ingredients.mapNotNull { (n, role) ->
+                val clean = n.trim()
+                if (clean.isBlank() || !seen.add(clean.lowercase())) null else IngredientSkill.ground(clean, role)
+            }.take(8)
+        } else {
+            // No actives from the fill (or no model) — a deterministic alias scan, NO extra
+            // model call, so the profile path stays at exactly one generation.
+            IngredientSkill.scanGrounded(name, sourceMaterial)
+        }
         ingredientLines.forEach { grounded += "Active: ${it.name}${if (it.role.isNotBlank()) " (${it.role})" else ""}" }
         val itemIngredients = ingredientLines.map {
             com.quietdose.data.model.ItemIngredient(key = IngredientSkill.keyFor(it.name), name = it.name)
         }
 
-        // Marketing claims — extracted and weighed across mechanism + evidence + reports in one
-        // bounded pass, reusing any conclusion already persisted from a prior session.
-        val claimLines = runCatching {
-            ClaimVerifier.verify(app, BrainProvider.engine(app), name, sourceMaterial, webResults)
-        }.getOrDefault(emptyList())
+        // Marketing claims — taken from the single fill (vacuous hype dropped), merged with any
+        // persisted priors and re-persisted, with NO extra model call. With no model, no claims.
+        val claimLines = if (fill != null) {
+            runCatching { ClaimVerifier.fromFill(app, name, fill.claims) }.getOrDefault(emptyList())
+        } else emptyList()
         claimLines.forEach { grounded += "Claim/${it.status.name.lowercase()}: ${it.claim}" }
 
         // The five verdict dimensions, derived honestly and deterministically from the profile.
@@ -1109,40 +1114,6 @@ object StackAnalyzer {
         return if (rows.isEmpty()) null else ReportBlock.Facts("Product", rows)
     }
 
-    private fun profileVerdictPrompt(
-        name: String,
-        profile: CategoryProfile,
-        source: SourceKind?,
-        goal: String?,
-        concern: String?,
-        web: List<WebSearch.WebResult>,
-        tier: ModelTier,
-    ): String = buildString {
-        appendLine("You are a calm, honest, slightly skeptical advisor. In ${if (tier == ModelTier.CAPABLE) "2-3" else "1-2"} plain sentences,")
-        appendLine("tell the user whether this ${profile.kind.label.lowercase()} is worth using and how to fit it in — using ONLY the profile and reviews below.")
-        appendLine("Separate what's verified from what to check. Label marketing as a claim. No medical claims, no invented numbers. Conversational, no headings.")
-        appendLine()
-        appendLine("Item: $name (${profile.categoryLabel})")
-        appendLine("What it is: ${profile.whatItIs}")
-        if (profile.goodFor.isNotEmpty()) appendLine("Good for: ${profile.goodFor.joinToString(", ")}")
-        if (profile.fitsWho.isNotEmpty()) appendLine("Suits: ${profile.fitsWho.joinToString(", ")}")
-        if (profile.usage.isNotBlank()) appendLine("Usage: ${profile.usage}")
-        if (profile.routineStep.isNotBlank()) appendLine("Routine step: ${profile.routineStep}")
-        profile.recommendedAmount?.let { appendLine("Amount per use: ${fmt(it)} ${profile.recommendedUnit ?: ""}".trim()) }
-        if (profile.absorption.isNotBlank()) appendLine("Absorption: ${profile.absorption}")
-        if (profile.safety.isNotEmpty()) appendLine("Safety: ${profile.safety.joinToString("; ")}")
-        if (profile.dontCombine.isNotEmpty()) appendLine("Don't combine with: ${profile.dontCombine.joinToString(", ")}")
-        if (!goal.isNullOrBlank()) appendLine("Their goal: $goal")
-        if (!concern.isNullOrBlank()) appendLine("Their worry: $concern")
-        if (source != null) appendLine("Heard from: ${source.label} (${if (source.skeptical) "weak — verify" else "credible"})")
-        if (web.isNotEmpty()) {
-            appendLine("Reviews:")
-            web.take(4).forEach { appendLine("- ${it.domain}: ${(it.snippet.ifBlank { it.title }).take(180)}") }
-        }
-        appendLine()
-        appendLine("Reply with only the synthesis.")
-    }
-
     /** Combines the product's own text (label/description or OCR), its directions-to-use
      *  section and web reviews into the raw material the model reasons over — capped to
      *  stay prompt-friendly. Directions are surfaced so the model can derive a per-use
@@ -1163,32 +1134,6 @@ object StackAnalyzer {
             web.take(5).forEach { r -> appendLine("- ${r.domain}: ${(r.snippet.ifBlank { r.title }).take(220)}") }
         }
     }.trim()
-
-    private fun aspectPrompt(
-        name: String,
-        matched: Ingredient?,
-        block: ReportBlock.Aspect,
-        goal: String?,
-        concern: String?,
-        sourceMaterial: String,
-    ): String = buildString {
-        appendLine("You are a calm, precise, slightly skeptical advisor. Write ONE short sentence (max 32 words) for this chapter.")
-        appendLine("Reason from BOTH the grounded points AND the source material. You may summarize what the product or reviewers say, but label marketing as a claim (\"claims to…\"), separate verified from what to check, and NEVER invent doses, certifications, prices or numbers. No medical claims. Conversational, no labels, no quotes.")
-        appendLine()
-        appendLine("Item: $name${matched?.let { " (${it.displayName})" } ?: ""}")
-        appendLine("Chapter: ${block.aspect.title} — ${block.aspect.question}")
-        if (!goal.isNullOrBlank()) appendLine("Their goal: $goal")
-        if (!concern.isNullOrBlank()) appendLine("Their worry: $concern")
-        appendLine("Grounded points (verified):")
-        block.lines.forEach { appendLine("- ${it.text}") }
-        if (sourceMaterial.isNotBlank()) {
-            appendLine()
-            appendLine("Source material:")
-            appendLine(sourceMaterial.take(1800))
-        }
-        appendLine()
-        appendLine("Reply with only the sentence.")
-    }
 
     private fun verdictPrompt(
         name: String,

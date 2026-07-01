@@ -41,12 +41,33 @@ object IngredientSkill {
         return raw.mapNotNull { (n, role) ->
             val clean = n.trim()
             if (clean.isBlank() || !seen.add(clean.lowercase())) null
-            else ground(clean, role.trim())
+            else groundActive(clean, role.trim())
         }.take(MAX_ACTIVES)
     }
 
     /** The catalog key for an active name, when it matches the supplement catalog — else null. */
     fun keyFor(name: String): String? = IngredientCatalog.match(name)?.key
+
+    /**
+     * MODEL-FREE grounding of a single active name against the curated KB / well-known active
+     * lists: supplies a grounded note + honest [Severity] and a role (curated-inferred, or the
+     * supplied one). Used by the consolidated profile path, where the name/role already came
+     * from the single fill so no extra model call is needed. Never throws.
+     */
+    fun ground(name: String, role: String = ""): IngredientLine = groundActive(name.trim(), role.trim())
+
+    /**
+     * MODEL-FREE: a deterministic alias scan of the source text, grounded. Used when the
+     * single consolidated fill produced no actives (or there's no model) — surfaces
+     * recognised actives without ANY extra generation. Never throws.
+     */
+    fun scanGrounded(name: String, sourceMaterial: String): List<IngredientLine> {
+        val seen = LinkedHashSet<String>()
+        return scan(name, sourceMaterial).mapNotNull { (n, role) ->
+            val clean = n.trim()
+            if (clean.isBlank() || !seen.add(clean.lowercase())) null else groundActive(clean, role.trim())
+        }.take(MAX_ACTIVES)
+    }
 
     // --- grounding ---------------------------------------------------------
 
@@ -70,7 +91,7 @@ object IngredientSkill {
      * grounded note (its plain "what it is") and confirms the role/severity; otherwise
      * we keep the model's role and read severity from the well-known active lists.
      */
-    private fun ground(name: String, modelRole: String): IngredientLine {
+    private fun groundActive(name: String, modelRole: String): IngredientLine {
         val lower = name.lowercase()
         val curated = CuratedProfiles.match(name)
         val severity = when {

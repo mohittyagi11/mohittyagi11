@@ -73,6 +73,59 @@ object ClaimVerifier {
         return merged
     }
 
+    /**
+     * MODEL-FREE claim resolution for the consolidated profile path: the claims (claim, status,
+     * basis) already came from the single [ProfileSkill.fillAll] pass, so there is NO generation
+     * here. We drop vacuous hype, map to [ClaimLine], merge with any persisted priors (a prior
+     * conclusion wins) and persist newly-concluded claims in the same
+     * "claim|<STATUS>|<claim> :: <basis>" format so the intelligence still accumulates.
+     */
+    suspend fun fromFill(
+        context: Context,
+        name: String,
+        claims: List<Triple<String, String, String>>,
+    ): List<ClaimLine> {
+        val fresh = claims.mapNotNull { (claim, status, basis) ->
+            val c = claim.trim()
+            if (c.isBlank() || isVacuous(c)) return@mapNotNull null
+            val st = runCatching { ClaimStatus.valueOf(status.trim().uppercase()) }.getOrDefault(ClaimStatus.UNVERIFIED)
+            ClaimLine(c.take(100), st, basis.trim().take(140))
+        }
+
+        val priors = runCatching { loadPriors(context, name) }.getOrDefault(emptyList())
+        val priorByClaim = priors.associateBy { it.claim.lowercase() }
+
+        val out = LinkedHashMap<String, ClaimLine>()
+        priors.forEach { out[it.claim.lowercase()] = it }
+        fresh.forEach { line ->
+            val k = line.claim.lowercase()
+            if (k !in priorByClaim) out[k] = line
+        }
+        val merged = out.values.take(MAX_CLAIMS)
+
+        val toPersist = fresh.filter { it.claim.lowercase() !in priorByClaim }
+        if (toPersist.isNotEmpty()) {
+            runCatching {
+                ContextStore.add(
+                    context, name,
+                    toPersist.map { ContextStore.entry(ContextKind.DEDUCTION, encode(it), SOURCE, 0.95f) },
+                )
+            }
+        }
+        return merged
+    }
+
+    /** Vacuous hype we skip — "real results", "new-gen molecule" and the like carry no substance. */
+    private fun isVacuous(claim: String): Boolean {
+        val c = claim.lowercase()
+        return VACUOUS.any { c.contains(it) }
+    }
+
+    private val VACUOUS = listOf(
+        "real result", "new-gen", "new gen", "next-gen", "next gen", "game chang", "game-chang",
+        "revolutionary", "breakthrough molecule", "must-have", "must have", "cutting-edge", "cutting edge",
+    )
+
     // --- persistence round-trip --------------------------------------------
     // Stored as a single ContextStore DEDUCTION text line, source "claim-verifier":
     //   "claim|<STATUS>|<claim> :: <basis>"
