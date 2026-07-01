@@ -3,130 +3,107 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>Azadi Shashn — diffraction glass preview</title>
+<title>Azadi Shashn — diffraction glass (luxe)</title>
 <style>
-  :root{
-    --bg0:#05060c; --bg1:#0b0f1e; --gold:#f4e2ac; --golddim:#c29a53;
-  }
+  :root{ --gold:#e9d6a3; --golddim:#b9974e; }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{
-    background:#04050a;
-    color:#e8e6f0;
+    background:#04050a; color:#ece9f2;
     font-family:"Space Grotesk",ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    -webkit-font-smoothing:antialiased;
-    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
   }
-  /* ---------- the field + central light orb ---------- */
+  /* ---------- deep field + one refined light orb ---------- */
   .field{
     position:relative; min-height:100%;
-    background:
-      radial-gradient(120% 90% at 50% 8%, #0e1430 0%, #0b0f1e 45%, #05060c 100%);
-    padding:28px 20px 60px;
-    overflow:hidden;
+    background:radial-gradient(115% 80% at 50% 6%, #0c1126 0%, #080b16 46%, #04050a 100%);
+    padding:30px 20px 64px; overflow:hidden;
   }
-  .orb, .halo{
-    position:fixed; left:50%; top:34%;
-    transform:translate(-50%,-50%);
-    pointer-events:none; z-index:0;
-    animation:float 9s ease-in-out infinite;
-  }
-  .orb{
-    width:340px;height:340px;border-radius:50%;
-    background:radial-gradient(circle at 50% 42%,
-        rgba(255,250,235,.95) 0%, rgba(255,240,205,.55) 14%,
-        rgba(180,200,255,.28) 34%, rgba(120,140,255,.10) 55%, transparent 72%);
-    filter:blur(6px);
-  }
-  .halo{
-    width:520px;height:520px;border-radius:50%;
-    background:conic-gradient(from 0deg,
-      #ff5d73,#ffb14e,#ffe14e,#4ee39b,#3bd7ff,#7b9bff,#c07bff,#ff5d73);
-    filter:blur(46px); opacity:.16; mix-blend-mode:screen;
-    animation:float 9s ease-in-out infinite, spin 26s linear infinite;
-  }
-  @keyframes float{0%,100%{margin-top:0}50%{margin-top:-16px}}
+  .orb,.halo{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);
+    pointer-events:none;z-index:0;animation:float 12s ease-in-out infinite}
+  .orb{width:230px;height:230px;border-radius:50%;
+    background:radial-gradient(circle at 50% 44%,
+      rgba(255,247,228,.72) 0%, rgba(240,222,180,.34) 18%,
+      rgba(150,170,220,.14) 42%, transparent 68%);
+    filter:blur(8px)}
+  .halo{width:430px;height:430px;border-radius:50%;
+    background:conic-gradient(from 0deg,#caa8ff,#a8d8ff,#a8e6c8,#f0d9a0,#e9b8c0,#caa8ff);
+    filter:blur(70px);opacity:.07;mix-blend-mode:screen;
+    animation:float 12s ease-in-out infinite, spin 60s linear infinite}
+  @keyframes float{0%,100%{margin-top:0}50%{margin-top:-12px}}
   @keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
 
   .wrap{position:relative;z-index:1;max-width:460px;margin:0 auto}
-  .brand{display:flex;align-items:center;gap:12px;margin:6px 2px 26px}
+  .brand{display:flex;align-items:center;gap:13px;margin:6px 2px 28px}
   .brand .mark{width:46px;height:46px;border-radius:13px;
-    background:radial-gradient(circle at 50% 40%,#12131a,#0a0a0c);
-    border:1px solid rgba(244,226,172,.5);
-    display:grid;place-items:center;font-size:22px}
-  .brand h1{font-size:22px;margin:0;letter-spacing:-.3px}
-  .brand p{margin:2px 0 0;font-size:12px;color:#9fa2c0}
-  .hint{font-size:12.5px;color:#8f93b4;text-align:center;margin:0 0 22px;letter-spacing:.2px}
+    background:radial-gradient(circle at 50% 38%,#141621,#0a0a0e);
+    border:1px solid rgba(233,214,163,.42);display:grid;place-items:center;font-size:22px}
+  .brand h1{font-size:22px;margin:0;letter-spacing:-.3px;font-weight:700}
+  .brand p{margin:3px 0 0;font-size:12px;color:#9195b6;letter-spacing:.3px}
+  .hint{font-size:12.5px;color:#7f83a4;text-align:center;margin:0 0 24px;letter-spacing:.2px}
 
-  /* ---------- the holographic "cut glass" material ---------- */
+  /* ---------- black-glass, gold hairline, single travelling flash ---------- */
   .holo{
-    --hue:0deg;            /* per-element colour cast */
-    --lift:0;              /* 0 idle .. 1 caught the light */
-    position:relative; isolation:isolate;
-    border-radius:22px;
-    background:linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
-    backdrop-filter:blur(9px) saturate(1.1);
-    transition:transform .18s ease, box-shadow .3s ease;
-    box-shadow:
-      0 12px 34px rgba(0,0,0,.5),
-      inset 0 1px 0 rgba(255,255,255,.18);
+    --hue:0deg;      /* where this element's flash sits */
+    --lift:0;        /* 0 idle .. 1 caught the light */
+    position:relative;isolation:isolate;border-radius:20px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.012)),
+      rgba(10,12,20,.55);
+    backdrop-filter:blur(10px) saturate(1.05);
+    transition:transform .28s cubic-bezier(.2,.7,.2,1), box-shadow .35s ease;
+    box-shadow:0 14px 40px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.10);
   }
-  /* prismatic rim: a rotating rainbow ring living in the border box */
+  /* constant luxury cue: a fine gold hairline */
+  .holo{border:1px solid rgba(233,214,163,.20)}
+  /* the flash: a NARROW soft-pastel spectral arc that slowly orbits the edge */
   .holo::before{
-    content:""; position:absolute; inset:0; border-radius:inherit; padding:1.6px;
+    content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1.4px;
     background:conic-gradient(from var(--hue),
-      #ff4d6d,#ff9e3d,#ffe14e,#4ee39b,#38d6ff,#7b9bff,#c86bff,#ff4d6d);
+      transparent 0deg, transparent 58deg,
+      rgba(255,205,170,.85) 82deg, rgba(175,215,255,.9) 100deg,
+      rgba(205,180,255,.85) 118deg, transparent 142deg, transparent 360deg);
     -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite:xor; mask-composite:exclude;
-    opacity:calc(.55 + .45*var(--lift));
-    filter:saturate(1.5) brightness(calc(1 + .5*var(--lift)));
-    animation:hue 12s linear infinite;
-    z-index:2; pointer-events:none;
+    -webkit-mask-composite:xor;mask-composite:exclude;
+    opacity:calc(.32 + .68*var(--lift));
+    filter:blur(.3px) brightness(calc(1 + .35*var(--lift)));
+    animation:orbit 22s linear infinite;z-index:2;pointer-events:none;
   }
-  /* oil-slick sheen sweeping the face */
+  /* labradorite face flash: one soft colour that shifts, very low key */
   .holo::after{
-    content:""; position:absolute; inset:0; border-radius:inherit;
-    background:linear-gradient(115deg,
-      transparent 20%,
-      rgba(255,90,140,.20), rgba(255,225,80,.18), rgba(80,230,160,.18),
-      rgba(90,160,255,.22), rgba(200,110,255,.20),
-      transparent 80%);
-    background-size:260% 100%;
-    mix-blend-mode:screen;
-    opacity:calc(.45 + .55*var(--lift));
-    animation:sweep 7s linear infinite;
-    z-index:1; pointer-events:none;
+    content:"";position:absolute;inset:0;border-radius:inherit;
+    background:linear-gradient(120deg, transparent 30%,
+      rgba(190,210,255,.16), rgba(225,205,255,.12), rgba(255,220,190,.14),
+      transparent 72%);
+    background-size:220% 100%;mix-blend-mode:screen;
+    opacity:calc(.16 + .5*var(--lift));
+    animation:drift 14s ease-in-out infinite;z-index:1;pointer-events:none;
   }
-  @keyframes hue{to{--hue:360deg}}
-  @keyframes sweep{0%{background-position:120% 0}100%{background-position:-60% 0}}
-  /* Firefox lacks @property for --hue animation → still shows a static rim + sweep */
+  @keyframes orbit{to{--hue:360deg}}
+  @keyframes drift{0%,100%{background-position:0% 0}50%{background-position:100% 0}}
   @property --hue{syntax:'<angle>';inherits:false;initial-value:0deg}
 
-  .holo:hover, .holo:active{--lift:1; transform:translateY(-2px)}
-  .holo:hover{box-shadow:0 18px 46px rgba(0,0,0,.55),
-    0 0 26px hsla(calc(var(--h) + 0),90%,65%,.20),
-    inset 0 1px 0 rgba(255,255,255,.25)}
+  .holo:hover,.holo:active{--lift:1;transform:translateY(-2px)}
+  .holo:hover{box-shadow:0 20px 52px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.18)}
 
   .card{padding:18px 18px}
-  .card + .card{margin-top:16px}
-  .kick{font-size:11px;letter-spacing:1.5px;color:#c9b06a;font-weight:700;text-transform:uppercase}
-  .card h3{margin:8px 0 6px;font-size:18px}
-  .card p{margin:0;font-size:13.5px;line-height:1.5;color:#c3c2d0}
+  .card + .card{margin-top:15px}
+  .kick{font-size:11px;letter-spacing:1.6px;color:#c7ad68;font-weight:700;text-transform:uppercase}
+  .card h3{margin:9px 0 6px;font-size:18px;letter-spacing:-.2px}
+  .card p{margin:0;font-size:13.5px;line-height:1.55;color:#bcbccd}
 
-  .cta{
-    display:block;width:100%;margin:22px 0 8px;padding:16px;border:0;
-    border-radius:22px;cursor:pointer;font:inherit;font-weight:700;font-size:16px;
-    color:#2a1e00;
-    background:linear-gradient(180deg,#f4e2ac,#c29a53);
-  }
-  .cta.holo::after{mix-blend-mode:overlay;opacity:calc(.5 + .5*var(--lift))}
+  .cta{display:block;width:100%;margin:24px 0 8px;padding:17px;cursor:pointer;
+    font:inherit;font-weight:700;font-size:16px;color:#241a02;border:1px solid rgba(233,214,163,.5);
+    border-radius:20px;background:linear-gradient(180deg,#ecd9a6,#bd9a52)}
+  .cta.holo::after{mix-blend-mode:overlay;opacity:calc(.28 + .5*var(--lift))}
+  .cta.holo::before{opacity:calc(.24 + .7*var(--lift))}
 
-  .chips{display:flex;gap:10px;margin:20px 0 6px}
-  .chip{padding:9px 16px;border-radius:14px;font-size:13px;font-weight:600;
-    color:#dcdcf0;background:rgba(255,255,255,.05)}
-  .chip.on{color:#0b1020;background:linear-gradient(180deg,#dfe4ff,#a9b6ff)}
+  .chips{display:flex;gap:10px;margin:22px 0 6px}
+  .chip{padding:9px 15px;border-radius:13px;font-size:13px;font-weight:600;color:#d7d7ea;
+    background:rgba(255,255,255,.04)}
+  .chip.on{color:#0c1022;background:linear-gradient(180deg,#e6ebff,#aeb9f0);border-color:transparent}
 
-  .foot{margin-top:34px;text-align:center;font-size:11px;color:#6a6e8c}
+  .foot{margin-top:36px;text-align:center;font-size:11px;color:#63678a}
 </style>
 </head>
 <body>
@@ -136,24 +113,24 @@
     <div class="wrap">
       <div class="brand">
         <div class="mark">✊</div>
-        <div><h1>Azadi Shashn</h1><p>diffraction-glass preview</p></div>
+        <div><h1>Azadi Shashn</h1><p>diffraction glass · luxe</p></div>
       </div>
-      <p class="hint">Hover / tap each element — it catches the orb's light and diffracts it.</p>
+      <p class="hint">Black glass, a gold hairline, and a single flash of colour that catches the light. Tap an element.</p>
 
-      <div class="holo card" style="--hue:210deg">
+      <div class="holo card" style="--hue:200deg">
         <div class="kick">Round 1 · Surveillance</div>
         <h3>The city wants eyes on every street</h3>
         <p>A wave of unrest has the capital on edge. The interior ministry proposes
            blanket facial-recognition cameras. Do you trade privacy for order?</p>
       </div>
 
-      <div class="holo card" style="--hue:330deg">
+      <div class="holo card" style="--hue:320deg">
         <div class="kick">Consequence map</div>
         <h3>Where this path leads</h3>
-        <p>Short-term calm, long-term chill on dissent — the classic cost of power.</p>
+        <p>Short-term calm, long-term chill on dissent — the cost of power.</p>
       </div>
 
-      <button class="holo cta" style="--hue:45deg">Begin the game</button>
+      <button class="holo cta" style="--hue:40deg">Begin the game</button>
 
       <div class="chips">
         <span class="holo chip on" style="--hue:210deg">English</span>
@@ -161,7 +138,7 @@
         <span class="holo chip" style="--hue:280deg">हिंदी</span>
       </div>
 
-      <p class="foot">Concept mock · the real app renders this in Jetpack Compose (Canvas + gradients)</p>
+      <p class="foot">Concept mock · rendered in Jetpack Compose in the real app</p>
     </div>
   </div>
 </body>
