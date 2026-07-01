@@ -6,6 +6,7 @@ import com.azadishashn.app.model.RoundData
 import com.azadishashn.app.model.Verdict
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -45,7 +46,7 @@ class ClaudeClient(
         .callTimeout(180, TimeUnit.SECONDS)
         .build()
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     /**
      * Generate a fresh round leaning into [themes] (any of PESTEL, deep, dark, trigger, etc.).
@@ -98,8 +99,7 @@ class ClaudeClient(
             ${narrationLine(readLangs, "the scenario title", "the situation followed by the dilemma question")}
         """.trimIndent()
 
-        val text = call(system = ROUND_SYSTEM, user = user, schema = roundSchema())
-        val round = json.decodeFromString<RoundData>(text)
+        val round = requestJson<RoundData>(ROUND_SYSTEM, user, roundSchema())
         round.copy(options = normaliseOptions(round.options))
     }
 
@@ -126,8 +126,7 @@ class ClaudeClient(
             ${narrationLine(readLangs, "the scenario title", "the situation followed by the dilemma question")}
         """.trimIndent()
 
-        val text = call(system = ROUND_SYSTEM, user = user, schema = roundSchema())
-        val round = json.decodeFromString<RoundData>(text)
+        val round = requestJson<RoundData>(ROUND_SYSTEM, user, roundSchema())
         round.copy(options = normaliseOptions(round.options))
     }
 
@@ -172,16 +171,38 @@ class ClaudeClient(
             ${narrationLine(readLangs, "a short verdict headline naming which ideology the answer served", "the one-line reasoning and the historical outcome")}
         """.trimIndent()
 
-        val text = call(system = ADJUDICATE_SYSTEM, user = user, schema = judgeSchema())
-        json.decodeFromString<Verdict>(text)
+        requestJson<Verdict>(ADJUDICATE_SYSTEM, user, judgeSchema())
     }
 
     // -- HTTP plumbing -------------------------------------------------------
 
+    /**
+     * Call the API and decode the JSON reply into [T], retrying once on a
+     * transient failure (a malformed or cut-off reply) — a fresh generation
+     * usually succeeds. On a second failure, surface a friendly, actionable
+     * message instead of a raw parser exception.
+     */
+    private inline fun <reified T> requestJson(system: String, user: String, schema: JsonObject): T {
+        var attempt = 0
+        while (true) {
+            attempt++
+            try {
+                return json.decodeFromString<T>(call(system, user, schema))
+            } catch (e: SerializationException) {
+                if (attempt >= 2) {
+                    throw IOException("Claude returned a reply the game couldn't read — please try again.")
+                }
+            } catch (e: IOException) {
+                // Includes the max_tokens cut-off below; retry once, then rethrow.
+                if (attempt >= 2) throw e
+            }
+        }
+    }
+
     private fun call(system: String, user: String, schema: JsonObject): String {
         val payload = buildJsonObject {
             put("model", model)
-            put("max_tokens", 3500)
+            put("max_tokens", MAX_TOKENS)
             put("system", system)
             put("messages", buildJsonArray {
                 add(buildJsonObject {
@@ -218,13 +239,18 @@ class ClaudeClient(
             if (!it.isSuccessful) {
                 throw IOException("Claude API ${it.code}: ${extractError(body)}")
             }
-            return extractText(body)
+            val root = json.parseToJsonElement(body).jsonObject
+            // A truncated reply is incomplete JSON — catch it here with a clear
+            // message rather than letting the parser choke on half a string.
+            if (root["stop_reason"]?.jsonPrimitive?.content == "max_tokens") {
+                throw IOException("Claude's reply was cut off before it finished — please try again.")
+            }
+            return extractText(root)
         }
     }
 
-    /** Pull the first text block out of the Messages API response. */
-    private fun extractText(body: String): String {
-        val root = json.parseToJsonElement(body).jsonObject
+    /** Pull the first text block out of the already-parsed Messages API response. */
+    private fun extractText(root: JsonObject): String {
         val content = root["content"]?.jsonArray
             ?: throw IOException("Unexpected response shape")
         for (block in content) {
@@ -249,6 +275,11 @@ class ClaudeClient(
 
     companion object {
         private val JSON_MEDIA = "application/json".toMediaType()
+
+        // Output budget. Generous headroom: one round packs scenario + 4 options +
+        // 4 paths + up to 3 narration entries whose `speak` strings are Devanagari
+        // (token-heavy), which overran the old 3500 cap and truncated the JSON.
+        private const val MAX_TOKENS = 8000
 
         private const val ROUND_SYSTEM =
             "You are the game master for Azadi Shashn, a debate party game about freedom and " +
