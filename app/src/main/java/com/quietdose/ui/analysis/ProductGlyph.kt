@@ -223,6 +223,10 @@ fun ProductGlyph(
     sampled: ImagePalette.PaletteResult? = null,
     benefits: List<String> = emptyList(),
     showBacking: Boolean = false,
+    /** Draw the benefit symbol-orbs around the glyph. Only for LARGE renders (the report
+     *  hero / analysing screen) — on a small list icon they overlap the body, so it's off
+     *  by default. */
+    showOrbs: Boolean = false,
 ) {
     val kind = remember(name, category) { KindDetector.detect(name, category) }
     val form = remember(name, category, type) { inferContainerForm(name, category, type) }
@@ -242,7 +246,7 @@ fun ProductGlyph(
         // A subtle backing disc + hairline ring sits the glyph cleanly apart from its
         // plate, so even a calm body never blends into the surface behind it.
         if (showBacking) drawBacking()
-        if (orbs.isNotEmpty()) drawBenefitOrbs(orbs)
+        if (showOrbs && orbs.isNotEmpty()) drawBenefitOrbs(orbs)
         drawGlyph(form, palette, initials, measurer)
     }
 }

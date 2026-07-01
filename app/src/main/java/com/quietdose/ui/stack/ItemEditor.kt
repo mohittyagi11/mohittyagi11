@@ -49,6 +49,8 @@ import com.quietdose.data.entity.ItemEntity
 import com.quietdose.data.model.DoseUnit
 import com.quietdose.data.model.FrequencyType
 import com.quietdose.data.model.ItemType
+import com.quietdose.ui.analysis.StoredProductGlyph
+import com.quietdose.ui.analysis.hasStoredLook
 import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.theme.Surface1
 import com.quietdose.ui.theme.Surface2
@@ -135,6 +137,7 @@ fun ItemEditorSheet(
                 title = name.ifBlank { if (existing == null) "New item" else "Item" },
                 subtitle = type.label(),
                 onVary = { previewTint = nextTint(previewTint) },
+                item = existing,
             )
 
             EditorSection("Name") {
@@ -300,6 +303,7 @@ private fun LivePreview(
     title: String,
     subtitle: String,
     onVary: () -> Unit,
+    item: ItemEntity? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     // A gentle pop whenever the form (or tint) changes, so picking feels satisfying:
@@ -318,15 +322,24 @@ private fun LivePreview(
             .background(Surface2)
             .padding(16.dp),
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(64.dp).clip(CircleShape).background(tint.copy(alpha = 0.14f)),
-        ) {
-            ItemIcon(
-                type = type,
-                tint = tint,
-                modifier = Modifier.size(48.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+        if (item?.hasStoredLook() == true) {
+            // A saved product keeps the same lookalike glyph the stack shows — no old form icon.
+            StoredProductGlyph(
+                item,
+                modifier = Modifier.size(64.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+                showBacking = true,
             )
+        } else {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(64.dp).clip(CircleShape).background(tint.copy(alpha = 0.14f)),
+            ) {
+                ItemIcon(
+                    type = type,
+                    tint = tint,
+                    modifier = Modifier.size(48.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+                )
+            }
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {

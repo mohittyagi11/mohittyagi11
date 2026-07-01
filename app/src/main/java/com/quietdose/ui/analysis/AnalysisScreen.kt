@@ -1190,6 +1190,7 @@ private fun ItemHero(
                     sampled = sampled,
                     benefits = benefits,
                     showBacking = true,
+                    showOrbs = true,
                 )
             }
             Spacer(Modifier.width(14.dp))
