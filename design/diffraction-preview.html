@@ -9,110 +9,107 @@
     --mag:#ff2d78; --cyan:#22e0ff; --lime:#b6ff3d; --gold:#e9d6a3;
     --violet:#b06bff; --blue:#5a7bff;
     --mono:ui-monospace,SFMono-Regular,Menlo,"Roboto Mono",monospace;
+    /* brushed metal bevel */
+    --metal:linear-gradient(135deg,#f6f1e4 0%,#9aa0b2 24%,#e9d6a3 48%,#5f6577 70%,#f2ecdd 100%);
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
-  body{
-    background:#04050a; color:#efedf6; overflow-x:hidden;
+  body{background:#04050a;color:#efedf6;overflow-x:hidden;
     font-family:"Space Grotesk",ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    -webkit-font-smoothing:antialiased;
-  }
-  /* ---------------- layered field ---------------- */
+    -webkit-font-smoothing:antialiased}
+
   .field{position:relative;min-height:100%;
-    background:radial-gradient(120% 78% at 50% 4%, #0d1330 0%, #080b18 44%, #04050a 100%);
-    padding:22px 20px 70px;overflow:hidden}
-  /* light orb with a chromatic bloom (light itself fringing into colour) */
-  .orb{position:fixed;left:50%;top:26%;width:300px;height:300px;transform:translate(-50%,-50%);
+    background:radial-gradient(120% 78% at 50% 4%, #0e1433 0%, #080b18 44%, #04050a 100%);
+    padding:22px 20px 72px;overflow:hidden}
+
+  /* dual-axis colour mesh (vertical × horizontal) behind everything */
+  .mesh{position:fixed;inset:-10% -10% auto -10%;height:120%;z-index:0;pointer-events:none;
+    background:
+      linear-gradient(180deg, rgba(90,123,255,.16), transparent 42%, rgba(255,45,120,.12) 100%),
+      linear-gradient(90deg, rgba(34,224,255,.14), transparent 45%, rgba(233,214,163,.12));
+    filter:blur(30px);mix-blend-mode:screen;opacity:.9}
+  /* light orb w/ chromatic bloom */
+  .orb{position:fixed;left:50%;top:25%;width:300px;height:300px;transform:translate(-50%,-50%);
     z-index:0;pointer-events:none;animation:float 13s ease-in-out infinite}
   .orb::before,.orb::after{content:"";position:absolute;inset:0;border-radius:50%}
-  .orb::before{background:radial-gradient(circle at 50% 44%,
-      rgba(255,248,231,.85) 0%, rgba(240,222,180,.34) 16%, transparent 60%);filter:blur(6px)}
-  .orb::after{background:
-      radial-gradient(circle at 44% 42%, rgba(90,123,255,.30), transparent 55%),
-      radial-gradient(circle at 58% 50%, rgba(255,45,120,.24), transparent 55%);
-    filter:blur(20px);mix-blend-mode:screen}
-  /* one bold diagonal spectral streak refracting across the top */
-  .streak{position:fixed;left:-30%;top:14%;width:160%;height:150px;z-index:0;pointer-events:none;
+  .orb::before{background:radial-gradient(circle at 50% 44%,rgba(255,248,231,.85),rgba(240,222,180,.32) 16%,transparent 60%);filter:blur(6px)}
+  .orb::after{background:radial-gradient(circle at 44% 42%,rgba(90,123,255,.30),transparent 55%),radial-gradient(circle at 58% 50%,rgba(255,45,120,.24),transparent 55%);filter:blur(20px);mix-blend-mode:screen}
+  .streak{position:fixed;left:-30%;top:12%;width:160%;height:150px;z-index:0;pointer-events:none;
     transform:rotate(-19deg);
-    background:linear-gradient(90deg,transparent 8%,
-      var(--mag),var(--violet),var(--blue),var(--cyan),var(--lime),transparent 92%);
-    filter:blur(38px);opacity:.42;mix-blend-mode:screen;
-    animation:slide 18s ease-in-out infinite}
+    background:linear-gradient(90deg,transparent 8%,var(--mag),var(--violet),var(--blue),var(--cyan),var(--lime),transparent 92%);
+    filter:blur(38px);opacity:.4;mix-blend-mode:screen;animation:slide 18s ease-in-out infinite}
   @keyframes float{0%,100%{margin-top:0}50%{margin-top:-14px}}
   @keyframes slide{0%,100%{transform:rotate(-19deg) translateX(-16px)}50%{transform:rotate(-19deg) translateX(16px)}}
-  /* film grain */
-  .grain{position:fixed;inset:0;z-index:6;pointer-events:none;opacity:.08;mix-blend-mode:overlay;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  /* heavier film grain (two-blend) */
+  .grain{position:fixed;inset:0;z-index:7;pointer-events:none;opacity:.14;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
   .wrap{position:relative;z-index:2;max-width:470px;margin:0 auto}
   .mono{font-family:var(--mono);font-size:10.5px;letter-spacing:2.4px;text-transform:uppercase}
-  .top{display:flex;justify-content:space-between;align-items:center;color:#7f84a6;margin:2px 0 30px}
+  .top{display:flex;justify-content:space-between;align-items:center;color:#8388a8;margin:2px 0 24px}
   .top .dot{color:var(--cyan)}
 
-  .hero{margin:6px 0 30px;position:relative}
-  .hero .kick{color:#9aa0c4;margin-bottom:14px}
+  /* ---- hero: prism illustration + geometry blended with the type ---- */
+  .hero{position:relative;margin:4px 0 26px;min-height:210px}
+  .hero svg{position:absolute;right:-14px;top:-8px;width:250px;height:220px;opacity:.9;z-index:0}
+  .hero .txt{position:relative;z-index:1}
+  .hero .kick{color:#9aa0c4;margin-bottom:12px}
   .hero .kick b{color:var(--gold);font-weight:600}
-  .hero h1{margin:0;font-size:44px;line-height:.98;font-weight:700;letter-spacing:-1.2px;
-    color:#f3f1f8;text-shadow:-1.6px 0 rgba(255,45,120,.55), 1.6px 0 rgba(34,224,255,.5)}
-  .hero p{margin:14px 0 0;max-width:33ch;font-size:14px;line-height:1.5;color:#b7b8cb}
-  .rule{height:1px;margin:26px 0;background:linear-gradient(90deg,transparent,rgba(233,214,163,.4),transparent)}
+  .hero h1{margin:0;font-size:44px;line-height:.96;font-weight:700;letter-spacing:-1.2px;color:#f3f1f8;
+    text-shadow:-1.6px 0 rgba(255,45,120,.55),1.6px 0 rgba(34,224,255,.5)}
+  .hero p{margin:14px 0 0;max-width:30ch;font-size:14px;line-height:1.5;color:#b7b8cb}
+  .rule{height:1px;margin:22px 0 24px;background:var(--metal);opacity:.6}
 
-  /* ---------------- black-glass cut material ---------------- */
-  .glass{
-    --lift:0; position:relative;isolation:isolate;border-radius:18px;
-    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012)), rgba(8,10,18,.6);
+  /* ---- black glass, metallic bevel edge, dual-axis colour, chromatic split ---- */
+  .glass{--lift:0;position:relative;isolation:isolate;border-radius:18px;
+    background:
+      linear-gradient(180deg, rgba(90,123,255,.12), transparent 46%, rgba(255,45,120,.08)),
+      linear-gradient(90deg, rgba(34,224,255,.10), transparent 50%, rgba(233,214,163,.10)),
+      rgba(8,10,18,.62);
     backdrop-filter:blur(11px) saturate(1.06);
-    border:1px solid rgba(233,214,163,.22);
-    /* chromatic-aberration split at the edges (red one way, cyan the other) */
-    box-shadow:
-      0 16px 44px rgba(0,0,0,.55),
-      inset 1.2px 1.2px 0 rgba(255,45,120,.32),
-      inset -1.2px -1.2px 0 rgba(34,224,255,.30);
-    transition:transform .28s cubic-bezier(.2,.7,.2,1), box-shadow .3s ease;
-  }
-  /* vibrant diffraction flare concentrated at the light-facing (top-right) facet */
+    box-shadow:0 16px 44px rgba(0,0,0,.55),
+      inset 1.2px 1.2px 0 rgba(255,45,120,.30), inset -1.2px -1.2px 0 rgba(34,224,255,.28);
+    transition:transform .28s cubic-bezier(.2,.7,.2,1), box-shadow .3s ease}
+  /* metallic bevel ring */
+  .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.4px;
+    background:var(--metal);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;
+    z-index:3;pointer-events:none;opacity:calc(.62 + .38*var(--lift));
+    filter:brightness(calc(1 + .3*var(--lift)))}
+  /* diffraction flare on the top-right facet, blooms on press */
   .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;z-index:2;pointer-events:none;
-    background:radial-gradient(120px 90px at 88% 0%,
-      rgba(34,224,255,.5), rgba(176,107,255,.34) 34%, rgba(255,45,120,.24) 55%, transparent 72%);
-    mix-blend-mode:screen;opacity:calc(.34 + .66*var(--lift));transition:opacity .3s ease}
-  /* a faint travelling oil-slick on the face */
-  .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;z-index:1;pointer-events:none;
-    background:linear-gradient(118deg,transparent 34%,
-      rgba(90,123,255,.14),rgba(176,107,255,.12),rgba(182,255,61,.10),transparent 70%);
-    background-size:220% 100%;mix-blend-mode:screen;opacity:calc(.2 + .5*var(--lift));
-    animation:drift 15s ease-in-out infinite}
-  @keyframes drift{0%,100%{background-position:0 0}50%{background-position:100% 0}}
+    background:radial-gradient(130px 90px at 88% 0%,rgba(34,224,255,.5),rgba(176,107,255,.32) 34%,rgba(255,45,120,.22) 56%,transparent 72%);
+    mix-blend-mode:screen;opacity:calc(.3 + .7*var(--lift));transition:opacity .3s ease}
   .glass:hover,.glass:active{--lift:1;transform:translateY(-3px)}
   .glass:hover{box-shadow:0 22px 56px rgba(0,0,0,.6),
-    inset 1.4px 1.4px 0 rgba(255,45,120,.5), inset -1.4px -1.4px 0 rgba(34,224,255,.48),
-    0 0 30px rgba(90,123,255,.16)}
+    inset 1.4px 1.4px 0 rgba(255,45,120,.5),inset -1.4px -1.4px 0 rgba(34,224,255,.48),0 0 30px rgba(90,123,255,.16)}
 
   .card{padding:18px 18px}
   .card + .card{margin-top:16px}
-  .card .idx{position:absolute;top:14px;right:16px;color:#565b7e}
+  .card .idx{position:absolute;top:14px;right:15px;color:#5b608a;z-index:4}
   .card .kick{color:#c7ad68}
   .card .kick i{font-style:normal;color:var(--cyan)}
-  .card h3{margin:11px 0 7px;font-size:19px;letter-spacing:-.3px;max-width:26ch}
-  .card p{margin:0;font-size:13.5px;line-height:1.55;color:#bcbccd;max-width:40ch}
+  .card h3{margin:11px 0 7px;font-size:19px;letter-spacing:-.3px;max-width:26ch;position:relative;z-index:4}
+  .card p{margin:0;font-size:13.5px;line-height:1.55;color:#bcbccd;max-width:40ch;position:relative;z-index:4}
 
-  .cta{display:block;width:100%;margin:26px 0 10px;padding:17px;cursor:pointer;
-    font:inherit;font-weight:700;font-size:16px;letter-spacing:.2px;color:#221803;
-    border:1px solid rgba(233,214,163,.55);border-radius:18px;
+  .cta{display:block;width:100%;margin:26px 0 10px;padding:17px;cursor:pointer;position:relative;z-index:4;
+    font:inherit;font-weight:700;font-size:16px;letter-spacing:.2px;color:#221803;border:0;border-radius:18px;
     background:linear-gradient(180deg,#efdcac,#c09c54)}
-  .cta::after{background:radial-gradient(150px 90px at 84% 0%,
-    rgba(255,255,255,.7), rgba(34,224,255,.4) 40%, rgba(255,45,120,.3) 62%, transparent 78%);
-    mix-blend-mode:overlay}
-  .cta::before{display:none}
+  .cta::after{background:radial-gradient(160px 90px at 84% 0%,rgba(255,255,255,.7),rgba(34,224,255,.4) 40%,rgba(255,45,120,.3) 62%,transparent 78%);mix-blend-mode:overlay}
+  .cta span{position:relative;z-index:4}
 
   .chips{display:flex;gap:10px;margin:22px 0 6px}
   .chip{padding:9px 15px;border-radius:12px;font-size:13px;font-weight:600;color:#dadaee}
-  .chip.on{color:#0c1022;border-color:transparent;background:linear-gradient(180deg,#e6ebff,#aeb9f0)}
-  .chip .mono{font-size:9px;opacity:.6;margin-right:6px}
+  .chip.on{color:#0c1022;background:linear-gradient(180deg,#e6ebff,#aeb9f0)}
+  .chip .mono{font-size:9px;opacity:.6;margin-right:6px;position:relative;z-index:4}
+  .chip b{position:relative;z-index:4;font-weight:600}
 
-  .foot{margin-top:38px;color:#5f6488}
+  .foot{margin-top:38px;color:#61668c}
 </style>
 </head>
 <body>
+  <div class="mesh"></div>
   <div class="orb"></div>
   <div class="streak"></div>
   <div class="field">
@@ -120,9 +117,37 @@
       <div class="top mono"><span>AZADI&nbsp;SHASHN</span><span><span class="dot">●</span> DARK / v1.14</span></div>
 
       <div class="hero">
-        <div class="kick mono">EXH.01 — <b>THE LIGHT</b></div>
-        <h1>DIFFRACTION<br>GLASS</h1>
-        <p>Black glass, cut like a gemstone. It holds the light — and splits it.</p>
+        <!-- prism illustration: a beam refracted into a spectrum (geometry + illustration) -->
+        <svg viewBox="0 0 250 220" fill="none">
+          <defs>
+            <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#cfe0ff" stop-opacity=".5"/>
+              <stop offset="1" stop-color="#8aa0ff" stop-opacity=".12"/>
+            </linearGradient>
+            <filter id="soft"><feGaussianBlur stdDeviation="2.2"/></filter>
+          </defs>
+          <!-- incoming white beam -->
+          <line x1="8" y1="150" x2="120" y2="112" stroke="#fdf6e6" stroke-width="2.4" opacity=".85" filter="url(#soft)"/>
+          <!-- refracted spectrum fan -->
+          <g filter="url(#soft)" stroke-width="2.6" opacity=".9">
+            <line x1="150" y1="118" x2="244" y2="70"  stroke="#ff4d6d"/>
+            <line x1="150" y1="120" x2="246" y2="92"  stroke="#ff9e3d"/>
+            <line x1="150" y1="122" x2="248" y2="112" stroke="#ffe14e"/>
+            <line x1="150" y1="124" x2="248" y2="132" stroke="#4ee39b"/>
+            <line x1="150" y1="126" x2="246" y2="152" stroke="#38d6ff"/>
+            <line x1="150" y1="128" x2="242" y2="172" stroke="#7b9bff"/>
+            <line x1="150" y1="130" x2="236" y2="190" stroke="#c86bff"/>
+          </g>
+          <!-- the prism (geometry) with a metallic stroke -->
+          <polygon points="130,52 96,150 176,150" fill="url(#glass)" stroke="#e9d6a3" stroke-width="1.6" stroke-opacity=".85"/>
+          <polygon points="130,52 176,150 150,150 130,86" fill="#ffffff" fill-opacity=".06"/>
+        </svg>
+
+        <div class="txt">
+          <div class="kick mono">EXH.01 — <b>THE LIGHT</b></div>
+          <h1>DIFFRACTION<br>GLASS</h1>
+          <p>Black glass, cut like a gemstone. It holds the light — and splits it.</p>
+        </div>
       </div>
 
       <div class="rule"></div>
@@ -142,12 +167,12 @@
         <p>Short-term calm, long-term chill on dissent — the cost of power.</p>
       </div>
 
-      <button class="glass cta">Begin the game →</button>
+      <button class="glass cta"><span>Begin the game →</span></button>
 
       <div class="chips">
-        <span class="glass chip on"><span class="mono">01</span>English</span>
-        <span class="glass chip"><span class="mono">02</span>Hinglish</span>
-        <span class="glass chip"><span class="mono">03</span>हिंदी</span>
+        <span class="glass chip on"><span class="mono">01</span><b>English</b></span>
+        <span class="glass chip"><span class="mono">02</span><b>Hinglish</b></span>
+        <span class="glass chip"><span class="mono">03</span><b>हिंदी</b></span>
       </div>
 
       <div class="foot mono">◤ CUT-GLASS MATERIAL · TAP TO CATCH THE LIGHT</div>
