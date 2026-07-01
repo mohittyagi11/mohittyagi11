@@ -6,9 +6,10 @@
 <title>Azadi Shashn — Diffraction Glass</title>
 <style>
   :root{
-    --mag:#ff2d78; --cyan:#22e0ff; --lime:#b6ff3d; --gold:#e9d6a3; --violet:#b06bff; --blue:#5a7bff;
+    /* techno palette — electric neon, chrome not gold */
+    --mag:#ff1e7a; --cyan:#12f2ff; --lime:#9dff2e; --gold:#9dff2e; --violet:#8b3dff; --blue:#2b6bff;
     --mono:ui-monospace,SFMono-Regular,Menlo,"Roboto Mono",monospace;
-    --metal:linear-gradient(135deg,#f8f3e6,#a4aabd 26%,#efdcac 50%,#5f6577 72%,#f4eede);
+    --metal:linear-gradient(135deg,#eafcff,#7fa9c9 24%,#cfe6f2 48%,#3d5f8f 72%,#e6fbff);
   }
   *{box-sizing:border-box}
   html,body{margin:0;min-height:100%}
@@ -19,17 +20,17 @@
   .bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
   .base{position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 2%, #10173a 0%, #0a0f22 42%, #05060c 100%)}
   .mesh{position:absolute;inset:-8%;background:
-      linear-gradient(180deg,rgba(90,123,255,.22),transparent 44%,rgba(255,45,120,.16)),
-      linear-gradient(90deg,rgba(34,224,255,.18),transparent 46%,rgba(233,214,163,.16));
+      linear-gradient(180deg,rgba(43,107,255,.24),transparent 44%,rgba(255,30,122,.18)),
+      linear-gradient(90deg,rgba(18,242,255,.2),transparent 46%,rgba(139,61,255,.2));
     filter:blur(34px);mix-blend-mode:screen}
-  .streak{position:absolute;left:-30%;top:9%;width:160%;height:170px;transform:rotate(-19deg);
+  .streak{position:absolute;left:-30%;top:9%;width:160%;height:180px;transform:rotate(-19deg);
     background:linear-gradient(90deg,transparent 8%,var(--mag),var(--violet),var(--blue),var(--cyan),var(--lime),transparent 92%);
-    filter:blur(34px);opacity:.5;mix-blend-mode:screen}
+    filter:blur(30px);opacity:.58;mix-blend-mode:screen}
   .orb{position:absolute;left:50%;top:23%;width:300px;height:300px;transform:translate(-50%,-50%)}
   .orb::before{content:"";position:absolute;inset:0;border-radius:50%;
-    background:radial-gradient(circle at 50% 44%,rgba(255,249,233,.95),rgba(240,222,180,.4) 16%,transparent 60%);filter:blur(5px)}
+    background:radial-gradient(circle at 50% 44%,rgba(233,252,255,.97),rgba(157,255,46,.34) 15%,transparent 58%);filter:blur(5px)}
   .orb::after{content:"";position:absolute;inset:0;border-radius:50%;
-    background:radial-gradient(circle at 42% 42%,rgba(90,123,255,.4),transparent 55%),radial-gradient(circle at 60% 52%,rgba(255,45,120,.32),transparent 55%);filter:blur(18px);mix-blend-mode:screen}
+    background:radial-gradient(circle at 40% 40%,rgba(18,242,255,.5),transparent 55%),radial-gradient(circle at 62% 54%,rgba(255,30,122,.4),transparent 55%),radial-gradient(circle at 54% 66%,rgba(139,61,255,.36),transparent 58%);filter:blur(18px);mix-blend-mode:screen}
   /* topographic contour field — explicit, clearly visible; blended toward the light */
   .topo{position:absolute;inset:0;width:100%;height:100%;
     -webkit-mask:radial-gradient(135% 100% at 50% 14%,#000,rgba(0,0,0,.5) 55%,transparent 95%);
@@ -49,36 +50,38 @@
   .rule{height:1px;margin:18px 0 20px;background:var(--metal);opacity:.7}
 
   .glass{position:relative;isolation:isolate;overflow:hidden;border-radius:18px;
-    background:linear-gradient(180deg,rgba(90,123,255,.13),transparent 46%,rgba(255,45,120,.09)),
-      linear-gradient(90deg,rgba(34,224,255,.11),transparent 50%,rgba(233,214,163,.11)),rgba(9,11,20,.20);
-    backdrop-filter:blur(7px) saturate(1.5) brightness(1.22) hue-rotate(-8deg) contrast(1.06);
-    -webkit-backdrop-filter:blur(7px) saturate(1.5) brightness(1.22) hue-rotate(-8deg) contrast(1.06);
-    box-shadow:0 16px 44px rgba(0,0,0,.55),
-      inset 0 0 0 1px rgba(255,255,255,.06),
-      inset 2.4px 0 6px rgba(255,45,120,.22),inset -2.4px 0 6px rgba(34,224,255,.22),
-      inset 0 3px 9px rgba(34,224,255,.12),inset 0 -3px 9px rgba(255,45,120,.10),
-      inset 1.4px 1.4px 0 rgba(255,45,120,.4),inset -1.4px -1.4px 0 rgba(34,224,255,.38)}
+    background:linear-gradient(180deg,rgba(43,107,255,.15),transparent 46%,rgba(255,30,122,.11)),
+      linear-gradient(90deg,rgba(18,242,255,.13),transparent 50%,rgba(139,61,255,.14)),rgba(7,10,20,.14);
+    backdrop-filter:blur(6px) saturate(2.1) brightness(1.5) hue-rotate(-14deg) contrast(1.14);
+    -webkit-backdrop-filter:blur(6px) saturate(2.1) brightness(1.5) hue-rotate(-14deg) contrast(1.14);
+    box-shadow:0 18px 48px rgba(0,0,0,.58),
+      inset 0 0 24px rgba(18,242,255,.10),
+      inset 4px 0 12px rgba(255,30,122,.4),inset -4px 0 12px rgba(18,242,255,.42),
+      inset 0 4px 14px rgba(157,255,46,.2),inset 0 -4px 14px rgba(255,30,122,.18),
+      inset 2px 2px 0 rgba(255,30,122,.6),inset -2px -2px 0 rgba(18,242,255,.58)}
   .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.5px;background:var(--metal);
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;z-index:5;opacity:.8}
   .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;z-index:4;pointer-events:none;
-    background:radial-gradient(140px 96px at 88% 0%,rgba(34,224,255,.6),rgba(176,107,255,.4) 34%,rgba(255,45,120,.28) 56%,transparent 72%);mix-blend-mode:screen;opacity:.62}
+    background:radial-gradient(150px 104px at 88% 0%,rgba(18,242,255,.72),rgba(139,61,255,.46) 32%,rgba(255,30,122,.34) 54%,transparent 72%),
+      radial-gradient(120px 90px at 6% 100%,rgba(157,255,46,.34),transparent 62%);mix-blend-mode:screen;opacity:.72}
 
   .card{padding:18px}
   .card + .card{margin-top:15px}
   .card .idx{position:absolute;top:14px;right:15px;color:#666bp;color:#6a6f95;z-index:6}
-  .card .kick{color:#cbb069;position:relative;z-index:6}
+  .card .kick{color:#6ff0ff;position:relative;z-index:6}
   .card .kick i{font-style:normal;color:var(--cyan)}
   .card h3{margin:11px 0 7px;font-size:19px;letter-spacing:-.3px;max-width:23ch;position:relative;z-index:6}
   .card p{margin:0;font-size:13.5px;line-height:1.55;color:#c3c3d6;max-width:40ch;position:relative;z-index:6}
 
   .cta{display:flex;align-items:center;justify-content:center;width:100%;margin:24px 0 10px;padding:17px;
-    font:inherit;font-weight:700;font-size:16px;color:#221803;border:0;border-radius:18px;background:linear-gradient(180deg,#efdcac,#c09c54)}
-  .cta::after{background:radial-gradient(170px 96px at 84% 0%,rgba(255,255,255,.8),rgba(34,224,255,.45) 40%,rgba(255,45,120,.34) 62%,transparent 78%);mix-blend-mode:overlay}
+    font:inherit;font-weight:700;font-size:16px;color:#04121a;border:0;border-radius:18px;
+    background:linear-gradient(115deg,#9dff2e,#12f2ff 46%,#8b3dff)}
+  .cta::after{background:radial-gradient(180px 104px at 84% 0%,rgba(255,255,255,.85),rgba(18,242,255,.5) 40%,rgba(255,30,122,.38) 62%,transparent 80%);mix-blend-mode:overlay;opacity:.9}
   .cta span{position:relative;z-index:6}
 
   .chips{display:flex;gap:10px;margin:20px 0 6px}
   .chip{display:flex;align-items:center;padding:9px 15px;border-radius:12px;font-size:13px;font-weight:600;color:#e0e0f2}
-  .chip.on{color:#0c1022;background:linear-gradient(180deg,#e9edff,#aeb9f0)}
+  .chip.on{color:#04121a;background:linear-gradient(150deg,#c9ffe0,#12f2ff 55%,#7fb0ff)}
   .chip .mono{font-size:9px;opacity:.6;margin-right:6px;position:relative;z-index:6}
   .chip b{position:relative;z-index:6;font-weight:600}
   .foot{margin-top:34px;color:#6a6f95}
@@ -96,23 +99,43 @@
         </filter>
       </defs>
       <g filter="url(#warp)">
-        <!-- peak A -->
-        <g transform="rotate(-17 300 250)" fill="none" stroke="#8f9bce" stroke-opacity=".6" stroke-width=".9">
-          <ellipse cx="300" cy="250" rx="26" ry="17"/><ellipse cx="300" cy="250" rx="54" ry="36"/>
-          <ellipse cx="300" cy="250" rx="86" ry="58"/><ellipse cx="300" cy="250" rx="150" ry="100"/>
-          <ellipse cx="300" cy="250" rx="188" ry="126"/><ellipse cx="300" cy="250" rx="230" ry="154"/>
+        <!-- peak A · top-right -->
+        <g transform="rotate(-17 300 250)" fill="none" stroke="#6ee0ff" stroke-opacity=".5" stroke-width=".9">
+          <ellipse cx="300" cy="250" rx="20" ry="13"/><ellipse cx="300" cy="250" rx="40" ry="27"/>
+          <ellipse cx="300" cy="250" rx="62" ry="42"/><ellipse cx="300" cy="250" rx="86" ry="58"/>
+          <ellipse cx="300" cy="250" rx="150" ry="100"/><ellipse cx="300" cy="250" rx="188" ry="126"/>
+          <ellipse cx="300" cy="250" rx="230" ry="154"/><ellipse cx="300" cy="250" rx="272" ry="182"/>
         </g>
-        <g transform="rotate(-17 300 250)" fill="none" stroke="#e9d6a3" stroke-opacity=".55" stroke-width="1.5">
-          <ellipse cx="300" cy="250" rx="118" ry="79"/><ellipse cx="300" cy="250" rx="270" ry="181"/>
+        <g transform="rotate(-17 300 250)" fill="none" stroke="#9dff2e" stroke-opacity=".5" stroke-width="1.4">
+          <ellipse cx="300" cy="250" rx="118" ry="79"/><ellipse cx="300" cy="250" rx="210" ry="140"/>
         </g>
-        <!-- peak B -->
-        <g transform="rotate(14 120 660)" fill="none" stroke="#8f9bce" stroke-opacity=".55" stroke-width=".9">
-          <ellipse cx="120" cy="660" rx="24" ry="16"/><ellipse cx="120" cy="660" rx="52" ry="35"/>
-          <ellipse cx="120" cy="660" rx="120" ry="80"/><ellipse cx="120" cy="660" rx="162" ry="108"/>
-          <ellipse cx="120" cy="660" rx="208" ry="138"/>
+        <!-- peak B · mid-left -->
+        <g transform="rotate(14 120 640)" fill="none" stroke="#6ee0ff" stroke-opacity=".46" stroke-width=".9">
+          <ellipse cx="120" cy="640" rx="20" ry="13"/><ellipse cx="120" cy="640" rx="44" ry="30"/>
+          <ellipse cx="120" cy="640" rx="72" ry="48"/><ellipse cx="120" cy="640" rx="120" ry="80"/>
+          <ellipse cx="120" cy="640" rx="162" ry="108"/><ellipse cx="120" cy="640" rx="208" ry="138"/>
         </g>
-        <g transform="rotate(14 120 660)" fill="none" stroke="#e9d6a3" stroke-opacity=".5" stroke-width="1.4">
-          <ellipse cx="120" cy="660" rx="84" ry="56"/><ellipse cx="120" cy="660" rx="182" ry="122"/>
+        <g transform="rotate(14 120 640)" fill="none" stroke="#9dff2e" stroke-opacity=".44" stroke-width="1.3">
+          <ellipse cx="120" cy="640" rx="96" ry="64"/><ellipse cx="120" cy="640" rx="182" ry="122"/>
+        </g>
+        <!-- peak C · top-left ridge -->
+        <g transform="rotate(-8 40 120)" fill="none" stroke="#7d8fff" stroke-opacity=".42" stroke-width=".85">
+          <ellipse cx="40" cy="120" rx="30" ry="22"/><ellipse cx="40" cy="120" rx="66" ry="48"/>
+          <ellipse cx="40" cy="120" rx="108" ry="78"/><ellipse cx="40" cy="120" rx="156" ry="112"/>
+        </g>
+        <!-- peak D · lower-right saddle -->
+        <g transform="rotate(22 380 900)" fill="none" stroke="#6ee0ff" stroke-opacity=".4" stroke-width=".85">
+          <ellipse cx="380" cy="900" rx="26" ry="18"/><ellipse cx="380" cy="900" rx="58" ry="40"/>
+          <ellipse cx="380" cy="900" rx="100" ry="70"/><ellipse cx="380" cy="900" rx="150" ry="104"/>
+          <ellipse cx="380" cy="900" rx="200" ry="138"/>
+        </g>
+        <g transform="rotate(22 380 900)" fill="none" stroke="#ff1e7a" stroke-opacity=".3" stroke-width="1.2">
+          <ellipse cx="380" cy="900" rx="78" ry="54"/>
+        </g>
+        <!-- peak E · lower-centre basin -->
+        <g transform="rotate(-4 180 870)" fill="none" stroke="#7d8fff" stroke-opacity=".36" stroke-width=".85">
+          <ellipse cx="180" cy="870" rx="40" ry="26"/><ellipse cx="180" cy="870" rx="92" ry="60"/>
+          <ellipse cx="180" cy="870" rx="150" ry="98"/><ellipse cx="180" cy="870" rx="214" ry="140"/>
         </g>
       </g>
     </svg>
