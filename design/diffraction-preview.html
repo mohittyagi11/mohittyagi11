@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Azadi Shashn — diffraction glass preview</title>
+<style>
+  :root{
+    --bg0:#05060c; --bg1:#0b0f1e; --gold:#f4e2ac; --golddim:#c29a53;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:#04050a;
+    color:#e8e6f0;
+    font-family:"Space Grotesk",ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* ---------- the field + central light orb ---------- */
+  .field{
+    position:relative; min-height:100%;
+    background:
+      radial-gradient(120% 90% at 50% 8%, #0e1430 0%, #0b0f1e 45%, #05060c 100%);
+    padding:28px 20px 60px;
+    overflow:hidden;
+  }
+  .orb, .halo{
+    position:fixed; left:50%; top:34%;
+    transform:translate(-50%,-50%);
+    pointer-events:none; z-index:0;
+    animation:float 9s ease-in-out infinite;
+  }
+  .orb{
+    width:340px;height:340px;border-radius:50%;
+    background:radial-gradient(circle at 50% 42%,
+        rgba(255,250,235,.95) 0%, rgba(255,240,205,.55) 14%,
+        rgba(180,200,255,.28) 34%, rgba(120,140,255,.10) 55%, transparent 72%);
+    filter:blur(6px);
+  }
+  .halo{
+    width:520px;height:520px;border-radius:50%;
+    background:conic-gradient(from 0deg,
+      #ff5d73,#ffb14e,#ffe14e,#4ee39b,#3bd7ff,#7b9bff,#c07bff,#ff5d73);
+    filter:blur(46px); opacity:.16; mix-blend-mode:screen;
+    animation:float 9s ease-in-out infinite, spin 26s linear infinite;
+  }
+  @keyframes float{0%,100%{margin-top:0}50%{margin-top:-16px}}
+  @keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+
+  .wrap{position:relative;z-index:1;max-width:460px;margin:0 auto}
+  .brand{display:flex;align-items:center;gap:12px;margin:6px 2px 26px}
+  .brand .mark{width:46px;height:46px;border-radius:13px;
+    background:radial-gradient(circle at 50% 40%,#12131a,#0a0a0c);
+    border:1px solid rgba(244,226,172,.5);
+    display:grid;place-items:center;font-size:22px}
+  .brand h1{font-size:22px;margin:0;letter-spacing:-.3px}
+  .brand p{margin:2px 0 0;font-size:12px;color:#9fa2c0}
+  .hint{font-size:12.5px;color:#8f93b4;text-align:center;margin:0 0 22px;letter-spacing:.2px}
+
+  /* ---------- the holographic "cut glass" material ---------- */
+  .holo{
+    --hue:0deg;            /* per-element colour cast */
+    --lift:0;              /* 0 idle .. 1 caught the light */
+    position:relative; isolation:isolate;
+    border-radius:22px;
+    background:linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
+    backdrop-filter:blur(9px) saturate(1.1);
+    transition:transform .18s ease, box-shadow .3s ease;
+    box-shadow:
+      0 12px 34px rgba(0,0,0,.5),
+      inset 0 1px 0 rgba(255,255,255,.18);
+  }
+  /* prismatic rim: a rotating rainbow ring living in the border box */
+  .holo::before{
+    content:""; position:absolute; inset:0; border-radius:inherit; padding:1.6px;
+    background:conic-gradient(from var(--hue),
+      #ff4d6d,#ff9e3d,#ffe14e,#4ee39b,#38d6ff,#7b9bff,#c86bff,#ff4d6d);
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor; mask-composite:exclude;
+    opacity:calc(.55 + .45*var(--lift));
+    filter:saturate(1.5) brightness(calc(1 + .5*var(--lift)));
+    animation:hue 12s linear infinite;
+    z-index:2; pointer-events:none;
+  }
+  /* oil-slick sheen sweeping the face */
+  .holo::after{
+    content:""; position:absolute; inset:0; border-radius:inherit;
+    background:linear-gradient(115deg,
+      transparent 20%,
+      rgba(255,90,140,.20), rgba(255,225,80,.18), rgba(80,230,160,.18),
+      rgba(90,160,255,.22), rgba(200,110,255,.20),
+      transparent 80%);
+    background-size:260% 100%;
+    mix-blend-mode:screen;
+    opacity:calc(.45 + .55*var(--lift));
+    animation:sweep 7s linear infinite;
+    z-index:1; pointer-events:none;
+  }
+  @keyframes hue{to{--hue:360deg}}
+  @keyframes sweep{0%{background-position:120% 0}100%{background-position:-60% 0}}
+  /* Firefox lacks @property for --hue animation → still shows a static rim + sweep */
+  @property --hue{syntax:'<angle>';inherits:false;initial-value:0deg}
+
+  .holo:hover, .holo:active{--lift:1; transform:translateY(-2px)}
+  .holo:hover{box-shadow:0 18px 46px rgba(0,0,0,.55),
+    0 0 26px hsla(calc(var(--h) + 0),90%,65%,.20),
+    inset 0 1px 0 rgba(255,255,255,.25)}
+
+  .card{padding:18px 18px}
+  .card + .card{margin-top:16px}
+  .kick{font-size:11px;letter-spacing:1.5px;color:#c9b06a;font-weight:700;text-transform:uppercase}
+  .card h3{margin:8px 0 6px;font-size:18px}
+  .card p{margin:0;font-size:13.5px;line-height:1.5;color:#c3c2d0}
+
+  .cta{
+    display:block;width:100%;margin:22px 0 8px;padding:16px;border:0;
+    border-radius:22px;cursor:pointer;font:inherit;font-weight:700;font-size:16px;
+    color:#2a1e00;
+    background:linear-gradient(180deg,#f4e2ac,#c29a53);
+  }
+  .cta.holo::after{mix-blend-mode:overlay;opacity:calc(.5 + .5*var(--lift))}
+
+  .chips{display:flex;gap:10px;margin:20px 0 6px}
+  .chip{padding:9px 16px;border-radius:14px;font-size:13px;font-weight:600;
+    color:#dcdcf0;background:rgba(255,255,255,.05)}
+  .chip.on{color:#0b1020;background:linear-gradient(180deg,#dfe4ff,#a9b6ff)}
+
+  .foot{margin-top:34px;text-align:center;font-size:11px;color:#6a6e8c}
+</style>
+</head>
+<body>
+  <div class="orb"></div>
+  <div class="halo"></div>
+  <div class="field">
+    <div class="wrap">
+      <div class="brand">
+        <div class="mark">✊</div>
+        <div><h1>Azadi Shashn</h1><p>diffraction-glass preview</p></div>
+      </div>
+      <p class="hint">Hover / tap each element — it catches the orb's light and diffracts it.</p>
+
+      <div class="holo card" style="--hue:210deg">
+        <div class="kick">Round 1 · Surveillance</div>
+        <h3>The city wants eyes on every street</h3>
+        <p>A wave of unrest has the capital on edge. The interior ministry proposes
+           blanket facial-recognition cameras. Do you trade privacy for order?</p>
+      </div>
+
+      <div class="holo card" style="--hue:330deg">
+        <div class="kick">Consequence map</div>
+        <h3>Where this path leads</h3>
+        <p>Short-term calm, long-term chill on dissent — the classic cost of power.</p>
+      </div>
+
+      <button class="holo cta" style="--hue:45deg">Begin the game</button>
+
+      <div class="chips">
+        <span class="holo chip on" style="--hue:210deg">English</span>
+        <span class="holo chip" style="--hue:150deg">Hinglish</span>
+        <span class="holo chip" style="--hue:280deg">हिंदी</span>
+      </div>
+
+      <p class="foot">Concept mock · the real app renders this in Jetpack Compose (Canvas + gradients)</p>
+    </div>
+  </div>
+</body>
+</html>
