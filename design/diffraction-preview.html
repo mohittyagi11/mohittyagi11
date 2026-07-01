@@ -14,30 +14,25 @@
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{background:#04050a;color:#efedf6;overflow-x:hidden;
-    font-family:"Space Grotesk",ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    -webkit-font-smoothing:antialiased}
+    font-family:"Space Grotesk",ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
 
   .field{position:relative;min-height:100%;
     background:radial-gradient(120% 78% at 50% 4%, #0e1433 0%, #080b18 44%, #04050a 100%);
     padding:22px 20px 72px;overflow:hidden}
 
-  /* dual-axis colour mesh */
   .mesh{position:fixed;inset:-10% -10% auto -10%;height:120%;z-index:0;pointer-events:none;
     background:linear-gradient(180deg,rgba(90,123,255,.16),transparent 42%,rgba(255,45,120,.12) 100%),
       linear-gradient(90deg,rgba(34,224,255,.14),transparent 45%,rgba(233,214,163,.12));
     filter:blur(30px);mix-blend-mode:screen;opacity:.9}
-  /* background geometric illustration: a big faint wireframe gem + orbit + rays */
-  .geobg{position:fixed;left:50%;top:20%;width:520px;height:520px;transform:translate(-50%,-50%);
-    z-index:0;pointer-events:none;opacity:.5}
-  .orb{position:fixed;left:50%;top:24%;width:300px;height:300px;transform:translate(-50%,-50%);
-    z-index:0;pointer-events:none;animation:float 13s ease-in-out infinite}
+  /* connected topographic illustration behind everything */
+  .topo{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.55}
+  .orb{position:fixed;left:50%;top:24%;width:290px;height:290px;transform:translate(-50%,-50%);z-index:0;pointer-events:none;animation:float 13s ease-in-out infinite}
   .orb::before,.orb::after{content:"";position:absolute;inset:0;border-radius:50%}
-  .orb::before{background:radial-gradient(circle at 50% 44%,rgba(255,248,231,.82),rgba(240,222,180,.3) 16%,transparent 60%);filter:blur(6px)}
-  .orb::after{background:radial-gradient(circle at 44% 42%,rgba(90,123,255,.28),transparent 55%),radial-gradient(circle at 58% 50%,rgba(255,45,120,.22),transparent 55%);filter:blur(20px);mix-blend-mode:screen}
-  .streak{position:fixed;left:-30%;top:10%;width:160%;height:150px;z-index:0;pointer-events:none;
-    transform:rotate(-19deg);
+  .orb::before{background:radial-gradient(circle at 50% 44%,rgba(255,248,231,.8),rgba(240,222,180,.28) 16%,transparent 60%);filter:blur(6px)}
+  .orb::after{background:radial-gradient(circle at 44% 42%,rgba(90,123,255,.26),transparent 55%),radial-gradient(circle at 58% 50%,rgba(255,45,120,.20),transparent 55%);filter:blur(20px);mix-blend-mode:screen}
+  .streak{position:fixed;left:-30%;top:10%;width:160%;height:150px;z-index:0;pointer-events:none;transform:rotate(-19deg);
     background:linear-gradient(90deg,transparent 8%,var(--mag),var(--violet),var(--blue),var(--cyan),var(--lime),transparent 92%);
-    filter:blur(40px);opacity:.36;mix-blend-mode:screen;animation:slide 18s ease-in-out infinite}
+    filter:blur(40px);opacity:.34;mix-blend-mode:screen;animation:slide 18s ease-in-out infinite}
   @keyframes float{0%,100%{margin-top:0}50%{margin-top:-14px}}
   @keyframes slide{0%,100%{transform:rotate(-19deg) translateX(-16px)}50%{transform:rotate(-19deg) translateX(16px)}}
   .grain{position:fixed;inset:0;z-index:7;pointer-events:none;opacity:.15;mix-blend-mode:overlay;
@@ -48,88 +43,90 @@
   .top{display:flex;justify-content:space-between;align-items:center;color:#8388a8;margin:2px 0 22px}
   .top .dot{color:var(--cyan)}
 
-  .hero{position:relative;margin:4px 0 24px;min-height:200px}
-  .hero svg.prism{position:absolute;right:-14px;top:-6px;width:240px;height:210px;opacity:.92;z-index:0}
+  .hero{position:relative;margin:4px 0 22px;min-height:186px}
   .hero .txt{position:relative;z-index:1}
   .hero .kick{color:#9aa0c4;margin-bottom:12px}
   .hero .kick b{color:var(--gold);font-weight:600}
-  .hero h1{margin:0;font-size:44px;line-height:.96;font-weight:700;letter-spacing:-1.2px;color:#f3f1f8;
-    text-shadow:-1.6px 0 rgba(255,45,120,.55),1.6px 0 rgba(34,224,255,.5)}
+  .hero h1{margin:0;font-size:44px;line-height:.96;font-weight:700;letter-spacing:-1.2px;color:#f3f1f8;text-shadow:-1.6px 0 rgba(255,45,120,.55),1.6px 0 rgba(34,224,255,.5)}
   .hero p{margin:13px 0 0;max-width:30ch;font-size:14px;line-height:1.5;color:#b7b8cb}
   .rule{height:1px;margin:20px 0 22px;background:var(--metal);opacity:.55}
 
-  /* black glass cut material */
   .glass{--lift:0;position:relative;isolation:isolate;overflow:hidden;border-radius:18px;
     background:linear-gradient(180deg,rgba(90,123,255,.12),transparent 46%,rgba(255,45,120,.08)),
-      linear-gradient(90deg,rgba(34,224,255,.10),transparent 50%,rgba(233,214,163,.10)),
-      rgba(8,10,18,.62);
+      linear-gradient(90deg,rgba(34,224,255,.10),transparent 50%,rgba(233,214,163,.10)),rgba(8,10,18,.62);
     backdrop-filter:blur(11px) saturate(1.06);
-    box-shadow:0 16px 44px rgba(0,0,0,.55),
-      inset 1.2px 1.2px 0 rgba(255,45,120,.30),inset -1.2px -1.2px 0 rgba(34,224,255,.28);
+    box-shadow:0 16px 44px rgba(0,0,0,.55),inset 1.2px 1.2px 0 rgba(255,45,120,.30),inset -1.2px -1.2px 0 rgba(34,224,255,.28);
     transition:transform .28s cubic-bezier(.2,.7,.2,1),box-shadow .3s ease}
-  /* metallic bevel ring */
   .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.4px;background:var(--metal);
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
     z-index:5;pointer-events:none;opacity:calc(.62 + .38*var(--lift));filter:brightness(calc(1 + .3*var(--lift)))}
-  /* diffraction flare on the top-right facet */
   .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;z-index:4;pointer-events:none;
     background:radial-gradient(130px 90px at 88% 0%,rgba(34,224,255,.5),rgba(176,107,255,.32) 34%,rgba(255,45,120,.22) 56%,transparent 72%);
     mix-blend-mode:screen;opacity:calc(.3 + .7*var(--lift));transition:opacity .3s ease}
   .glass:hover,.glass:active{--lift:1;transform:translateY(-3px)}
   .glass:hover{box-shadow:0 22px 56px rgba(0,0,0,.6),inset 1.4px 1.4px 0 rgba(255,45,120,.5),inset -1.4px -1.4px 0 rgba(34,224,255,.48),0 0 30px rgba(90,123,255,.16)}
 
-  /* etched geometry inside each element (faded so it doesn't crowd the text) */
-  .geo{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.9;
-    -webkit-mask:radial-gradient(130% 100% at 88% 6%,#000,transparent 66%);
-            mask:radial-gradient(130% 100% at 88% 6%,#000,transparent 66%)}
-  .geo.facets{background-image:
-    repeating-linear-gradient(62deg,transparent 0 15px,rgba(233,214,163,.10) 15px 16px),
-    repeating-linear-gradient(-62deg,transparent 0 15px,rgba(120,150,255,.09) 15px 16px)}
-  .geo.rings{background-image:
-    repeating-radial-gradient(circle at 88% 6%,transparent 0 14px,rgba(34,224,255,.12) 14px 15px)}
-  .geo.grating{opacity:.7;-webkit-mask:linear-gradient(90deg,transparent,#000 30%,#000 70%,transparent);
-    mask:linear-gradient(90deg,transparent,#000 30%,#000 70%,transparent);
-    background-image:repeating-linear-gradient(90deg,transparent 0 8px,rgba(255,255,255,.07) 8px 9px)}
+  /* small connected illustration etched in each element (top-right, fading out) */
+  .geo{position:absolute;top:0;right:0;width:120px;height:100%;z-index:0;pointer-events:none;opacity:.9;
+    -webkit-mask:linear-gradient(255deg,#000,transparent 74%);mask:linear-gradient(255deg,#000,transparent 74%)}
 
   .card{padding:18px 18px}
   .card + .card{margin-top:16px}
   .card .idx{position:absolute;top:14px;right:15px;color:#5b608a;z-index:6}
   .card .kick{color:#c7ad68;position:relative;z-index:6}
   .card .kick i{font-style:normal;color:var(--cyan)}
-  .card h3{margin:11px 0 7px;font-size:19px;letter-spacing:-.3px;max-width:24ch;position:relative;z-index:6}
+  .card h3{margin:11px 0 7px;font-size:19px;letter-spacing:-.3px;max-width:23ch;position:relative;z-index:6}
   .card p{margin:0;font-size:13.5px;line-height:1.55;color:#bcbccd;max-width:40ch;position:relative;z-index:6}
 
   .cta{display:flex;align-items:center;justify-content:center;width:100%;margin:26px 0 10px;padding:17px;cursor:pointer;
-    font:inherit;font-weight:700;font-size:16px;letter-spacing:.2px;color:#221803;border:0;border-radius:18px;
-    background:linear-gradient(180deg,#efdcac,#c09c54)}
+    font:inherit;font-weight:700;font-size:16px;letter-spacing:.2px;color:#221803;border:0;border-radius:18px;background:linear-gradient(180deg,#efdcac,#c09c54)}
   .cta::after{background:radial-gradient(160px 90px at 84% 0%,rgba(255,255,255,.7),rgba(34,224,255,.4) 40%,rgba(255,45,120,.3) 62%,transparent 78%);mix-blend-mode:overlay}
-  .cta .geo.grating{background-image:repeating-linear-gradient(90deg,transparent 0 9px,rgba(60,40,0,.10) 9px 10px)}
-  .cta span{position:relative;z-index:6}
+  .cta .geo{opacity:.5;-webkit-mask:linear-gradient(90deg,transparent,#000 40%,#000 60%,transparent);mask:linear-gradient(90deg,transparent,#000 40%,#000 60%,transparent);width:100%}
+  .cta span.t{position:relative;z-index:6}
 
   .chips{display:flex;gap:10px;margin:22px 0 6px}
   .chip{display:flex;align-items:center;padding:9px 15px;border-radius:12px;font-size:13px;font-weight:600;color:#dadaee}
   .chip.on{color:#0c1022;background:linear-gradient(180deg,#e6ebff,#aeb9f0)}
   .chip .mono{font-size:9px;opacity:.6;margin-right:6px;position:relative;z-index:6}
   .chip b{position:relative;z-index:6;font-weight:600}
+  .chip .geo{width:56px}
 
   .foot{margin-top:38px;color:#61668c}
 </style>
 </head>
 <body>
   <div class="mesh"></div>
-  <!-- background geometric illustration: wireframe gem, orbit ring, diffraction rays -->
-  <svg class="geobg" viewBox="0 0 520 520" fill="none">
-    <g stroke="#8ea0d0" stroke-opacity=".30" stroke-width="1" fill="none">
-      <ellipse cx="260" cy="250" rx="215" ry="120" transform="rotate(-16 260 250)"/>
-      <polygon points="260,120 372,232 320,392 200,392 148,232"/>
-      <path d="M260,120 L260,300 M148,232 L260,300 L372,232 M200,392 L260,300 L320,392"/>
-      <path d="M40,470 L200,392 M480,470 L320,392 M260,20 L260,120"/>
+  <!-- BACKGROUND: connected topographic map — contour lines + a node network -->
+  <svg class="topo" viewBox="0 0 500 900" preserveAspectRatio="xMidYMid slice" fill="none">
+    <g stroke="#7f8ec0" stroke-opacity=".22" stroke-width="1" fill="none">
+      <!-- contours (elevation), two 'peaks' -->
+      <ellipse cx="300" cy="210" rx="52" ry="34" transform="rotate(-18 300 210)"/>
+      <ellipse cx="300" cy="210" rx="104" ry="70" transform="rotate(-18 300 210)"/>
+      <ellipse cx="300" cy="210" rx="162" ry="110" transform="rotate(-18 300 210)"/>
+      <ellipse cx="300" cy="210" rx="226" ry="154" transform="rotate(-18 300 210)"/>
+      <ellipse cx="140" cy="620" rx="44" ry="30" transform="rotate(12 140 620)"/>
+      <ellipse cx="140" cy="620" rx="92" ry="64" transform="rotate(12 140 620)"/>
+      <ellipse cx="140" cy="620" rx="150" ry="104" transform="rotate(12 140 620)"/>
     </g>
-    <g stroke-width="1.4" stroke-opacity=".5">
-      <line x1="260" y1="300" x2="450" y2="150" stroke="#ff4d6d"/>
-      <line x1="260" y1="300" x2="470" y2="230" stroke="#ffe14e"/>
-      <line x1="260" y1="300" x2="470" y2="330" stroke="#38d6ff"/>
-      <line x1="260" y1="300" x2="430" y2="430" stroke="#c86bff"/>
+    <!-- connections -->
+    <g stroke-width="1" stroke-opacity=".3">
+      <path d="M60,150 L170,90 L300,140 L430,100" stroke="#9aa8d8"/>
+      <path d="M170,90 L250,250 M300,140 L250,250 M250,250 L400,320 M120,320 L250,250" stroke="#9aa8d8"/>
+      <path d="M250,250 L230,520 L120,650 M230,520 L360,600 L470,470 M400,320 L470,470" stroke="#9aa8d8"/>
+      <path d="M300,140 L250,250" stroke="#22e0ff" stroke-opacity=".5"/>
+      <path d="M250,250 L230,520" stroke="#ff2d78" stroke-opacity=".45"/>
+      <path d="M400,320 L470,470" stroke="#b06bff" stroke-opacity=".45"/>
+      <path d="M170,90 L250,250" stroke="#e9d6a3" stroke-opacity=".45"/>
+    </g>
+    <!-- nodes + tiny glyphs -->
+    <g fill="#0a0c14" stroke="#cfd6e6" stroke-opacity=".55" stroke-width="1">
+      <circle cx="60" cy="150" r="2.6"/><circle cx="430" cy="100" r="2.6"/><circle cx="120" cy="320" r="2.6"/>
+      <circle cx="400" cy="320" r="2.6"/><circle cx="120" cy="650" r="2.6"/><circle cx="360" cy="600" r="2.6"/>
+      <circle cx="470" cy="470" r="2.6"/><circle cx="230" cy="520" r="2.6"/>
+      <polygon points="170,82 178,90 170,98 162,90" /> <!-- diamond node -->
+      <polygon points="300,132 308,146 292,146" />       <!-- triangle node -->
+      <circle cx="250" cy="250" r="5.5" fill="none" stroke="#e9d6a3" stroke-opacity=".8"/>
+      <rect x="226" y="516" width="8" height="8" transform="rotate(45 230 520)"/>
     </g>
   </svg>
   <div class="orb"></div>
@@ -140,23 +137,6 @@
       <div class="top mono"><span>AZADI&nbsp;SHASHN</span><span><span class="dot">●</span> DARK / v1.14</span></div>
 
       <div class="hero">
-        <svg class="prism" viewBox="0 0 250 210" fill="none">
-          <defs>
-            <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#cfe0ff" stop-opacity=".5"/><stop offset="1" stop-color="#8aa0ff" stop-opacity=".12"/>
-            </linearGradient>
-            <filter id="soft"><feGaussianBlur stdDeviation="2.2"/></filter>
-          </defs>
-          <line x1="8" y1="146" x2="120" y2="108" stroke="#fdf6e6" stroke-width="2.4" opacity=".85" filter="url(#soft)"/>
-          <g filter="url(#soft)" stroke-width="2.6" opacity=".9">
-            <line x1="150" y1="114" x2="244" y2="66"  stroke="#ff4d6d"/><line x1="150" y1="116" x2="246" y2="88" stroke="#ff9e3d"/>
-            <line x1="150" y1="118" x2="248" y2="108" stroke="#ffe14e"/><line x1="150" y1="120" x2="248" y2="128" stroke="#4ee39b"/>
-            <line x1="150" y1="122" x2="246" y2="148" stroke="#38d6ff"/><line x1="150" y1="124" x2="242" y2="168" stroke="#7b9bff"/>
-            <line x1="150" y1="126" x2="236" y2="186" stroke="#c86bff"/>
-          </g>
-          <polygon points="130,48 96,146 176,146" fill="url(#glass)" stroke="#e9d6a3" stroke-width="1.6" stroke-opacity=".85"/>
-          <polygon points="130,48 176,146 150,146 130,82" fill="#ffffff" fill-opacity=".06"/>
-        </svg>
         <div class="txt">
           <div class="kick mono">EXH.01 — <b>THE LIGHT</b></div>
           <h1>DIFFRACTION<br>GLASS</h1>
@@ -167,31 +147,66 @@
       <div class="rule"></div>
 
       <div class="glass card">
-        <span class="geo facets"></span>
+        <!-- small connected illustration: node cluster + tiny contour -->
+        <svg class="geo" viewBox="0 0 120 120" fill="none">
+          <g stroke="#e9d6a3" stroke-opacity=".5" stroke-width="1" fill="none">
+            <path d="M78,26 L104,44 L96,80 L62,86 L54,50 Z"/>
+            <path d="M96,18 L104,44 M62,86 L44,104 M104,44 L118,40"/>
+          </g>
+          <g stroke="#7ea0ff" stroke-opacity=".5" stroke-width="1">
+            <line x1="78" y1="26" x2="96" y2="80"/><line x1="54" y1="50" x2="104" y2="44"/>
+          </g>
+          <g fill="#0a0c14" stroke="#cfd6e6" stroke-opacity=".65" stroke-width="1">
+            <circle cx="78" cy="26" r="2.4"/><circle cx="104" cy="44" r="2.4"/><circle cx="96" cy="80" r="2.4"/>
+            <circle cx="62" cy="86" r="2.4"/><polygon points="54,45 59,50 54,55 49,50"/>
+          </g>
+        </svg>
         <div class="idx mono">01 / 04</div>
         <div class="kick mono">ROUND 1 <i>·</i> SURVEILLANCE</div>
         <h3>The city wants eyes on every street</h3>
-        <p>Unrest has the capital on edge. The ministry proposes blanket facial-recognition.
-           Trade privacy for order — or hold the line?</p>
+        <p>Unrest has the capital on edge. The ministry proposes blanket facial-recognition —
+           trade privacy for order, or hold the line?</p>
       </div>
 
       <div class="glass card">
-        <span class="geo rings"></span>
+        <svg class="geo" viewBox="0 0 120 120" fill="none">
+          <g stroke="#22e0ff" stroke-opacity=".4" stroke-width="1" fill="none">
+            <ellipse cx="86" cy="42" rx="14" ry="10"/><ellipse cx="86" cy="42" rx="28" ry="20"/><ellipse cx="86" cy="42" rx="44" ry="32"/>
+          </g>
+          <g stroke="#e9d6a3" stroke-opacity=".45" stroke-width="1"><line x1="86" y1="42" x2="52" y2="96"/><line x1="52" y1="96" x2="98" y2="92"/></g>
+          <g fill="#0a0c14" stroke="#cfd6e6" stroke-opacity=".65" stroke-width="1">
+            <circle cx="86" cy="42" r="2.6"/><circle cx="52" cy="96" r="2.4"/><circle cx="98" cy="92" r="2.4"/>
+          </g>
+        </svg>
         <div class="idx mono">02 / 04</div>
         <div class="kick mono">CONSEQUENCE <i>·</i> MAP</div>
         <h3>Where this path leads</h3>
         <p>Short-term calm, long-term chill on dissent — the cost of power.</p>
       </div>
 
-      <button class="glass cta"><span class="geo grating"></span><span>Begin the game →</span></button>
+      <button class="glass cta">
+        <svg class="geo" viewBox="0 0 300 60" fill="none" preserveAspectRatio="none">
+          <g stroke="#7a5a10" stroke-opacity=".35" stroke-width="1">
+            <path d="M20,44 L70,20 L120,40 L170,16 L220,42 L280,22"/>
+          </g>
+          <g fill="#c09c54" stroke="#7a5a10" stroke-opacity=".4" stroke-width="1">
+            <circle cx="70" cy="20" r="2.2"/><circle cx="120" cy="40" r="2.2"/><circle cx="170" cy="16" r="2.2"/><circle cx="220" cy="42" r="2.2"/>
+          </g>
+        </svg>
+        <span class="t">Begin the game →</span>
+      </button>
 
       <div class="chips">
         <span class="glass chip on"><span class="mono">01</span><b>English</b></span>
-        <span class="glass chip"><span class="geo facets"></span><span class="mono">02</span><b>Hinglish</b></span>
-        <span class="glass chip"><span class="geo rings"></span><span class="mono">03</span><b>हिंदी</b></span>
+        <span class="glass chip">
+          <svg class="geo" viewBox="0 0 56 56" fill="none"><g stroke="#7ea0ff" stroke-opacity=".5" stroke-width="1"><path d="M40,14 L50,26 L44,42"/></g><g fill="#0a0c14" stroke="#cfd6e6" stroke-opacity=".6" stroke-width="1"><circle cx="40" cy="14" r="2"/><circle cx="50" cy="26" r="2"/><circle cx="44" cy="42" r="2"/></g></svg>
+          <span class="mono">02</span><b>Hinglish</b></span>
+        <span class="glass chip">
+          <svg class="geo" viewBox="0 0 56 56" fill="none"><g stroke="#22e0ff" stroke-opacity=".4"><ellipse cx="44" cy="24" rx="8" ry="6" fill="none" stroke-width="1"/><ellipse cx="44" cy="24" rx="16" ry="12" fill="none" stroke-width="1"/></g></svg>
+          <span class="mono">03</span><b>हिंदी</b></span>
       </div>
 
-      <div class="foot mono">◤ CUT-GLASS MATERIAL · GEOMETRY ETCHED · TAP TO CATCH THE LIGHT</div>
+      <div class="foot mono">◤ CUT-GLASS · CONNECTED TOPOGRAPHY · TAP TO CATCH THE LIGHT</div>
     </div>
   </div>
   <div class="grain"></div>
