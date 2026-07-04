@@ -201,22 +201,27 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
             onLink = { showAddChooser = false; showLinkInput = true },
             onGenerateAll = {
                 showAddChooser = false
-                // Give every look-less item a deterministic drawn icon at once — no model,
-                // no network: the inferred form + a calm category palette (first variant).
-                val todo = state.groups.flatMap { it.items }.filter { it.look.isNullOrBlank() }
+                // Backfill every item that is missing EITHER its drawn icon OR its benefit
+                // orbs — no model, no network. Items drawn in an earlier build already have a
+                // look but no benefits, so orbs never appeared; catch those here too. Preserve
+                // an existing look; only infer one when there is none.
+                val todo = state.groups.flatMap { it.items }
+                    .filter { it.look.isNullOrBlank() || it.benefits.isNullOrBlank() }
                 scope.launch {
                     todo.forEach { item ->
-                        val look = lookVariants(item).firstOrNull() ?: return@forEach
-                        // Also derive the benefits (for the icon's orbs) when the item has none.
+                        // Keep the item's existing icon; only draw a fresh one when it has none.
+                        val lookJson = item.look?.ifBlank { null }
+                            ?: lookVariants(item).firstOrNull()?.let { ProductLookCodec.encode(it) }
+                        // Derive the benefits (for the icon's orbs) when the item has none.
                         val benefits = item.benefits?.ifBlank { null }
                             ?: benefitsFor(item).joinToString("\n").ifBlank { null }
-                        vm.saveItem(item.copy(look = ProductLookCodec.encode(look), benefits = benefits))
+                        vm.saveItem(item.copy(look = lookJson, benefits = benefits))
                     }
                 }
                 Toast.makeText(
                     context,
-                    if (todo.isEmpty()) "Every item already has an icon"
-                    else "Drew ${todo.size} icon${if (todo.size == 1) "" else "s"}",
+                    if (todo.isEmpty()) "Every item already has an icon and orbs"
+                    else "Updated ${todo.size} icon${if (todo.size == 1) "" else "s"}",
                     Toast.LENGTH_SHORT,
                 ).show()
             },

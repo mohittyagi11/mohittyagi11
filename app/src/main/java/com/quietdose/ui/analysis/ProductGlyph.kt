@@ -251,8 +251,10 @@ fun ProductGlyph(
         // A subtle backing disc + hairline ring sits the glyph cleanly apart from its
         // plate, so even a calm body never blends into the surface behind it.
         if (showBacking) drawBacking()
-        if (showOrbs && orbs.isNotEmpty()) drawBenefitOrbs(orbs)
         drawGlyph(form, palette, initials, measurer)
+        // Orbs LAST so they ring on TOP of the container silhouette — otherwise the bottle
+        // body paints over them and the benefits never show on the saved glyph.
+        if (showOrbs && orbs.isNotEmpty()) drawBenefitOrbs(orbs)
     }
 }
 
