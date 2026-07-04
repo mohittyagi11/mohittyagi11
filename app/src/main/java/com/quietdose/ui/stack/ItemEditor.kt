@@ -144,7 +144,15 @@ fun ItemEditorSheet(
                 title = name.ifBlank { if (existing == null) "New item" else "Item" },
                 subtitle = type.label(),
                 onVary = { previewTint = nextTint(previewTint) },
-                item = existing,
+                // Reflect the CURRENT pick + typed fields live, so the preview updates the
+                // moment you choose an icon (not only after save).
+                item = (existing ?: ItemEntity(groupId = groupId, name = name)).copy(
+                    name = name.trim(),
+                    brand = brand.trim().ifBlank { null },
+                    category = category.trim().ifBlank { null },
+                    type = type,
+                    look = pickedLook?.let { ProductLookCodec.encode(it) } ?: existing?.look,
+                ),
             )
 
             EditorSection("Name") {

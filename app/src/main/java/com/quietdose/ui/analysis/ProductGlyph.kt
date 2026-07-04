@@ -271,11 +271,17 @@ fun StoredProductGlyph(
     showInitials: Boolean = false,
     showBacking: Boolean = false,
 ) {
-    val sampled = remember(item.look) {
-        ProductLookCodec.decode(item.look)?.bodyArgb?.let { body ->
-            val accent = ProductLookCodec.decode(item.look)?.accentArgb ?: body
+    val look = remember(item.look) { ProductLookCodec.decode(item.look) }
+    val sampled = remember(look) {
+        look?.bodyArgb?.let { body ->
+            val accent = look.accentArgb ?: body
             ImagePalette.PaletteResult(primary = Color(body.toInt()), accent = Color(accent.toInt()))
         }
+    }
+    // Honour the CHOSEN form too (not just the colour) — otherwise picking a jar/tube in the
+    // editor would save but every list still re-infers the shape from the name and looks unchanged.
+    val form = remember(look) {
+        look?.form?.takeIf { it.isNotBlank() }?.let { runCatching { ContainerForm.valueOf(it) }.getOrNull() }
     }
     val benefits = remember(item.benefits) {
         item.benefits?.split('\n')?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
@@ -290,6 +296,7 @@ fun StoredProductGlyph(
         sampled = sampled,
         benefits = benefits,
         showBacking = showBacking,
+        formOverride = form,
     )
 }
 
