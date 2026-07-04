@@ -45,10 +45,13 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.quietdose.brain.analysis.ProductLook
+import com.quietdose.brain.analysis.ProductLookCodec
 import com.quietdose.data.entity.ItemEntity
 import com.quietdose.data.model.DoseUnit
 import com.quietdose.data.model.FrequencyType
 import com.quietdose.data.model.ItemType
+import com.quietdose.ui.analysis.IconPickerRow
 import com.quietdose.ui.analysis.StoredProductGlyph
 import com.quietdose.ui.analysis.hasStoredLook
 import com.quietdose.ui.icons.ItemIcon
@@ -90,6 +93,10 @@ fun ItemEditorSheet(
             if ((existing?.name ?: "").isNotBlank()) seededTint(existing!!.name) else groupTintArgb,
         )
     }
+
+    // The picked drawn "look". null → keep whatever's stored (auto). Editing a saved item
+    // starts on its current look; picking a tile overrides it on save.
+    var pickedLook by remember { mutableStateOf(ProductLookCodec.decode(existing?.look)) }
 
     var doseAmount by remember { mutableStateOf(formatAmount(existing?.doseAmount ?: 1.0)) }
     var doseUnit by remember { mutableStateOf(existing?.doseUnit ?: DoseUnit.UNIT) }
@@ -157,6 +164,21 @@ fun ItemEditorSheet(
                     accent = accent,
                     label = { it.label() },
                     onSelect = { type = it },
+                )
+            }
+
+            EditorSection("Icon") {
+                // A live item built from the current fields so the tiles reflect what's typed.
+                val iconItem = (existing ?: ItemEntity(groupId = groupId, name = "")).copy(
+                    name = name.trim(),
+                    brand = brand.trim().ifBlank { null },
+                    category = category.trim().ifBlank { null },
+                    type = type,
+                )
+                IconPickerRow(
+                    item = iconItem,
+                    selected = pickedLook,
+                    onPick = { pickedLook = it },
                 )
             }
 
@@ -276,6 +298,8 @@ fun ItemEditorSheet(
                         purchaseUrl = purchaseUrl.trim().ifBlank { null },
                         stockCount = if (trackStock) (stockCount.toDoubleOrNull() ?: 0.0) else null,
                         unitsPerDose = unitsPerDose.toDoubleOrNull() ?: 1.0,
+                        // Apply the picked icon; leaving it untouched preserves the existing look.
+                        look = pickedLook?.let { ProductLookCodec.encode(it) } ?: base.look,
                     ),
                 )
             }

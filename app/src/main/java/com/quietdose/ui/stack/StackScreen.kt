@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
@@ -39,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,12 +53,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.quietdose.brain.analysis.ProductLookCodec
 import com.quietdose.data.entity.GroupEntity
 import com.quietdose.data.entity.ItemEntity
+import android.widget.Toast
 import androidx.compose.ui.window.Dialog
 import com.quietdose.ui.add.AddItemActivity
 import com.quietdose.ui.analysis.StoredProductGlyph
 import com.quietdose.ui.analysis.hasStoredLook
+import com.quietdose.ui.analysis.lookVariants
 import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.theme.Accent
 import com.quietdose.ui.theme.GroupStyle
@@ -67,6 +72,7 @@ import com.quietdose.ui.theme.TextLow
 import com.quietdose.ui.theme.TextMid
 import com.quietdose.ui.theme.TintNeutral
 import com.quietdose.util.Format
+import kotlinx.coroutines.launch
 
 /** Which editor sheet, if any, is currently open. */
 private sealed interface Editing {
@@ -83,6 +89,7 @@ private enum class StackMode { Groups, Items }
 fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val expanded = remember { mutableStateMapOf<Long, Boolean>() }
     var editing by remember { mutableStateOf<Editing?>(null) }
     var mode by remember { mutableStateOf(StackMode.Groups) }
@@ -191,6 +198,24 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
             },
             onScan = { showAddChooser = false; context.startActivity(AddItemActivity.scan(context)) },
             onLink = { showAddChooser = false; showLinkInput = true },
+            onGenerateAll = {
+                showAddChooser = false
+                // Give every look-less item a deterministic drawn icon at once — no model,
+                // no network: the inferred form + a calm category palette (first variant).
+                val todo = state.groups.flatMap { it.items }.filter { it.look.isNullOrBlank() }
+                scope.launch {
+                    todo.forEach { item ->
+                        val look = lookVariants(item).firstOrNull() ?: return@forEach
+                        vm.saveItem(item.copy(look = ProductLookCodec.encode(look)))
+                    }
+                }
+                Toast.makeText(
+                    context,
+                    if (todo.isEmpty()) "Every item already has an icon"
+                    else "Drew ${todo.size} icon${if (todo.size == 1) "" else "s"}",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            },
             onDismiss = { showAddChooser = false },
         )
     }
@@ -361,6 +386,7 @@ private fun AddChooserDialog(
     onManual: () -> Unit,
     onScan: () -> Unit,
     onLink: () -> Unit,
+    onGenerateAll: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -378,6 +404,8 @@ private fun AddChooserDialog(
                 ChooserRow(Icons.Rounded.PhotoCamera, "Scan a label", "Photograph front + back", enabled = true, onClick = onScan)
                 Spacer(Modifier.height(8.dp))
                 ChooserRow(Icons.Rounded.Link, "From a link", "Paste an Amazon/Flipkart URL", enabled = true, onClick = onLink)
+                Spacer(Modifier.height(8.dp))
+                ChooserRow(Icons.Rounded.AutoAwesome, "Generate all icons", "Draw an icon for every item without one", enabled = true, onClick = onGenerateAll)
                 Spacer(Modifier.height(12.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButtonGhost("Cancel", color = TextLow, onClick = onDismiss)

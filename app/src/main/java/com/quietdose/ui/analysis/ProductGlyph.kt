@@ -227,9 +227,14 @@ fun ProductGlyph(
      *  hero / analysing screen) — on a small list icon they overlap the body, so it's off
      *  by default. */
     showOrbs: Boolean = false,
+    /** When non-null, draw THIS container form instead of inferring one from the item —
+     *  used by the icon picker so the user can override the guessed silhouette. */
+    formOverride: ContainerForm? = null,
 ) {
     val kind = remember(name, category) { KindDetector.detect(name, category) }
-    val form = remember(name, category, type) { inferContainerForm(name, category, type) }
+    val form = remember(name, category, type, formOverride) {
+        formOverride ?: inferContainerForm(name, category, type)
+    }
     val palette = remember(name, brand, kind, sampled) {
         if (sampled != null) paletteFromSample(sampled.primary, sampled.accent)
         else paletteFor(name, brand, kind)
