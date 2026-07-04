@@ -917,11 +917,16 @@ object StackAnalyzer {
         // Overall score = a safety-weighted roll-up of the very bars shown beneath it — the
         // ring reflects the dimensions, NOT the fill confidence (which pinned unknowns to 25).
         val overallScore = rollUpDimensions(dimensions)
-        // The product's primary benefits, 1–2 words each, from the profile's goodFor.
-        val benefits = profile.goodFor.map { it.trim() }.filter { it.isNotBlank() }.distinct().take(4)
+        // The product's primary benefits, 1–2 words each, PLUS the symbol the brain chose for
+        // each (so the orb conveys meaning). Prefer the brain's benefitOrbs; fall back to
+        // goodFor labels (the UI then derives a symbol by keyword). Never fabricated.
+        val orbs = fill?.benefitOrbs.orEmpty()
+        val benefits = (if (orbs.isNotEmpty()) orbs.map { it.first } else profile.goodFor)
+            .map { it.trim() }.filter { it.isNotBlank() }.distinct().take(4)
+        val benefitSymbols = orbs.associate { it.first.trim().lowercase() to it.second }
 
         val blocks = buildList<ReportBlock> {
-            add(ReportBlock.Verdict(verdictLabel, rationale, overallScore, listOf(profile.kind.label, profile.categoryLabel).filter { it.isNotBlank() }.distinct(), byModel, dimensions, benefits))
+            add(ReportBlock.Verdict(verdictLabel, rationale, overallScore, listOf(profile.kind.label, profile.categoryLabel).filter { it.isNotBlank() }.distinct(), byModel, dimensions, benefits, benefitSymbols))
             buildProfileFacts(profile, product)?.let { add(it) }
 
             // Good for & who it's for.

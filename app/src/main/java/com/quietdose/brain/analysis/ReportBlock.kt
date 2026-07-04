@@ -24,6 +24,10 @@ sealed interface ReportBlock {
         /** The product's primary benefits in 1–2 words each (e.g. "Hydration", "Anti-ageing")
          *  — shown as small tags/orbs around the product glyph. */
         val benefits: List<String> = emptyList(),
+        /** For each benefit label (lowercased) the symbol the BRAIN chose to depict it, from
+         *  the fixed vocabulary (see `BenefitSymbolVocab`). Empty → the UI derives a symbol by
+         *  keyword as a fallback. Lets the orb convey meaning instead of a generic dot. */
+        val benefitSymbols: Map<String, String> = emptyMap(),
     ) : ReportBlock
 
     /** The actives/ingredients read off the label, each with a plain role + grounded note. */

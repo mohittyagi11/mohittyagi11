@@ -72,11 +72,12 @@ class AddItemActivity : ComponentActivity() {
             ?: if (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_VIEW) MODE_LINK else MODE_TYPED
         val url = intent.getStringExtra(EXTRA_URL) ?: sharedUrl(intent)
         val groupId = intent.getLongExtra(EXTRA_GROUP, -1L)
+        val itemId = intent.getLongExtra(EXTRA_ITEM_ID, -1L)
 
         setContent {
             DoseTheme {
                 Box(Modifier.fillMaxSize().background(Ink).statusBarsPadding()) {
-                    AddFlow(mode = mode, url = url, groupId = groupId, onDone = { finishToApp() })
+                    AddFlow(mode = mode, url = url, groupId = groupId, itemId = itemId, onDone = { finishToApp() })
                 }
             }
         }
@@ -113,12 +114,16 @@ class AddItemActivity : ComponentActivity() {
         const val MODE_TYPED = "typed"
         const val MODE_LINK = "link"
         const val MODE_SCAN = "scan"
+        /** Re-open a SAVED item straight into its analysis (verdict, bars, ingredients,
+         *  claims, reviews) — the report isn't persisted, so this recomputes it on-device. */
+        const val MODE_ANALYZE = "analyze"
         /** Set when launched from the external-share trampoline, so [finishToApp] returns
          *  to Dose rather than the sharing app. */
         const val EXTRA_FROM_SHARE = "from_share"
         private const val EXTRA_MODE = "mode"
         private const val EXTRA_URL = "url"
         private const val EXTRA_GROUP = "group"
+        private const val EXTRA_ITEM_ID = "item_id"
 
         fun typed(context: Context, groupId: Long): Intent =
             Intent(context, AddItemActivity::class.java).putExtra(EXTRA_MODE, MODE_TYPED).putExtra(EXTRA_GROUP, groupId)
@@ -131,6 +136,12 @@ class AddItemActivity : ComponentActivity() {
 
         fun scan(context: Context): Intent =
             Intent(context, AddItemActivity::class.java).putExtra(EXTRA_MODE, MODE_SCAN)
+
+        /** Re-analyze a saved item: loads it by id and jumps straight to the analysis screen. */
+        fun analyze(context: Context, itemId: Long): Intent =
+            Intent(context, AddItemActivity::class.java)
+                .putExtra(EXTRA_MODE, MODE_ANALYZE)
+                .putExtra(EXTRA_ITEM_ID, itemId)
     }
 }
 
@@ -149,7 +160,7 @@ private sealed interface AddPhase {
 }
 
 @Composable
-private fun AddFlow(mode: String, url: String?, groupId: Long, onDone: () -> Unit) {
+private fun AddFlow(mode: String, url: String?, groupId: Long, itemId: Long = -1L, onDone: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val repo = remember { ServiceLocator.repository(context) }
     val groups by remember { repo.observeGroups() }
@@ -161,9 +172,18 @@ private fun AddFlow(mode: String, url: String?, groupId: Long, onDone: () -> Uni
             when (mode) {
                 AddItemActivity.MODE_LINK -> AddPhase.Resolving
                 AddItemActivity.MODE_SCAN -> AddPhase.Capturing
+                AddItemActivity.MODE_ANALYZE -> AddPhase.Resolving
                 else -> AddPhase.Confirm(DraftItem(name = ""), AddProvenance.Typed, null, null, groupId.takeIf { it > 0 })
             },
         )
+    }
+
+    if (mode == AddItemActivity.MODE_ANALYZE) {
+        LaunchedEffect(itemId) {
+            val saved = if (itemId > 0) repo.item(itemId) else null
+            phase = if (saved != null) AddPhase.Analyze(saved, null)
+            else AddPhase.Failed("Couldn't find that item.")
+        }
     }
 
     if (mode == AddItemActivity.MODE_LINK) {

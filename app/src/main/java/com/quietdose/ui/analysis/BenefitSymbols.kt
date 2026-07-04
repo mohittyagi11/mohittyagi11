@@ -17,25 +17,63 @@ import kotlin.math.sin
  * derive it from the benefit text the brain produced, choosing from this fixed set of
  * primitives. The same derivation legends the benefit chips, so chip ↔ orb agree.
  */
-enum class BenefitSymbol { DROP, GLOW, SPARKLE, LEAF, SHIELD, TARGET, FIRM, GRAIN, SUN, STAR }
+enum class BenefitSymbol { DROP, GLOW, SPARKLE, LEAF, SHIELD, TARGET, FIRM, GRAIN, SUN, MOON, HEART, STAR }
 
-/** Derive a symbol from a benefit phrase by meaning — keyword buckets over the word. */
+/**
+ * Derive a symbol from a benefit phrase by meaning — keyword buckets over the word. Covers
+ * BOTH skincare/haircare benefits (hydration, brightening, barrier…) AND supplement/wellness
+ * benefits (immunity, energy, sleep, focus, heart, joints…) so a supplement's orbs depict
+ * their benefit rather than all falling through to a generic star.
+ */
 fun benefitSymbolFor(label: String): BenefitSymbol {
     val s = label.lowercase()
     fun has(vararg w: String) = w.any { s.contains(it) }
     return when {
+        // --- topical / skin & hair ---
         has("hydrat", "moist", "dewy", "water", "plump") -> BenefitSymbol.DROP
         has("spf", "uv", "sun protect", "sunscreen") -> BenefitSymbol.SHIELD
-        has("bright", "glow", "radian", "even tone", "luminous", "dull") -> BenefitSymbol.GLOW
-        has("anti-ag", "anti ag", "ageing", "aging", "wrinkle", "fine line", "youth") -> BenefitSymbol.SPARKLE
-        has("sooth", "calm", "cica", "centella", "redness", "sensitiv", "irritat") -> BenefitSymbol.LEAF
-        has("barrier", "repair", "protect", "strengthen", "ceramide") -> BenefitSymbol.SHIELD
-        has("acne", "blemish", "spot", "pore", "blackhead", "breakout", "pimple") -> BenefitSymbol.TARGET
-        has("firm", "lift", "elastic", "bounce", "tighten", "sag") -> BenefitSymbol.FIRM
+        has("bright", "glow", "radian", "even tone", "luminous", "dull", "complexion") -> BenefitSymbol.GLOW
+        has("anti-ag", "anti ag", "ageing", "aging", "wrinkle", "fine line", "youth", "collagen") -> BenefitSymbol.SPARKLE
+        has("acne", "blemish", "spot", "pore", "blackhead", "breakout", "pimple", "sebum", "oil control") -> BenefitSymbol.TARGET
         has("exfoliat", "peel", "smooth", "texture", "resurfac", "renew") -> BenefitSymbol.GRAIN
-        has("nourish", "vitamin", "antioxidant", "energ") -> BenefitSymbol.SUN
+        has("firm", "lift", "elastic", "bounce", "tighten", "sag") -> BenefitSymbol.FIRM
+        // --- wellness / supplement (checked alongside topical; order picks the best fit) ---
+        has("sleep", "rest", "relax", "melatonin", "night", "unwind") -> BenefitSymbol.MOON
+        has("heart", "cardio", "cholesterol", "blood pressure", "circulat", "omega") -> BenefitSymbol.HEART
+        has("immun", "defen", "resist", "cold", "barrier", "repair", "strengthen", "protect", "ceramide") -> BenefitSymbol.SHIELD
+        has("energ", "vital", "fatigue", "stamina", "metabol") -> BenefitSymbol.SUN
+        has("focus", "cognit", "brain", "memory", "mental", "clarity", "concentrat", "nootropic") -> BenefitSymbol.SPARKLE
+        has("sooth", "calm", "cica", "centella", "redness", "sensitiv", "irritat", "stress", "mood", "anxiet", "inflam") -> BenefitSymbol.LEAF
+        has("joint", "bone", "muscle", "strength", "recovery", "mobility", "flex", "hair", "nail") -> BenefitSymbol.FIRM
+        has("gut", "digest", "probiotic", "bloat", "bowel", "microbiome", "detox", "liver", "cleanse") -> BenefitSymbol.DROP
+        has("eye", "vision", "sight", "blood sugar", "glucose") -> BenefitSymbol.TARGET
+        has("nourish", "vitamin", "antioxidant", "mineral", "wellness", "health") -> BenefitSymbol.SUN
         else -> BenefitSymbol.STAR
     }
+}
+
+/**
+ * Persist a benefit as `label` or, when the brain chose a symbol for it, `label|SYMBOL`.
+ * The saved [com.quietdose.data.entity.ItemEntity.benefits] is these, newline-joined, so a
+ * saved glyph can redraw the SAME orb the analysis showed — the brain's choice, not a re-derive.
+ */
+fun encodeBenefit(label: String, symbol: String?): String =
+    if (symbol.isNullOrBlank()) label else "${label.trim()}|${symbol.trim().uppercase()}"
+
+/** The label part of an encoded benefit line (drops any `|SYMBOL` suffix), for display. */
+fun benefitLabelOf(line: String): String = line.substringBefore('|').trim()
+
+/**
+ * Resolve an encoded benefit line to the symbol to draw: the brain's chosen `|SYMBOL` when
+ * present and valid, otherwise the deterministic keyword derivation as a no-model fallback.
+ */
+fun benefitSymbolOf(line: String): BenefitSymbol {
+    val parts = line.split('|', limit = 2)
+    val explicit = parts.getOrNull(1)?.trim()?.uppercase()
+    if (!explicit.isNullOrBlank()) {
+        runCatching { BenefitSymbol.valueOf(explicit) }.getOrNull()?.let { return it }
+    }
+    return benefitSymbolFor(parts[0])
 }
 
 /**
@@ -130,6 +168,24 @@ fun DrawScope.drawBenefitSymbol(symbol: BenefitSymbol, center: Offset, r: Float,
                 Offset(cx + r * 0.5f, cy + r * 0.5f),
             )
             pts.forEach { drawCircle(color, radius = r * 0.2f, center = it) }
+        }
+        BenefitSymbol.MOON -> {
+            // a crescent: a full disc with an offset disc punched out via evenOdd
+            val p = Path().apply {
+                addOval(androidx.compose.ui.geometry.Rect(cx - r, cy - r, cx + r, cy + r))
+                addOval(androidx.compose.ui.geometry.Rect(cx - r * 0.35f, cy - r, cx + r * 1.45f, cy + r))
+                fillType = androidx.compose.ui.graphics.PathFillType.EvenOdd
+            }
+            drawPath(p, color)
+        }
+        BenefitSymbol.HEART -> {
+            val p = Path().apply {
+                moveTo(cx, cy + r * 0.9f)
+                cubicTo(cx - r * 1.3f, cy - r * 0.1f, cx - r * 0.55f, cy - r, cx, cy - r * 0.35f)
+                cubicTo(cx + r * 0.55f, cy - r, cx + r * 1.3f, cy - r * 0.1f, cx, cy + r * 0.9f)
+                close()
+            }
+            drawPath(p, color)
         }
         BenefitSymbol.STAR -> {
             val p = Path()

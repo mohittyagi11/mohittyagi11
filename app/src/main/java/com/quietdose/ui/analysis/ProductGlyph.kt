@@ -242,8 +242,10 @@ fun ProductGlyph(
     val initials = remember(name, brand) { if (showInitials) initialsFor(name, brand) else "" }
     // Cap the orbit to keep it calm; each benefit becomes a small symbol-orb whose
     // colour comes from the shared BenefitOrbit spectrum so orb N == chip N in the legend.
+    // Each benefit may be a plain label OR an encoded "label|SYMBOL" (the brain's chosen
+    // symbol). Resolve to the symbol to draw — brain's choice first, keyword fallback second.
     val orbs = remember(benefits) {
-        benefits.take(6).mapIndexed { i, b -> BenefitOrbit[i % BenefitOrbit.size] to benefitSymbolFor(b) }
+        benefits.take(6).mapIndexed { i, b -> BenefitOrbit[i % BenefitOrbit.size] to benefitSymbolOf(b) }
     }
     val measurer = rememberTextMeasurer()
 

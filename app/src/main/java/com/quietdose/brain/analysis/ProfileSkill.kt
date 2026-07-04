@@ -19,7 +19,37 @@ data class ProfileFill(
     val reviewTakeaway: String,
     val reviewLoved: List<String>,
     val reviewWatch: List<String>,
+    /** The primary benefits the brain chose to surface, each PAIRED with the symbol it
+     *  picked to depict that benefit (label → symbol name from [BenefitSymbolVocab]). The
+     *  brain decides which symbol conveys the meaning; we only hand it the vocabulary. */
+    val benefitOrbs: List<Pair<String, String>> = emptyList(),
 )
+
+/**
+ * The fixed **vocabulary of benefit symbols** the brain may choose from — the "tools" it is
+ * given so a benefit's orb conveys its meaning rather than defaulting to a generic star. The
+ * names MUST match the UI's `BenefitSymbol` enum; the descriptions are what the model reads
+ * when deciding. We never hardcode which symbol a product gets — the brain derives it per
+ * benefit from this palette; a deterministic keyword fallback covers the no-model path only.
+ */
+object BenefitSymbolVocab {
+    /** symbolName → what it depicts, listed to the model so it can choose meaningfully. */
+    val entries: List<Pair<String, String>> = listOf(
+        "DROP" to "hydration, moisture, fluids, digestion/gut",
+        "GLOW" to "brightening, radiance, even tone, shine",
+        "SPARKLE" to "renewal, anti-ageing, cognition/focus, clarity",
+        "LEAF" to "soothing, calm, natural, anti-inflammatory, stress/mood",
+        "SHIELD" to "protection, immunity, barrier, defence, SPF",
+        "TARGET" to "precise concerns: blemishes/acne, pores, eyes/vision, blood sugar",
+        "FIRM" to "strength & structure: firmness, lift, joints, bones, muscle, hair/nails",
+        "GRAIN" to "texture, exfoliation, smoothing, resurfacing",
+        "SUN" to "energy, vitality, metabolism, antioxidants, nourishment",
+        "MOON" to "sleep, rest, relaxation, night",
+        "HEART" to "heart, circulation, cholesterol, cardiovascular",
+        "STAR" to "general — anything that doesn't fit the above",
+    )
+    val names: Set<String> = entries.map { it.first }.toSet()
+}
 
 /**
  * The brain's workflow for profiling ANY item it doesn't have curated facts for.
@@ -93,8 +123,22 @@ object ProfileSkill {
         val reviewTakeaway = json.optString("reviewTakeaway").trim()
         val reviewLoved = json.optJSONArray("reviewLoved").toPhrases()
         val reviewWatch = json.optJSONArray("reviewWatch").toPhrases()
+        val benefitOrbs = parseBenefitOrbs(json.optJSONArray("benefitOrbs"))
 
-        return ProfileFill(profile, rationale, ingredients, claims, reviewTakeaway, reviewLoved, reviewWatch)
+        return ProfileFill(profile, rationale, ingredients, claims, reviewTakeaway, reviewLoved, reviewWatch, benefitOrbs)
+    }
+
+    /** Parse the brain's chosen benefit→symbol pairs, keeping only symbols in the vocabulary. */
+    private fun parseBenefitOrbs(arr: JSONArray?): List<Pair<String, String>> {
+        if (arr == null) return emptyList()
+        val seen = LinkedHashSet<String>()
+        return (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val label = o.optString("label").trim()
+            if (label.isBlank() || !seen.add(label.lowercase())) return@mapNotNull null
+            val sym = o.optString("symbol").trim().uppercase()
+            label to (if (sym in BenefitSymbolVocab.names) sym else "STAR")
+        }.take(4)
     }
 
     private fun parseIngredients(arr: JSONArray?): List<Pair<String, String>> {
@@ -154,6 +198,10 @@ object ProfileSkill {
         appendLine("  reviewTakeaway: ONE short calm sentence (max 22 words) summarising what people report from the web snippets. \"\" if nothing to go on.")
         appendLine("  reviewLoved: array of SHORT keyword phrases (2-4 words) for recurring praise — e.g. \"absorbs fast\". Empty if none.")
         appendLine("  reviewWatch: array of SHORT keyword phrases for recurring complaints / watch-outs — e.g. \"pricey\". Empty if none.")
+        appendLine("  benefitOrbs: array (at most 4) of {label, symbol} for the product's PRIMARY benefits — the ones worth a badge on its icon.")
+        appendLine("    label: 1-2 words (e.g. \"Hydration\", \"Immunity\", \"Sleep\"). symbol: pick the ONE from this palette that best CONVEYS that benefit:")
+        BenefitSymbolVocab.entries.forEach { (sym, meaning) -> appendLine("      $sym — $meaning") }
+        appendLine("    Choose the symbol by meaning, not by keyword; use STAR only when none fit. [] if the product has no clear benefit.")
         appendLine()
         appendLine("Use ONLY the material below. Plain words, no jargon. Label marketing as claims. Do NOT invent certifications or fake numbers.")
         appendLine()

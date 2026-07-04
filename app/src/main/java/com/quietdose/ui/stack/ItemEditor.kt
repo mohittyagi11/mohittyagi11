@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.DeleteOutline
+import com.quietdose.ui.add.AddItemActivity
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -79,6 +80,7 @@ fun ItemEditorSheet(
     onDelete: ((ItemEntity) -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     var name by remember { mutableStateOf(existing?.name ?: "") }
     var brand by remember { mutableStateOf(existing?.brand ?: "") }
@@ -310,6 +312,23 @@ fun ItemEditorSheet(
                         look = pickedLook?.let { ProductLookCodec.encode(it) } ?: base.look,
                     ),
                 )
+            }
+
+            // Re-open the full on-device analysis (verdict, bars, ingredients, claims, reviews)
+            // for a SAVED item — and refresh its icon orbs with the brain's chosen symbols.
+            if (existing != null) {
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    TextButtonGhost("Analyze", color = accent) {
+                        context.startActivity(AddItemActivity.analyze(context, existing.id))
+                    }
+                }
             }
 
             if (existing != null && onDelete != null) {

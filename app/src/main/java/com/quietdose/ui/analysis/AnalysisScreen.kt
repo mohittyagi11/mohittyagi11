@@ -392,6 +392,11 @@ private fun ReportStep(
     val benefits = remember(report) {
         report.blocks.firstNotNullOfOrNull { (it as? ReportBlock.Verdict)?.benefits }.orEmpty()
     }
+    // The brain's chosen symbol per benefit (label→symbol), so the saved glyph keeps the
+    // SAME orb the analysis showed rather than re-deriving one. Empty → keyword fallback.
+    val benefitSymbols = remember(report) {
+        report.blocks.firstNotNullOfOrNull { (it as? ReportBlock.Verdict)?.benefitSymbols }.orEmpty()
+    }
     // Editable config, pre-filled from the recommendation.
     var groupId by remember { mutableStateOf(rec.groupId ?: item.groupId) }
     var doseText by remember { mutableStateOf(trimDose(rec.doseAmount)) }
@@ -574,7 +579,11 @@ private fun ReportStep(
                         note = finalNote,
                         ingredients = IngredientCodec.encode(report.ingredients) ?: item.ingredients,
                         look = storedLook,
-                        benefits = benefits.joinToString("\n").ifBlank { null },
+                        // Persist each benefit WITH the brain's chosen symbol ("label|SYMBOL"),
+                        // so the stack orb matches what the analysis drew.
+                        benefits = benefits
+                            .joinToString("\n") { encodeBenefit(it, benefitSymbols[it.lowercase()]) }
+                            .ifBlank { null },
                     ),
                 )
             }

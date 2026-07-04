@@ -27,6 +27,7 @@ class DoseRepository(
     fun observeTakenToday(epochDay: Long): Flow<List<Long>> = intakeDao.observeTakenItemIds(epochDay)
 
     suspend fun group(id: Long): GroupEntity? = groupDao.byId(id)
+    suspend fun item(id: Long): ItemEntity? = itemDao.byId(id)
     suspend fun itemsFor(groupId: Long): List<ItemEntity> = itemDao.forGroup(groupId)
 
     /** Confirm a single item, honouring day-rollover and decrementing stock. */
