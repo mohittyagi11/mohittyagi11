@@ -89,6 +89,7 @@ import com.quietdose.brain.analysis.ProductLook
 import com.quietdose.brain.analysis.ProductLookCodec
 import com.quietdose.brain.analysis.ProductSignals
 import com.quietdose.brain.analysis.ReportBlock
+import com.quietdose.brain.analysis.ReportCodec
 import com.quietdose.brain.analysis.Severity
 import com.quietdose.brain.analysis.SourceKind
 import com.quietdose.brain.analysis.StackAnalyzer
@@ -152,12 +153,15 @@ fun AnalysisScreen(
     val groups by remember { repo.observeGroups() }
         .collectAsStateWithLifecycle(initialValue = emptyList<GroupEntity>())
 
-    var phase by remember { mutableStateOf(Phase.INTENT) }
+    // A finished analysis is PERSISTED on the item — restore it so re-opening is instant
+    // (no recompute). "Re-analyze" clears it back to the intent step for a fresh run.
+    val savedReport = remember(item.analysis) { ReportCodec.decode(item.analysis) }
+    var report by remember { mutableStateOf(savedReport) }
+    var phase by remember { mutableStateOf(if (savedReport != null) Phase.REPORT else Phase.INTENT) }
     var source by remember { mutableStateOf<SourceKind?>(null) }
     var sourceName by remember { mutableStateOf("") }
     var goal by remember { mutableStateOf("") }
     var concern by remember { mutableStateOf("") }
-    var report by remember { mutableStateOf<AnalysisReport?>(null) }
     val thoughts = remember { mutableStateListOf<AnalysisProgress>() }
     val tier = remember { ModelCapability.tier(context) }
 
@@ -205,7 +209,14 @@ fun AnalysisScreen(
                 Phase.REPORT -> {
                     val r = report
                     if (r == null) ErrorStep(item, onAdd, onDismiss)
-                    else ReportStep(item = item, report = r, groups = groups, sampled = sampled, onAdd = onAdd, onDismiss = onDismiss)
+                    else ReportStep(
+                        item = item, report = r, groups = groups, sampled = sampled,
+                        onAdd = onAdd, onDismiss = onDismiss,
+                        onReanalyze = {
+                            report = null; source = null; sourceName = ""; goal = ""; concern = ""
+                            phase = Phase.INTENT
+                        },
+                    )
                 }
             }
         }
@@ -385,6 +396,7 @@ private fun ReportStep(
     sampled: ImagePalette.PaletteResult? = null,
     onAdd: (ItemEntity) -> Unit,
     onDismiss: () -> Unit,
+    onReanalyze: () -> Unit = {},
 ) {
     val rec = report.recommendation
     // The product's primary benefits live on the Verdict block — they legend the
@@ -584,11 +596,17 @@ private fun ReportStep(
                         benefits = benefits
                             .joinToString("\n") { encodeBenefit(it, benefitSymbols[it.lowercase()]) }
                             .ifBlank { null },
+                        // Persist the finished report so re-opening the item is instant.
+                        analysis = ReportCodec.encode(report) ?: item.analysis,
                     ),
                 )
             }
             Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+            ) {
+                TextButtonGhost("Re-analyze", color = TextMid, onClick = onReanalyze)
                 TextButtonGhost("Not now", color = TextLow, onClick = onDismiss)
             }
         }

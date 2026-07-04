@@ -20,7 +20,7 @@ import com.quietdose.data.entity.ItemEntity
         ItemEntity::class,
         IntakeLogEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -49,13 +49,21 @@ abstract class DoseDatabase : RoomDatabase() {
             }
         }
 
+        /** v3 → v4: add the per-item `analysis` column (nullable TEXT) so a finished analysis
+         *  report is persisted and re-opened instantly. Additive only — all data preserved. */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN analysis TEXT")
+            }
+        }
+
         fun get(context: Context): DoseDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     DoseDatabase::class.java,
                     "dose.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigration() // last resort only; the migrations above are the real path
                     .build().also { INSTANCE = it }
             }

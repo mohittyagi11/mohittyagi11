@@ -73,4 +73,9 @@ data class ItemEntity(
     /** The product's primary benefits, ""-joined (e.g. "HydrationAnti-ageing"),
      *  so the stack glyph can show the same benefit orbs. null/empty = none. */
     val benefits: String? = null,
+
+    /** The finished analysis report as a JSON blob (see [com.quietdose.brain.analysis.ReportCodec]) —
+     *  persisted once analysis completes so re-opening the item shows it INSTANTLY instead of
+     *  recomputing. null = never analysed (or pre-migration). */
+    val analysis: String? = null,
 )
