@@ -61,6 +61,7 @@ import androidx.compose.ui.window.Dialog
 import com.quietdose.ui.add.AddItemActivity
 import com.quietdose.ui.analysis.StoredProductGlyph
 import com.quietdose.ui.analysis.hasStoredLook
+import com.quietdose.ui.analysis.benefitsFor
 import com.quietdose.ui.analysis.lookVariants
 import com.quietdose.ui.icons.ItemIcon
 import com.quietdose.ui.theme.Accent
@@ -206,7 +207,10 @@ fun StackScreen(modifier: Modifier = Modifier, vm: StackViewModel = viewModel())
                 scope.launch {
                     todo.forEach { item ->
                         val look = lookVariants(item).firstOrNull() ?: return@forEach
-                        vm.saveItem(item.copy(look = ProductLookCodec.encode(look)))
+                        // Also derive the benefits (for the icon's orbs) when the item has none.
+                        val benefits = item.benefits?.ifBlank { null }
+                            ?: benefitsFor(item).joinToString("\n").ifBlank { null }
+                        vm.saveItem(item.copy(look = ProductLookCodec.encode(look), benefits = benefits))
                     }
                 }
                 Toast.makeText(

@@ -44,6 +44,33 @@ import com.quietdose.ui.theme.Surface2
 /** A stored ARGB [Long] (unsigned) for a [Color], round-tripping via [Color.toArgb]/[Color]. */
 private fun Color.toArgbLong(): Long = toArgb().toLong() and 0xFFFFFFFFL
 
+/**
+ * The item's primary benefits (for the icon's benefit orbs) — honest and DETERMINISTIC, no
+ * model. Skincare/haircare: inferred from the product name's keywords; supplements/food and
+ * anything else: pulled from the curated catalogs. Empty when nothing is recognised. Used by
+ * the "Generate all icons" batch so the drawn orbs have real data to depict.
+ */
+fun benefitsFor(item: ItemEntity): List<String> {
+    val kind = KindDetector.detect(item.name, item.category)
+    val lower = item.name.lowercase()
+    if (!kind.isIngested && kind != ItemKind.DEVICE) {
+        val out = buildList {
+            if (Regex("anti.?ag|ageing|aging|wrinkle|retino").containsMatchIn(lower)) add("Anti-ageing")
+            if (Regex("hydrat|moistur|hyaluronic|snail|mucin|essence").containsMatchIn(lower)) add("Hydration")
+            if (Regex("brighten|glow|radian|vitamin c").containsMatchIn(lower)) add("Brightening")
+            if (Regex("acne|blemish|spot|salicylic|\\bbha\\b").containsMatchIn(lower)) add("Blemish control")
+            if (Regex("barrier|repair|ceramide").containsMatchIn(lower)) add("Barrier repair")
+            if (Regex("sooth|cica|centella|calm|redness").containsMatchIn(lower)) add("Soothing")
+        }
+        if (out.isNotEmpty()) return out.take(4)
+    }
+    com.quietdose.brain.analysis.IngredientCatalog.match(item.name)?.benefits
+        ?.takeIf { it.isNotEmpty() }?.let { return it.take(4) }
+    com.quietdose.brain.analysis.CuratedProfiles.match(item.name, kind)?.goodFor
+        ?.takeIf { it.isNotEmpty() }?.let { return it.take(4) }
+    return emptyList()
+}
+
 /** The calm category base colour for an item's kind — the deterministic palette fallback. */
 private fun categoryColourFor(kind: ItemKind): Color = when (kind) {
     ItemKind.SKINCARE -> GlyphSkincare

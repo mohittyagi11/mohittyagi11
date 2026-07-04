@@ -268,8 +268,9 @@ fun ItemEntity.hasStoredLook(): Boolean = !look.isNullOrBlank()
 fun StoredProductGlyph(
     item: ItemEntity,
     modifier: Modifier = Modifier,
-    showInitials: Boolean = false,
+    showInitials: Boolean = true,
     showBacking: Boolean = false,
+    showOrbs: Boolean = true,
 ) {
     val look = remember(item.look) { ProductLookCodec.decode(item.look) }
     val sampled = remember(look) {
@@ -296,6 +297,7 @@ fun StoredProductGlyph(
         sampled = sampled,
         benefits = benefits,
         showBacking = showBacking,
+        showOrbs = showOrbs,
         formOverride = form,
     )
 }
@@ -321,23 +323,27 @@ fun benefitColor(index: Int): Color = BenefitOrbit[index % BenefitOrbit.size]
  */
 private fun DrawScope.drawBenefitOrbs(orbs: List<Pair<Color, BenefitSymbol>>) {
     if (orbs.isEmpty()) return
+    // Cap at 4 and seat them in the CORNERS (offset from the vertical, where the bottle
+    // stands) so they never overlap the body/cap — the earlier bug was full-size orbs
+    // starting right over the cap. Smaller badges keep it clean even on a 34dp list icon.
+    val list = orbs.take(4)
     val s = size.minDimension
     val cx = size.width / 2f
     val cy = size.height / 2f
-    val ringR = s * 0.45f          // just inside the canvas edge
-    val orbR = s * 0.085f          // badge radius — big enough to seat a symbol
-    val symR = orbR * 0.6f
-    val start = -90.0              // first orb at top
-    val step = 360.0 / orbs.size
-    orbs.forEachIndexed { i, (c, sym) ->
+    val ringR = s * 0.44f
+    val orbR = s * 0.075f
+    val symR = orbR * 0.62f
+    val start = -45.0              // corners, not the top (clear of the cap)
+    val step = 360.0 / list.size
+    list.forEachIndexed { i, (c, sym) ->
         val ang = Math.toRadians(start + i * step)
         val x = cx + (ringR * cos(ang)).toFloat()
         val y = cy + (ringR * sin(ang)).toFloat()
         val center = Offset(x, y)
         // soft halo, then a dark seat so the badge sits cleanly on the dark surface
-        drawCircle(c.copy(alpha = 0.16f), radius = orbR * 1.7f, center = center)
-        drawCircle(Ink.copy(alpha = 0.85f), radius = orbR, center = center)
-        drawCircle(c.copy(alpha = 0.28f), radius = orbR, center = center, style = Stroke(width = s * 0.012f))
+        drawCircle(c.copy(alpha = 0.16f), radius = orbR * 1.5f, center = center)
+        drawCircle(Ink.copy(alpha = 0.9f), radius = orbR, center = center)
+        drawCircle(c.copy(alpha = 0.30f), radius = orbR, center = center, style = Stroke(width = s * 0.012f))
         drawBenefitSymbol(sym, center, symR, c.copy(alpha = 0.95f))
     }
 }
