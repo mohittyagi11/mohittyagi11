@@ -181,6 +181,7 @@ fun AnalysisScreen(
                     item.doseAmount, item.doseUnit,
                     goal.ifBlank { null }, source, sourceName.ifBlank { null }, concern.ifBlank { null },
                     product,
+                    brand = item.brand,
                     onProgress = { thoughts.add(it) },
                 )
             }.getOrNull()
@@ -409,11 +410,14 @@ private fun ReportStep(
     val benefitSymbols = remember(report) {
         report.blocks.firstNotNullOfOrNull { (it as? ReportBlock.Verdict)?.benefitSymbols }.orEmpty()
     }
-    // Editable config, pre-filled from the recommendation.
-    var groupId by remember { mutableStateOf(rec.groupId ?: item.groupId) }
-    var doseText by remember { mutableStateOf(trimDose(rec.doseAmount)) }
-    var doseUnit by remember { mutableStateOf(rec.doseUnit) }
-    var flags by remember { mutableIntStateOf(rec.flags) }
+    // Editable config. For a SAVED item (re-analysis) start from the item's OWN current
+    // config so re-analysing never silently reverts the dose/group/timing you set; only a
+    // brand-new add is pre-filled from the fresh recommendation.
+    val existing = item.id > 0
+    var groupId by remember { mutableStateOf(if (existing) item.groupId else (rec.groupId ?: item.groupId)) }
+    var doseText by remember { mutableStateOf(trimDose(if (existing) item.doseAmount else rec.doseAmount)) }
+    var doseUnit by remember { mutableStateOf(if (existing) item.doseUnit else rec.doseUnit) }
+    var flags by remember { mutableIntStateOf(if (existing) item.flags else rec.flags) }
 
     // A toner/serum/device must not be judged like a pill: applied items get
     // routine placement (AM / PM / both), not fasted/with-food supplement flags.
@@ -433,6 +437,46 @@ private fun ReportStep(
     // sets it (title + body) to open the reusable DetailSheet; null = closed.
     var detail by remember { mutableStateOf<DetailContent?>(null) }
     val onDetail: (String, String) -> Unit = { title, body -> detail = DetailContent(title, body) }
+    // Saving an already-saved item confirms the changes first (a new add commits directly).
+    var showConfirm by remember { mutableStateOf(false) }
+
+    // Assemble the item to persist from the current, possibly-edited config. Reused by both
+    // the direct add and the confirm dialog so the two paths can never drift apart.
+    val buildConfigured: () -> ItemEntity = {
+        val matched = report.matchedIngredientKey?.let { IngredientCatalog.byKey(it) }
+        val finalNote = if (ingested) {
+            item.note
+        } else {
+            listOf("Use: ${routine.label.lowercase()}", item.note?.trim().orEmpty())
+                .filter { it.isNotBlank() }
+                .joinToString(" · ")
+                .ifBlank { null }
+        }
+        val storedLook = ProductLookCodec.encode(
+            ProductLook(
+                form = inferContainerForm(item.name, item.category, item.type).name,
+                bodyArgb = sampled?.primary?.toArgb()?.toLong(),
+                accentArgb = sampled?.accent?.toArgb()?.toLong(),
+            ),
+        )
+        item.copy(
+            groupId = groupId,
+            category = item.category?.ifBlank { null } ?: matched?.category,
+            doseAmount = doseText.toDoubleOrNull() ?: item.doseAmount,
+            doseUnit = doseUnit,
+            flags = if (ingested) flags else item.flags,
+            note = finalNote,
+            ingredients = IngredientCodec.encode(report.ingredients) ?: item.ingredients,
+            look = storedLook,
+            // Persist each benefit WITH the brain's chosen symbol ("label|SYMBOL"),
+            // so the stack orb matches what the analysis drew.
+            benefits = benefits
+                .joinToString("\n") { encodeBenefit(it, benefitSymbols[it.lowercase()]) }
+                .ifBlank { null },
+            // Persist the finished report so re-opening the item is instant.
+            analysis = ReportCodec.encode(report) ?: item.analysis,
+        )
+    }
 
     Column(Modifier.fillMaxSize()) {
         Column(
@@ -557,49 +601,14 @@ private fun ReportStep(
         }
 
         BottomBar {
-            FilledButton(label = "Add to checklist", accent = Accent, modifier = Modifier.fillMaxWidth()) {
-                // Fill in what the catalog knows but the source omitted — category
-                // (and the canonical name) so brand/category aren't lost on a link add.
-                val matched = report.matchedIngredientKey?.let { IngredientCatalog.byKey(it) }
-                // Applied items have no timing column — fold the chosen routine slot
-                // into the note in plain words; supplements keep their intake flags.
-                val finalNote = if (ingested) {
-                    item.note
-                } else {
-                    listOf("Use: ${routine.label.lowercase()}", item.note?.trim().orEmpty())
-                        .filter { it.isNotBlank() }
-                        .joinToString(" · ")
-                        .ifBlank { null }
-                }
-                // Capture the drawn look (form + sampled packaging palette) and the primary
-                // benefits so the saved item keeps its glyph + orbs in the stack — redrawn
-                // offline from these, no re-sampling needed.
-                val storedLook = ProductLookCodec.encode(
-                    ProductLook(
-                        form = inferContainerForm(item.name, item.category, item.type).name,
-                        bodyArgb = sampled?.primary?.toArgb()?.toLong(),
-                        accentArgb = sampled?.accent?.toArgb()?.toLong(),
-                    ),
-                )
-                onAdd(
-                    item.copy(
-                        groupId = groupId,
-                        category = item.category?.ifBlank { null } ?: matched?.category,
-                        doseAmount = doseText.toDoubleOrNull() ?: item.doseAmount,
-                        doseUnit = doseUnit,
-                        flags = if (ingested) flags else item.flags,
-                        note = finalNote,
-                        ingredients = IngredientCodec.encode(report.ingredients) ?: item.ingredients,
-                        look = storedLook,
-                        // Persist each benefit WITH the brain's chosen symbol ("label|SYMBOL"),
-                        // so the stack orb matches what the analysis drew.
-                        benefits = benefits
-                            .joinToString("\n") { encodeBenefit(it, benefitSymbols[it.lowercase()]) }
-                            .ifBlank { null },
-                        // Persist the finished report so re-opening the item is instant.
-                        analysis = ReportCodec.encode(report) ?: item.analysis,
-                    ),
-                )
+            FilledButton(
+                label = if (existing) "Save changes" else "Add to checklist",
+                accent = Accent,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                // A saved item confirms first (so re-analysis can't silently change its
+                // config); a brand-new add commits straight away.
+                if (existing) showConfirm = true else onAdd(buildConfigured())
             }
             Spacer(Modifier.height(6.dp))
             Row(
@@ -615,6 +624,22 @@ private fun ReportStep(
     // The single explainer sheet for the whole report — opened by any tapped
     // score bar, ingredient or claim, dismissed back to null.
     detail?.let { DetailSheet(it.title, it.body, onDismiss = { detail = null }) }
+
+    // Confirm before applying changes to an already-saved item.
+    if (showConfirm) {
+        val groupName = groups.firstOrNull { it.id == groupId }?.name
+        val rows = buildList {
+            add("Dose" to "$doseText ${doseUnit.name.lowercase()}")
+            groupName?.let { add("Group" to it) }
+            if (!ingested) add("Use" to routine.label)
+        }
+        ConfirmSaveSheet(
+            itemName = item.name,
+            rows = rows,
+            onConfirm = { showConfirm = false; onAdd(buildConfigured()) },
+            onDismiss = { showConfirm = false },
+        )
+    }
 }
 
 /** A tapped drill-down's payload: a short title and the grounded body it explains. */
@@ -650,6 +675,53 @@ private fun DetailSheet(title: String, body: String, onDismiss: () -> Unit) {
                 style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 25.sp),
                 color = TextMid,
             )
+        }
+    }
+}
+
+/**
+ * Confirm-before-save sheet for an already-saved item — shows exactly what will be written
+ * (dose, group, use), so re-analysing or editing never changes an item's setup without a
+ * deliberate tap. Mirrors the [DetailSheet] surface with a Confirm / Cancel pair.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConfirmSaveSheet(
+    itemName: String,
+    rows: List<Pair<String, String>>,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Surface1,
+        dragHandle = {
+            Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.width(36.dp).height(4.dp).clip(CircleShape).background(Surface2))
+            }
+        },
+    ) {
+        Column(
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 28.dp),
+        ) {
+            Text("Save changes to ${itemName.ifBlank { "this item" }}?", style = MaterialTheme.typography.titleLarge, color = TextHigh)
+            Spacer(Modifier.height(4.dp))
+            Text("This updates the item with:", style = MaterialTheme.typography.bodyMedium, color = TextMid)
+            Spacer(Modifier.height(14.dp))
+            rows.forEach { (k, v) ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                    Text(k, style = MaterialTheme.typography.bodyMedium, color = TextLow, modifier = Modifier.width(72.dp))
+                    Text(v, style = MaterialTheme.typography.bodyMedium, color = TextHigh)
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            FilledButton(label = "Save changes", accent = Accent, modifier = Modifier.fillMaxWidth(), onClick = onConfirm)
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                TextButtonGhost("Cancel", color = TextLow, onClick = onDismiss)
+            }
         }
     }
 }

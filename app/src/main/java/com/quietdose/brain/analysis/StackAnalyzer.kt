@@ -35,9 +35,14 @@ object StackAnalyzer {
         source: SourceKind?,
         sourceName: String?,
         concern: String?,
-        product: ProductSignals? = null,
+        productIn: ProductSignals? = null,
+        brand: String? = null,
         onProgress: ((AnalysisProgress) -> Unit)? = null,
     ): AnalysisReport {
+        // When there's no rich product signal (a typed/saved item, not a scanned link) but the
+        // item carries a BRAND, still analyse the SPECIFIC branded product: synthesise a minimal
+        // signal so the web search + fill anchor to "<brand> <name>", not the ingredient in general.
+        val product = productIn ?: brand?.trim()?.takeIf { it.isNotBlank() }?.let { ProductSignals(brand = it) }
         fun emit(label: String, commentary: String, mood: Mood, fraction: Float) =
             onProgress?.invoke(AnalysisProgress(label, commentary, mood, fraction))
         emit("Settling in", "Taking a first look at ${name.ifBlank { "this" }}…", Mood.CALM, 0.04f)
@@ -151,7 +156,7 @@ object StackAnalyzer {
         // The actual raw material the model reasons over — the product's own text
         // (label/description or OCR) plus what the web says. This is what was missing:
         // the SLM was fed pre-digested bullets, not the real source.
-        val sourceMaterial = buildSourceMaterial(product?.ingredientsText, webResults)
+        val sourceMaterial = buildSourceMaterial(product?.ingredientsText, webResults, brand = product?.brand, name = name)
 
         // Brand reputation — the model's own hedged read, clearly labelled (opt-in).
         val brandTake: String? = if (engineUp && !product?.brand.isNullOrBlank()) {
@@ -812,7 +817,7 @@ object StackAnalyzer {
         emit("Settling in", "Taking a first look at ${name.ifBlank { "this" }}…", Mood.CALM, 0.06f)
         emit("Listening to the web", "Seeing what people actually say about it…", Mood.CURIOUS, 0.2f)
         val webResults = runCatching { researchWeb(name, product?.brand) }.getOrDefault(emptyList())
-        val sourceMaterial = buildSourceMaterial(product?.ingredientsText, webResults, product?.directionsText)
+        val sourceMaterial = buildSourceMaterial(product?.ingredientsText, webResults, product?.directionsText, product?.brand, name)
 
         emit("Working out what it is", "Reading it as ${kind.label.lowercase()}, not a pill…", Mood.CALM, 0.45f)
         val routineNames = currentStack.map { it.name }
@@ -1123,7 +1128,18 @@ object StackAnalyzer {
      *  section and web reviews into the raw material the model reasons over — capped to
      *  stay prompt-friendly. Directions are surfaced so the model can derive a per-use
      *  amount and routine placement instead of misreading the pack volume. */
-    private fun buildSourceMaterial(productText: String?, web: List<WebSearch.WebResult>, directions: String? = null): String = buildString {
+    private fun buildSourceMaterial(
+        productText: String?,
+        web: List<WebSearch.WebResult>,
+        directions: String? = null,
+        brand: String? = null,
+        name: String? = null,
+    ): String = buildString {
+        val identity = listOfNotNull(brand?.takeIf { it.isNotBlank() }, name?.takeIf { it.isNotBlank() }).joinToString(" ")
+        if (identity.isNotBlank()) {
+            appendLine("PRODUCT: $identity — analyse THIS specific product (its own formulation, brand and what people report about it), not the ingredient in general. Only generalise if the material below doesn't identify the specific product.")
+            appendLine()
+        }
         productText?.takeIf { it.isNotBlank() }?.let {
             appendLine("PRODUCT TEXT (its own label/description — marketing, treat as claims):")
             appendLine(it.take(2500))
