@@ -38,7 +38,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.ui.components.Avatar
-import com.azadishashn.app.ui.components.FlowBackground
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.SealDivider
@@ -56,7 +55,6 @@ fun SetupScreen(vm: GameViewModel) {
         ?: players.firstOrNull()?.id
 
     Box(Modifier.fillMaxSize()) {
-        FlowBackground(Modifier.fillMaxSize())
         SealWatermark(
             modifier = Modifier
                 .align(Alignment.TopCenter)

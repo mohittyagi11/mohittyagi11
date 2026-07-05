@@ -41,8 +41,9 @@ fun AzadiScaffold(
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    // The animated field is hoisted to the app root (AzadiApp); this scaffold is
+    // transparent so that single field shows through every screen.
     Box(Modifier.fillMaxSize()) {
-        FlowBackground(Modifier.fillMaxSize())
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {

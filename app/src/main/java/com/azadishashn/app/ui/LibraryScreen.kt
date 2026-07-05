@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import com.azadishashn.app.data.GameSummary
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.ui.components.Avatar
-import com.azadishashn.app.ui.components.FlowBackground
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.SectionCard
@@ -54,7 +53,6 @@ fun LibraryScreen(vm: GameViewModel) {
     fun reload() { summaries = vm.librarySummaries() }
 
     Box(Modifier.fillMaxSize()) {
-        FlowBackground(Modifier.fillMaxSize())
         Column(
             modifier = Modifier
                 .fillMaxSize()
