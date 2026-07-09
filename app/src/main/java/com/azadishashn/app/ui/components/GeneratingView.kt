@@ -48,7 +48,12 @@ import kotlinx.coroutines.delay
  * wait — narrate what's happening, under a kicker and live ideology-colour dots.
  */
 @Composable
-fun GeneratingView(kind: String?, context: String, modifier: Modifier = Modifier) {
+fun GeneratingView(
+    kind: String?,
+    context: String,
+    liveHint: String? = null,
+    modifier: Modifier = Modifier,
+) {
     val pool = remember(kind, context) { captionsFor(kind, context) }
 
     // Walk a shuffled order so no line repeats until the pool is exhausted; on
@@ -100,6 +105,26 @@ fun GeneratingView(kind: String?, context: String, modifier: Modifier = Modifier
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
             )
+        }
+        // The round taking shape live — streamed title (then situation) as Claude types.
+        if (!liveHint.isNullOrBlank()) {
+            Spacer(Modifier.height(16.dp))
+            val lines = liveHint.split("\n", limit = 2)
+            Text(
+                "“${lines.first()}”",
+                style = MaterialTheme.typography.titleMedium,
+                color = GoldBright,
+                textAlign = TextAlign.Center,
+            )
+            lines.getOrNull(1)?.takeIf { it.isNotBlank() }?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "$it…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
         Spacer(Modifier.height(20.dp))
         BreathingDots()

@@ -153,6 +153,7 @@ data class DossierEntry(
     val roundTitle: String,
     val ideology: String,       // the ideology the argument served
     val stance: String,         // one-line record of the position taken
+    val strength: Int = 0,      // the verdict's 1..10 (for end-of-game awards)
 )
 
 /** A skeleton surfacing from a player's own record, demanding a public response. */

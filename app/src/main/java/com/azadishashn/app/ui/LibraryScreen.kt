@@ -77,6 +77,7 @@ fun LibraryScreen(vm: GameViewModel) {
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(Modifier.height(Dim.tight))
+                val prints = remember(summaries) { vm.fingerprints() }
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(Dim.itemGap),
@@ -88,6 +89,42 @@ fun LibraryScreen(vm: GameViewModel) {
                             onRename = { vm.renameGame(g.id, it); reload() },
                             onDelete = { vm.deleteGame(g.id); reload() },
                         )
+                    }
+                    // Political fingerprints — what each player's arguments ACTUALLY
+                    // served, across every game on this device.
+                    if (prints.isNotEmpty()) {
+                        item(key = "fingerprints") {
+                            SectionCard {
+                                Text(
+                                    "POLITICAL FINGERPRINTS",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                prints.entries.sortedByDescending { it.value.values.sum() }.forEach { (name, counts) ->
+                                    val total = counts.values.sum().coerceAtLeast(1)
+                                    val top = counts.maxByOrNull { it.value }
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        if (top != null) {
+                                            Text(
+                                                "${top.value * 100 / total}% ${top.key} · $total stands",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

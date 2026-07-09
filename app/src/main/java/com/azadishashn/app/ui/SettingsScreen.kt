@@ -41,6 +41,10 @@ fun SettingsScreen(vm: GameViewModel) {
     var context by remember { mutableStateOf(vm.context) }
     var language by remember { mutableStateOf(vm.language) }
     var readLangs by remember { mutableStateOf(vm.readLangs.toSet()) }
+    var era by remember { mutableStateOf(vm.era) }
+    var partyLines by remember { mutableStateOf(vm.partyLines) }
+    var fastJudge by remember { mutableStateOf(vm.fastJudge) }
+    var scandals by remember { mutableStateOf(vm.scandalsOn) }
 
     AzadiScaffold(title = "Settings", onBack = vm::closeSettings) { pad ->
         Column(
@@ -158,11 +162,56 @@ fun SettingsScreen(vm: GameViewModel) {
                 }
             }
 
+            Spacer(Modifier.height(12.dp))
+            SectionCard {
+                Text("Era", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Pin scenarios to a period — its institutions, technology, and what was politically thinkable.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SettingsStore.ERAS.forEach { (label, value) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = era == value, onClick = { era = value })
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = era == value, onClick = { era = value })
+                        Text(label, modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            SectionCard {
+                Text("Real-politics modes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                SettingsToggle(
+                    "Party lines",
+                    "Each answerer is secretly assigned the ideology they must argue — real whip pressure.",
+                    partyLines,
+                ) { partyLines = it }
+                SettingsToggle(
+                    "Scandals",
+                    "Skeletons occasionally surface from a player's own record; face the press.",
+                    scandals,
+                ) { scandals = it }
+                SettingsToggle(
+                    "Fast judging",
+                    "Verdicts use the fastest model — snappier rounds; scenarios keep the model above.",
+                    fastJudge,
+                ) { fastJudge = it }
+            }
+
             Spacer(Modifier.height(20.dp))
             PrimaryCta(
                 text = "Save",
                 onClick = {
-                    vm.saveSettings(key, model, context, language, readLangs)
+                    vm.saveSettings(
+                        key, model, context, language, readLangs,
+                        era = era, partyLines = partyLines, fastJudge = fastJudge, scandals = scandals,
+                    )
                     vm.closeSettings()
                 },
             )
@@ -170,5 +219,33 @@ fun SettingsScreen(vm: GameViewModel) {
                 Text("Cancel")
             }
         }
+    }
+}
+
+/** A labelled switch row with a one-line description. */
+@Composable
+private fun SettingsToggle(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, onValueChange = onChange)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.padding(start = 8.dp))
+        androidx.compose.material3.Switch(checked = checked, onCheckedChange = null)
     }
 }

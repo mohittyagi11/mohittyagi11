@@ -1,8 +1,12 @@
 package com.azadishashn.app.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,11 +45,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.model.Ideologies
+import kotlinx.coroutines.delay
 import com.azadishashn.app.ui.components.AzadiScaffold
 import com.azadishashn.app.ui.components.Collapsible
 import com.azadishashn.app.ui.components.IconActionButton
@@ -72,9 +79,18 @@ fun ResultScreen(vm: GameViewModel) {
     val r = vm.state.lastResult ?: return
     val cardIdeo = r.cardIdeology.ifBlank { r.primary }
 
-    // The verdict ceremony: the seal stamps in, the colour blooms, sparks fly.
+    // The verdict ceremony: a held beat, a haptic thump, the seal stamps in,
+    // the colour blooms, sparks fly — then the morning-after press pack lands.
     var shown by remember(r) { mutableStateOf(false) }
-    LaunchedEffect(r) { shown = true }
+    var press by remember(r) { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    LaunchedEffect(r) {
+        delay(420)                                        // the held breath
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        shown = true                                      // the stamp
+        delay(650)
+        press = true                                      // the papers land
+    }
     val pop by animateFloatAsState(
         targetValue = if (shown) 1f else 0.55f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
@@ -170,11 +186,161 @@ fun ResultScreen(vm: GameViewModel) {
                         }
                     }
 
+                    if (r.assigned.isNotBlank()) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            "PARTY LINE — argued the ${r.assigned} brief",
+                            style = OverlineStyle,
+                            color = IdeologyTheme.of(r.assigned).brand,
+                        )
+                    }
+
                     Spacer(Modifier.height(16.dp))
                     StrengthMeter(strength = r.strength, required = r.required, ideology = r.primary)
                 }
                 // Celebratory spark burst over the hero.
                 Particles(color = glow, modifier = Modifier.matchParentSize())
+            }
+
+            // The morning after — spin, the record, the blocs, the snap poll.
+            val hasPress = r.headlines.isNotEmpty() || r.blocReactions.isNotEmpty() ||
+                r.approvalAfter >= 0 || (r.consistency?.note?.isNotBlank() == true)
+            if (hasPress) {
+                AnimatedVisibility(
+                    visible = press,
+                    enter = fadeIn(tween(420)) + slideInVertically(tween(420)) { it / 4 },
+                ) {
+                    Column {
+                        Spacer(Modifier.height(Dim.sectionGap))
+                        Text(
+                            "THE MORNING AFTER",
+                            style = OverlineStyle,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+
+                        // Two front pages — the same answer, two spins.
+                        r.headlines.take(2).forEach { h ->
+                            Spacer(Modifier.height(10.dp))
+                            SectionCard {
+                                Text(
+                                    "${h.outlet.uppercase()}  ·  ${h.slant}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "“${h.headline}”",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
+
+                        // The press checks the record.
+                        val c = r.consistency
+                        if (c != null && c.note.isNotBlank() && c.verdict != "first_stand") {
+                            Spacer(Modifier.height(10.dp))
+                            val recordTint = when (c.verdict) {
+                                "flipflop" -> MaterialTheme.colorScheme.error
+                                "evolved" -> MaterialTheme.colorScheme.secondary
+                                else -> MaterialTheme.colorScheme.tertiary
+                            }
+                            SectionCard {
+                                Text(
+                                    when (c.verdict) {
+                                        "flipflop" -> "THE PRESS NOTICES A U-TURN"
+                                        "evolved" -> "A PIVOT, ARGUED WELL"
+                                        else -> "ON THE RECORD, CONSISTENT"
+                                    },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = recordTint,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(c.note, style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic)
+                            }
+                        }
+
+                        // The blocs react — you can't please everyone.
+                        if (r.blocReactions.isNotEmpty()) {
+                            Spacer(Modifier.height(10.dp))
+                            SectionCard {
+                                Text(
+                                    "THE BLOCS REACT",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                )
+                                r.blocReactions.forEach { b ->
+                                    Spacer(Modifier.height(8.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            b.bloc,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        val up = b.delta >= 0
+                                        Text(
+                                            if (up) "+${b.delta}" else "${b.delta}",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (up) Color(0xFF2AF08A) else MaterialTheme.colorScheme.error,
+                                        )
+                                    }
+                                    Text(
+                                        b.reaction,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+
+                        // Snap poll + how the nation moved.
+                        if (r.approvalAfter >= 0 || r.nationEffects != null) {
+                            Spacer(Modifier.height(10.dp))
+                            SectionCard {
+                                if (r.approvalAfter >= 0) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            "SNAP POLL",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.tertiary,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        Text(
+                                            "${r.approvalAfter}%",
+                                            style = MaterialTheme.typography.headlineSmall,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        val d = r.pollDelta
+                                        Text(
+                                            if (d >= 0) "+$d" else "$d",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (d >= 0) Color(0xFF2AF08A) else MaterialTheme.colorScheme.error,
+                                        )
+                                    }
+                                }
+                                r.nationEffects?.let { fx ->
+                                    Spacer(Modifier.height(10.dp))
+                                    Text(
+                                        "THE NATION MOVES",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.tertiary,
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        NationDelta("Economy", fx.economy, Modifier.weight(1f))
+                                        NationDelta("Liberty", fx.liberty, Modifier.weight(1f))
+                                        NationDelta("Stability", fx.stability, Modifier.weight(1f))
+                                        NationDelta("Trust", fx.trust, Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Analyst exhibits — the consequence map of the chosen stance, and
@@ -305,5 +471,31 @@ fun ResultScreen(vm: GameViewModel) {
                 Text("End game & see standings")
             }
         }
+    }
+}
+
+/** A tiny labelled meter delta ("Economy +2") tinted by direction. */
+@Composable
+private fun NationDelta(label: String, delta: Int, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            when {
+                delta > 0 -> "+$delta"
+                delta < 0 -> "$delta"
+                else -> "·"
+            },
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = when {
+                delta > 0 -> Color(0xFF2AF08A)
+                delta < 0 -> MaterialTheme.colorScheme.error
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
     }
 }

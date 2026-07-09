@@ -45,8 +45,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -72,8 +75,43 @@ import com.azadishashn.app.ui.components.LangChips
 import com.azadishashn.app.ui.components.causal.PathsFanOut
 import com.azadishashn.app.ui.theme.Dim
 import com.azadishashn.app.ui.theme.IdeologyTheme
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.delay
 
-private enum class RoundPhase { QUESTION, ANSWER }
+private enum class RoundPhase { QUESTION, ANSWER, REBUTTAL, CLOSER }
+
+/**
+ * A small countdown ring — debate pressure, not enforcement: it turns red and
+ * holds at zero, and nothing is cut off. Resets whenever [seconds] or the
+ * composition key changes (each phase gets its own).
+ */
+@Composable
+private fun DebateTimer(seconds: Int, running: Boolean) {
+    var left by remember(seconds) { mutableIntStateOf(seconds) }
+    LaunchedEffect(seconds, running) {
+        while (running && left > 0) {
+            delay(1000)
+            left--
+        }
+    }
+    val frac = left / seconds.toFloat()
+    val tint = when {
+        frac > 0.5f -> MaterialTheme.colorScheme.tertiary
+        frac > 0.2f -> MaterialTheme.colorScheme.secondary
+        else -> MaterialTheme.colorScheme.error
+    }
+    val track = MaterialTheme.colorScheme.surfaceVariant
+    Box(contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(44.dp)) {
+            val stroke = Stroke(width = 4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawArc(track, -90f, 360f, false, style = stroke, size = Size(size.width, size.height))
+            drawArc(tint, -90f, 360f * frac, false, style = stroke, size = Size(size.width, size.height))
+        }
+        Text("$left", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = tint)
+    }
+}
 
 @Composable
 fun RoundScreen(vm: GameViewModel) {
@@ -100,11 +138,63 @@ fun RoundScreen(vm: GameViewModel) {
                 // RoundBody overlays the loader itself while twisting/judging, so
                 // the player's typed answer and phase survive a failed judge.
                 s.current != null -> RoundBody(vm)
-                s.loading -> GeneratingView(s.loadingKind, vm.context)
+                s.loading -> GeneratingView(s.loadingKind, vm.context, s.streamHint)
                 s.error != null -> ErrorBlock(vm)
+                s.scandal != null -> ScandalCard(vm)
                 vm.hasKey -> ThemePicker(vm)
-                else -> GeneratingView(s.loadingKind, vm.context)
+                else -> GeneratingView(s.loadingKind, vm.context, s.streamHint)
             }
+        }
+    }
+}
+
+/** A skeleton from the player's own record — the press pack wants an answer NOW. */
+@Composable
+private fun ScandalCard(vm: GameViewModel) {
+    val sc = vm.state.scandal ?: return
+    var response by remember(sc) { mutableStateOf("") }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Text(
+            "BREAKING — SCANDAL",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.error,
+        )
+        Spacer(Modifier.height(Dim.tight))
+        Text(
+            "“${sc.headline}”",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+        )
+        Spacer(Modifier.height(Dim.tight))
+        Text(sc.story, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(Dim.itemGap))
+        Text(
+            "The press demands: ${sc.question}",
+            style = MaterialTheme.typography.bodyMedium,
+            fontStyle = FontStyle.Italic,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(Dim.itemGap))
+        OutlinedTextField(
+            value = response,
+            onValueChange = { response = it },
+            label = { Text("${vm.state.activePlayer?.name}: your public response") },
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 2,
+        )
+        Spacer(Modifier.height(Dim.itemGap))
+        PrimaryCta(
+            text = "Face the press",
+            onClick = { vm.respondScandal(response) },
+            enabled = response.isNotBlank(),
+        )
+        TextButton(onClick = vm::dismissScandal, modifier = Modifier.fillMaxWidth()) {
+            Text("“No comment.” (the press smells blood: −3)")
         }
     }
 }
@@ -118,6 +208,16 @@ private fun ThemePicker(vm: GameViewModel) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
+        // The fallout from a scandal response, still smouldering above the fold.
+        s.scandalResult?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                fontStyle = FontStyle.Italic,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(Dim.itemGap))
+        }
         Text(
             "Pick a theme — or a few — then Generate. Skip the picks to roll a random one.",
             style = MaterialTheme.typography.bodyLarge,
@@ -157,7 +257,11 @@ private fun ThemePicker(vm: GameViewModel) {
         }
         Spacer(Modifier.height(Dim.itemGap))
         PrimaryCta(
-            text = if (s.selectedThemes.isEmpty()) "Surprise me — generate" else "Generate question",
+            text = when {
+                s.selectedThemes.isEmpty() && s.prefetched != null -> "Surprise me — ready ⚡"
+                s.selectedThemes.isEmpty() -> "Surprise me — generate"
+                else -> "Generate question"
+            },
             onClick = vm::generate,
         )
         Spacer(Modifier.height(Dim.sectionGap))
@@ -169,9 +273,16 @@ private fun ThemePicker(vm: GameViewModel) {
 private fun RoundBody(vm: GameViewModel) {
     val s = vm.state
     val round = s.current!!
-    var phase by remember(round) { mutableStateOf(RoundPhase.QUESTION) }
-    var argument by remember(round) { mutableStateOf("") }
-    var voiceHint by remember(round) { mutableStateOf<String?>(null) }
+    // Keyed on the TITLE, not the round object: a mid-argument leak (twist keeps
+    // the title) must not reset the phase or wipe the half-spoken argument.
+    val roundKey = round.scenario.title
+    var phase by remember(roundKey) { mutableStateOf(RoundPhase.QUESTION) }
+    var argument by remember(roundKey) { mutableStateOf("") }
+    var rebuttal by remember(roundKey) { mutableStateOf("") }
+    var closer by remember(roundKey) { mutableStateOf("") }
+    var voiceHint by remember(roundKey) { mutableStateOf<String?>(null) }
+    // Which field the mic feeds: 0 = argument, 1 = rebuttal, 2 = closer.
+    var voiceTarget by remember(roundKey) { mutableStateOf(0) }
 
     val speechLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -181,11 +292,16 @@ private fun RoundBody(vm: GameViewModel) {
                 ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
                 ?.firstOrNull()
             if (!spoken.isNullOrBlank()) {
-                argument = if (argument.isBlank()) spoken else "$argument $spoken"
+                when (voiceTarget) {
+                    1 -> rebuttal = if (rebuttal.isBlank()) spoken else "$rebuttal $spoken"
+                    2 -> closer = if (closer.isBlank()) spoken else "$closer $spoken"
+                    else -> argument = if (argument.isBlank()) spoken else "$argument $spoken"
+                }
             }
         }
     }
-    fun startVoice() {
+    fun startVoice(target: Int = 0) {
+        voiceTarget = target
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, vm.speechTag)
@@ -261,6 +377,16 @@ private fun RoundBody(vm: GameViewModel) {
             questionText = if (translated) "" else round.dilemma.question,
         )
 
+        // Who's watching: the stakeholder blocs that will judge the answer.
+        if (round.blocs.isNotEmpty()) {
+            Spacer(Modifier.height(Dim.tight))
+            Text(
+                "WATCHING: ${round.blocs.joinToString("  ·  ")}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+        }
+
         when (phase) {
             RoundPhase.QUESTION -> {
                 Spacer(Modifier.height(Dim.sectionGap))
@@ -313,15 +439,49 @@ private fun RoundBody(vm: GameViewModel) {
 
             RoundPhase.ANSWER -> {
                 Spacer(Modifier.height(Dim.sectionGap))
-                Text(
-                    "${s.activePlayer?.name}: answer in your own words. " +
-                        "Claude awards +2 to the ideology your answer most embodies and +1 to the next.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+
+                // Party lines: the answerer's secret brief — tap to peek, tap to hide.
+                if (s.assignedIdeology != null && vm.hasKey) {
+                    var peek by remember(roundKey) { mutableStateOf(false) }
+                    val brand = IdeologyTheme.of(s.assignedIdeology).brand
+                    OutlinedButton(
+                        onClick = { peek = !peek },
+                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (peek) "PARTY BRIEF: argue the ${s.assignedIdeology} line (tap to hide)"
+                            else "🔒 ${s.activePlayer?.name} only — tap for your secret party brief",
+                            color = if (peek) brand else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.height(Dim.tight))
+                }
+
+                // Breaking-news banner after a mid-argument leak.
+                if (s.leakUsed) {
+                    Text(
+                        "⚡ BREAKING — the situation just changed. The judge will watch how you absorb it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.height(Dim.tight))
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${s.activePlayer?.name}: answer in your own words. " +
+                            "Claude awards +2 to the ideology your answer most embodies and +1 to the next.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    DebateTimer(seconds = 90, running = true)
+                }
                 Spacer(Modifier.height(Dim.itemGap))
 
                 Button(
-                    onClick = { startVoice() },
+                    onClick = { startVoice(0) },
                     shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -342,6 +502,14 @@ private fun RoundBody(vm: GameViewModel) {
                         .animateContentSize(),
                     minLines = 2,
                 )
+
+                // The questioner's dirty trick: leak a complication mid-argument.
+                if (vm.hasKey && !s.leakUsed && s.twistsUsedThisTurn < 2) {
+                    Spacer(Modifier.height(Dim.tight))
+                    TextButton(onClick = vm::leak, modifier = Modifier.fillMaxWidth()) {
+                        Text("${s.questioner?.name}: leak a complication mid-argument ⚡")
+                    }
+                }
 
                 if (!vm.hasKey) {
                     Spacer(Modifier.height(Dim.itemGap))
@@ -390,10 +558,101 @@ private fun RoundBody(vm: GameViewModel) {
                     onClick = { vm.resolve(argument) },
                     enabled = if (vm.hasKey) argument.isNotBlank() else s.championedOptionId != null,
                 )
+                if (vm.hasKey) {
+                    OutlinedButton(
+                        onClick = { phase = RoundPhase.REBUTTAL },
+                        enabled = argument.isNotBlank(),
+                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Cross-examine first — open the floor") }
+                }
                 TextButton(
                     onClick = { phase = RoundPhase.QUESTION },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Re-read the question") }
+                Spacer(Modifier.height(Dim.sectionGap))
+            }
+
+            RoundPhase.REBUTTAL -> {
+                Spacer(Modifier.height(Dim.sectionGap))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "The floor is open: ONE opponent gets a 20-second rebuttal of " +
+                            "${s.activePlayer?.name}'s answer.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    DebateTimer(seconds = 20, running = true)
+                }
+                Spacer(Modifier.height(Dim.itemGap))
+                Button(
+                    onClick = { startVoice(1) },
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.height(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Speak the rebuttal")
+                }
+                OutlinedTextField(
+                    value = rebuttal,
+                    onValueChange = { rebuttal = it },
+                    label = { Text("…or type the rebuttal") },
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                )
+                s.error?.let { ErrorLine(it) }
+                Spacer(Modifier.height(Dim.sectionGap))
+                PrimaryCta(
+                    text = "To ${s.activePlayer?.name}'s closing statement",
+                    onClick = { phase = RoundPhase.CLOSER },
+                    enabled = rebuttal.isNotBlank(),
+                )
+                TextButton(
+                    onClick = { rebuttal = ""; vm.resolve(argument) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("No takers — resolve now") }
+                Spacer(Modifier.height(Dim.sectionGap))
+            }
+
+            RoundPhase.CLOSER -> {
+                Spacer(Modifier.height(Dim.sectionGap))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${s.activePlayer?.name}: 15 seconds to close. Answer the rebuttal — " +
+                            "the judge weighs the whole exchange.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    DebateTimer(seconds = 15, running = true)
+                }
+                Spacer(Modifier.height(Dim.itemGap))
+                Button(
+                    onClick = { startVoice(2) },
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.height(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Speak the closer")
+                }
+                OutlinedTextField(
+                    value = closer,
+                    onValueChange = { closer = it },
+                    label = { Text("…or type the closer") },
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                )
+                s.error?.let { ErrorLine(it) }
+                Spacer(Modifier.height(Dim.sectionGap))
+                PrimaryCta(
+                    text = "Resolve — Claude weighs the exchange",
+                    onClick = { vm.resolve(argument, rebuttal, closer) },
+                )
                 Spacer(Modifier.height(Dim.sectionGap))
             }
         }
@@ -409,7 +668,7 @@ private fun RoundBody(vm: GameViewModel) {
                 } else {
                     Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.background))
                 }
-                GeneratingView(s.loadingKind, vm.context)
+                GeneratingView(s.loadingKind, vm.context, s.streamHint)
             }
         }
     }

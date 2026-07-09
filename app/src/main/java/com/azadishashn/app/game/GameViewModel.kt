@@ -720,6 +720,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 roundTitle = state.current?.scenario?.title.orEmpty(),
                 ideology = primary,
                 stance = verdict.stanceSummary.ifBlank { verdict.reasoning },
+                strength = strength.coerceIn(1, 10),
             )
         } else state.dossier
 
