@@ -60,6 +60,26 @@ class SettingsStore(context: Context) {
             prefs.edit().putString(KEY_READ, final.joinToString(",")).apply()
         }
 
+    /** The historical era scenarios are set in ("" = range freely). */
+    var era: String
+        get() = prefs.getString(KEY_ERA, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_ERA, value).apply()
+
+    /** Party-lines mode: each answerer is secretly assigned the ideology to argue. */
+    var partyLines: Boolean
+        get() = prefs.getBoolean(KEY_PARTY, false)
+        set(value) = prefs.edit().putBoolean(KEY_PARTY, value).apply()
+
+    /** Judge with the fastest model (verdicts are classification-shaped) — snappier rounds. */
+    var fastJudge: Boolean
+        get() = prefs.getBoolean(KEY_FAST_JUDGE, false)
+        set(value) = prefs.edit().putBoolean(KEY_FAST_JUDGE, value).apply()
+
+    /** Scandals: skeletons occasionally surface from a player's own record. */
+    var scandals: Boolean
+        get() = prefs.getBoolean(KEY_SCANDALS, true)
+        set(value) = prefs.edit().putBoolean(KEY_SCANDALS, value).apply()
+
     val hasKey: Boolean get() = apiKey.isNotBlank()
 
     companion object {
@@ -69,9 +89,24 @@ class SettingsStore(context: Context) {
         private const val KEY_VOICE = "voice_lang"   // legacy (pre-language) key
         private const val KEY_LANGUAGE = "language"
         private const val KEY_READ = "read_langs"
+        private const val KEY_ERA = "era"
+        private const val KEY_PARTY = "party_lines"
+        private const val KEY_FAST_JUDGE = "fast_judge"
+        private const val KEY_SCANDALS = "scandals"
 
         const val DEFAULT_MODEL = "claude-opus-4-8"
         const val DEFAULT_CONTEXT = "India"
+        const val FAST_MODEL = "claude-haiku-4-5"
+
+        /** label -> era prompt value ("" ranges freely), for the Settings picker. */
+        val ERAS: List<Pair<String, String>> = listOf(
+            "Range freely (default)" to "",
+            "1947 · Partition & founding" to "the late 1940s — independence, partition, and nation-founding",
+            "1975 · Emergency era" to "the mid-1970s — emergency powers, censorship, and resistance",
+            "1991 · Liberalization" to "the early 1990s — economic liberalization and upheaval",
+            "Present day" to "the present day",
+            "2035 · Near future" to "a plausible near-future around 2035 — AI, climate, and new powers",
+        )
 
         /** label -> model id, shown in the Settings picker. */
         val MODELS: List<Pair<String, String>> = listOf(

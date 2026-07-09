@@ -37,6 +37,8 @@ data class RoundData(
     val paths: List<PathForecast> = emptyList(),
     /** Spoken read-aloud of the scenario, one entry per selected read-aloud language. */
     val narration: List<NarrationLine> = emptyList(),
+    /** 2-3 stakeholder blocs watching this decision (farmers, army, media barons…). */
+    val blocs: List<String> = emptyList(),
 )
 
 /**
@@ -95,6 +97,87 @@ data class OptionCard(
     val summary: String,
 )
 
+/** How the same answer is spun by one partisan outlet's front page. */
+@Serializable
+data class Headline(
+    val outlet: String,
+    val slant: String = "",     // the outlet's leaning, e.g. "pro-market daily"
+    val headline: String = "",
+)
+
+/** How one stakeholder bloc received the answer. */
+@Serializable
+data class BlocReaction(
+    val bloc: String,
+    val reaction: String = "",  // one line, in the bloc's voice
+    val delta: Int = 0,         // -2..2 support movement
+)
+
+/** The judge's read of this answer against the player's public record. */
+@Serializable
+data class Consistency(
+    val verdict: String = "",   // first_stand | consistent | evolved | flipflop
+    val note: String = "",      // one wry line, as the press would put it
+)
+
+/** How enacting the answer nudges the nation meters (-3..3 each). */
+@Serializable
+data class NationEffects(
+    val economy: Int = 0,
+    val liberty: Int = 0,
+    val stability: Int = 0,
+    val trust: Int = 0,
+)
+
+/** The living nation: four 0..100 meters the game's choices push around. */
+@Serializable
+data class NationState(
+    val economy: Int = 50,
+    val liberty: Int = 50,
+    val stability: Int = 50,
+    val trust: Int = 50,
+) {
+    fun applied(fx: NationEffects?): NationState = if (fx == null) this else NationState(
+        (economy + fx.economy).coerceIn(0, 100),
+        (liberty + fx.liberty).coerceIn(0, 100),
+        (stability + fx.stability).coerceIn(0, 100),
+        (trust + fx.trust).coerceIn(0, 100),
+    )
+}
+
+/** One entry in the public record — a position a player took, on the books forever. */
+@Serializable
+data class DossierEntry(
+    val playerId: Int,
+    val playerName: String,
+    val roundTitle: String,
+    val ideology: String,       // the ideology the argument served
+    val stance: String,         // one-line record of the position taken
+)
+
+/** A skeleton surfacing from a player's own record, demanding a public response. */
+@Serializable
+data class Scandal(
+    val headline: String = "",
+    val story: String = "",
+    val question: String = "",  // what the press is demanding an answer to
+)
+
+/** The generated end-of-game closing chapter. */
+@Serializable
+data class Epilogue(
+    val title: String = "",
+    val text: String = "",
+)
+
+/** The judge's score of a scandal response — pure damage control. */
+@Serializable
+data class ScandalVerdict(
+    val handling: Int = 5,      // 1..10 — how well the response defused it
+    val note: String = "",
+    @SerialName("poll_delta") val pollDelta: Int = 0,
+)
+
 /** Claude's verdict: the dominant ideology in the answer and the next-strongest one. */
 @Serializable
 data class Verdict(
@@ -107,6 +190,18 @@ data class Verdict(
     @SerialName("causal_chain") val causalChain: List<CausalStep> = emptyList(),
     /** The central cost-of-power tradeoff. */
     val tradeoff: String = "",
+    /** One-line public record of the position taken (feeds the dossier). */
+    @SerialName("stance_summary") val stanceSummary: String = "",
+    /** The same answer spun by two opposing front pages. */
+    val headlines: List<Headline> = emptyList(),
+    /** The judge's read against the player's past positions. */
+    val consistency: Consistency? = null,
+    /** How each watching bloc received the answer. */
+    @SerialName("bloc_reactions") val blocReactions: List<BlocReaction> = emptyList(),
+    /** Snap-poll approval movement, -10..10. */
+    @SerialName("poll_delta") val pollDelta: Int = 0,
+    /** How enacting this would nudge the nation meters. */
+    @SerialName("nation_effects") val nationEffects: NationEffects? = null,
     /** Spoken read-aloud of the verdict, one entry per selected read-aloud language. */
     val narration: List<NarrationLine> = emptyList(),
 )
@@ -152,4 +247,14 @@ data class AwardResult(
     val tradeoff: String = "",
     /** The verdict's spoken read-aloud per selected language. */
     val narration: List<NarrationLine> = emptyList(),
+    // -- Political-realism extras (all optional; offline rounds leave them empty) --
+    val headlines: List<Headline> = emptyList(),
+    val consistency: Consistency? = null,
+    val blocReactions: List<BlocReaction> = emptyList(),
+    val pollDelta: Int = 0,
+    /** The player's approval AFTER this verdict (0..100), for the snap-poll flash. */
+    val approvalAfter: Int = -1,
+    val nationEffects: NationEffects? = null,
+    /** Party-lines mode: the ideology the player was ASSIGNED to argue (else ""). */
+    val assigned: String = "",
 )

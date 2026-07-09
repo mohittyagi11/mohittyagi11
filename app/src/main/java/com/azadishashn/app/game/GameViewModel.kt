@@ -13,9 +13,13 @@ import com.azadishashn.app.data.GameStore
 import com.azadishashn.app.data.OfflineContent
 import com.azadishashn.app.data.SettingsStore
 import com.azadishashn.app.model.AwardResult
+import com.azadishashn.app.model.DossierEntry
+import com.azadishashn.app.model.Epilogue
 import com.azadishashn.app.model.Ideologies
+import com.azadishashn.app.model.NationState
 import com.azadishashn.app.model.Player
 import com.azadishashn.app.model.RoundData
+import com.azadishashn.app.model.Scandal
 import com.azadishashn.app.model.Themes
 import com.azadishashn.app.model.Verdict
 import com.azadishashn.app.net.ClaudeClient
@@ -23,6 +27,7 @@ import com.azadishashn.app.tts.Speaker
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlin.math.roundToInt
+import kotlin.random.Random
 
 @Serializable
 enum class Screen { Library, Setup, Settings, Round, Result, Standings, Edit, Transfer }
@@ -62,6 +67,29 @@ data class GameState(
     val dashboardReturn: Screen? = null,
     /** When set, the Export/Import screen is open; closing returns here. */
     val transferReturn: Screen? = null,
+    // -- The living nation (political-realism systems) ------------------------
+    /** Four 0..100 meters the table's choices push around; conditions generation. */
+    val nation: NationState = NationState(),
+    /** playerId -> snap-poll approval 0..100 (default 50 until first verdict). */
+    val approval: Map<Int, Int> = emptyMap(),
+    /** playerId -> bloc name -> accumulated support (each verdict's deltas). */
+    val blocSupport: Map<Int, Map<String, Int>> = emptyMap(),
+    /** The public record: every position every player has taken this game. */
+    val dossier: List<DossierEntry> = emptyList(),
+    /** Party-lines mode: the ideology this turn's answerer must secretly argue. */
+    val assignedIdeology: String? = null,
+    /** A pending scandal the active player must answer before the round starts. */
+    val scandal: Scandal? = null,
+    /** One-line result of the last scandal response (shown before theme pick). */
+    val scandalResult: String? = null,
+    /** Complication was leaked mid-argument this turn (judge weighs composure). */
+    val leakUsed: Boolean = false,
+    /** Pre-generated round waiting to make "Surprise me" instant. */
+    val prefetched: RoundData? = null,
+    /** Live streamed text (title/situation) while a round is generating. */
+    val streamHint: String? = null,
+    /** The generated end-of-game closing chapter. */
+    val epilogue: Epilogue? = null,
 ) {
     val activePlayer: Player? get() = players.getOrNull(activeIndex)
 
@@ -254,14 +282,27 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         context: String,
         language: String,
         readLangs: Set<String>,
+        era: String = settings.era,
+        partyLines: Boolean = settings.partyLines,
+        fastJudge: Boolean = settings.fastJudge,
+        scandals: Boolean = settings.scandals,
     ) {
         settings.apiKey = apiKey
         settings.model = model
         settings.context = context
         settings.language = language
         settings.readLangs = readLangs
+        settings.era = era
+        settings.partyLines = partyLines
+        settings.fastJudge = fastJudge
+        settings.scandals = scandals
         speaker.setLanguage(language)
     }
+
+    val era: String get() = settings.era
+    val partyLines: Boolean get() = settings.partyLines
+    val fastJudge: Boolean get() = settings.fastJudge
+    val scandalsOn: Boolean get() = settings.scandals
 
     fun closeSettings() {
         val back = if (state.players.isEmpty()) Screen.Setup else Screen.Round
@@ -282,15 +323,103 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             usingOffline = false,
             selectedThemes = emptySet(),
             screen = Screen.Round,
+            // Political-realism turn resets.
+            assignedIdeology = if (settings.partyLines && settings.hasKey) Ideologies.NAMES.random() else null,
+            scandal = null,
+            scandalResult = null,
+            leakUsed = false,
+            streamHint = null,
         )
         if (settings.hasKey) {
             // Show the questioner a theme picker; generation waits for [generate].
             state = base.copy(availableThemes = Themes.sample(12))
+            maybeSurfaceScandal()
         } else {
             // Offline deck ignores themes — go straight to a bundled round.
             state = base.copy(availableThemes = emptyList())
             useOfflineRound()
         }
+    }
+
+    // -- Scandals: skeletons surface from the player's own record --------------
+
+    /** Occasionally dig a scandal out of the active player's record (~1 turn in 4). */
+    private fun maybeSurfaceScandal() {
+        if (!settings.scandals || !settings.hasKey) return
+        val active = state.activePlayer ?: return
+        val record = state.dossier.filter { it.playerId == active.id }
+        if (record.isEmpty() || Random.nextFloat() > 0.25f) return
+        val past = record.random()
+        val turnId = state.id
+        viewModelScope.launch {
+            runCatching {
+                ClaudeClient(settings.apiKey, settings.model)
+                    .scandal(active.name, "${past.roundTitle}: ${past.stance}", settings.context, settings.language)
+            }.onSuccess { s ->
+                // Only surface it if the table is still on this turn's theme pick.
+                if (state.id == turnId && state.current == null && state.screen == Screen.Round) {
+                    state = state.copy(scandal = s)
+                }
+            }
+            // A failed scandal fetch is silently dropped — it was optional colour.
+        }
+    }
+
+    /** The player answers the press; judged purely as damage control. */
+    fun respondScandal(response: String) {
+        val s = state.scandal ?: return
+        val active = state.activePlayer ?: return
+        if (response.isBlank()) return
+        state = state.copy(loading = true, loadingKind = "judge", error = null)
+        viewModelScope.launch {
+            runCatching {
+                judgeClient().judgeScandal(s, response, settings.language)
+            }.onSuccess { v ->
+                val newApproval = (approvalOf(active.id) + v.pollDelta).coerceIn(0, 100)
+                state = state.copy(
+                    loading = false,
+                    loadingKind = null,
+                    scandal = null,
+                    scandalResult = "${v.note}  ·  Snap poll: $newApproval% (${signed(v.pollDelta)})",
+                    approval = state.approval + (active.id to newApproval),
+                )
+            }.onFailure {
+                // Scandals are colour, not core — dismiss rather than block the turn.
+                state = state.copy(loading = false, loadingKind = null, scandal = null)
+            }
+        }
+    }
+
+    /** "No comment." The press smells blood: a small fixed approval hit. */
+    fun dismissScandal() {
+        val active = state.activePlayer ?: return
+        val newApproval = (approvalOf(active.id) - 3).coerceIn(0, 100)
+        state = state.copy(
+            scandal = null,
+            scandalResult = "\"No comment.\" The press smells blood.  ·  Snap poll: $newApproval% (-3)",
+            approval = state.approval + (active.id to newApproval),
+        )
+    }
+
+    /** Current snap-poll approval for a player (everyone starts at 50). */
+    fun approvalOf(playerId: Int): Int = state.approval[playerId] ?: 50
+
+    private fun signed(v: Int): String = if (v >= 0) "+$v" else "$v"
+
+    /** Judge calls can route to the fastest model — verdicts are classification-shaped. */
+    private fun judgeClient(): ClaudeClient =
+        ClaudeClient(settings.apiKey, if (settings.fastJudge) SettingsStore.FAST_MODEL else settings.model)
+
+    /** The running world-state fed into generation, so scenarios remember the game. */
+    private fun storySoFar(): String {
+        if (state.dossier.isEmpty()) return ""
+        val n = state.nation
+        val meters = "Economy ${n.economy}/100, Liberty ${n.liberty}/100, " +
+            "Stability ${n.stability}/100, Institutional Trust ${n.trust}/100"
+        val recent = state.dossier.takeLast(3).joinToString("\n") {
+            "- ${it.roundTitle}: ${it.playerName} took a ${it.ideology} line — ${it.stance}"
+        }
+        return "Nation meters: $meters\nRecent decisions:\n$recent"
     }
 
     fun toggleTheme(theme: String) {
@@ -307,6 +436,20 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Generate the scenario in the selected themes (or a random one if none picked). */
     fun generate() {
+        // No themes picked + a prefetched round waiting → instant surprise.
+        if (state.selectedThemes.isEmpty()) {
+            val ready = state.prefetched
+            if (ready != null && !state.seenTitles.any { it.trim().equals(ready.scenario.title.trim(), true) }) {
+                state = state.copy(
+                    current = ready,
+                    prefetched = null,
+                    seenTitles = state.seenTitles + ready.scenario.title,
+                    usingOffline = false,
+                    error = null,
+                )
+                return
+            }
+        }
         val themes = if (state.selectedThemes.isNotEmpty()) {
             state.selectedThemes.toList()
         } else {
@@ -320,12 +463,19 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             useOfflineRound()
             return
         }
-        state = state.copy(loading = true, loadingKind = "generate", error = null, lastThemes = themes)
+        state = state.copy(
+            loading = true, loadingKind = "generate", error = null,
+            lastThemes = themes, streamHint = null,
+        )
         val avoid = state.seenTitles.takeLast(20)
         viewModelScope.launch {
             runCatching {
-                ClaudeClient(settings.apiKey, settings.model)
-                    .generateRound(themes, settings.context, avoid, settings.language, settings.readLangs.toList())
+                ClaudeClient(settings.apiKey, settings.model).generateRound(
+                    themes, settings.context, avoid, settings.language, settings.readLangs.toList(),
+                    era = settings.era,
+                    storySoFar = storySoFar(),
+                    onProgress = { hint -> mainHandler.post { if (state.loading) state = state.copy(streamHint = hint) } },
+                )
             }.onSuccess { round ->
                 val title = round.scenario.title.trim()
                 val dup = state.seenTitles.any { it.trim().equals(title, ignoreCase = true) }
@@ -340,10 +490,35 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                         loading = false,
                         loadingKind = null,
                         usingOffline = false,
+                        streamHint = null,
                     )
                 }
             }.onFailure { e ->
-                state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Generation failed")
+                state = state.copy(
+                    loading = false, loadingKind = null, streamHint = null,
+                    error = e.message ?: "Generation failed",
+                )
+            }
+        }
+    }
+
+    /**
+     * Quietly generate the NEXT round while the table debates this one, so the
+     * next "Surprise me" is instant. Best-effort: failures are silently dropped.
+     */
+    private fun prefetchNext() {
+        if (!settings.hasKey || state.prefetched != null) return
+        val avoid = state.seenTitles.takeLast(20)
+        val themes = listOf(Themes.random())
+        viewModelScope.launch {
+            runCatching {
+                ClaudeClient(settings.apiKey, settings.model).generateRound(
+                    themes, settings.context, avoid, settings.language, settings.readLangs.toList(),
+                    era = settings.era,
+                    storySoFar = storySoFar(),
+                )
+            }.onSuccess { round ->
+                if (state.prefetched == null) state = state.copy(prefetched = round)
             }
         }
     }
@@ -404,27 +579,63 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * The questioner leaks a complication MID-ARGUMENT — the twist machinery with
+     * breaking-news timing. The judge is told and weighs the answerer's composure.
+     */
+    fun leak() {
+        if (state.leakUsed) return
+        val round = state.current ?: return
+        if (!settings.hasKey || state.twistsUsedThisTurn >= twistLimit) return
+        state = state.copy(loading = true, loadingKind = "twist", error = null)
+        viewModelScope.launch {
+            runCatching {
+                ClaudeClient(settings.apiKey, settings.model).twistRound(round, settings.language, settings.readLangs.toList())
+            }.onSuccess { twisted ->
+                state = state.copy(
+                    current = twisted,
+                    twistsUsedThisTurn = state.twistsUsedThisTurn + 1,
+                    leakUsed = true,
+                    loading = false,
+                    loadingKind = null,
+                )
+            }.onFailure { e ->
+                state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Leak failed")
+            }
+        }
+    }
+
     // -- Resolve (Claude judges; rivals can't stall) -------------------------
 
-    fun resolve(argument: String) {
+    fun resolve(argument: String, rebuttal: String = "", closer: String = "") {
         val active = state.activePlayer ?: return
         val round = state.current ?: return
 
         if (settings.hasKey && argument.isNotBlank()) {
             // Player argued; Claude names the dominant and secondary ideologies.
             state = state.copy(loading = true, loadingKind = "judge", error = null)
+            val pastPositions = state.dossier.filter { it.playerId == active.id }
+                .takeLast(4)
+                .map { "\"${it.roundTitle}\": served ${it.ideology} — ${it.stance}" }
+            val assigned = state.assignedIdeology.orEmpty()
+            val leaked = state.leakUsed
             viewModelScope.launch {
                 runCatching {
-                    ClaudeClient(settings.apiKey, settings.model).judge(round, argument, settings.language, settings.readLangs.toList())
+                    judgeClient().judge(
+                        round, argument, settings.language, settings.readLangs.toList(),
+                        rebuttal = rebuttal, closer = closer,
+                        pastPositions = pastPositions,
+                        assigned = assigned, leaked = leaked,
+                    )
                 }.onSuccess { v ->
-                    val primary = v.primaryIdeology.takeIf { it in Ideologies.NAMES }
+                    val actual = v.primaryIdeology.takeIf { it in Ideologies.NAMES }
                         ?: Ideologies.NAMES.first()
+                    // Party lines: the card serves the ASSIGNED ideology (strength
+                    // already measures how convincingly it was argued).
+                    val primary = if (assigned.isNotBlank()) assigned else actual
                     val secondary = v.secondaryIdeology.takeIf { it in Ideologies.NAMES && it != primary }
                         ?: Ideologies.NAMES.first { it != primary }
-                    award(
-                        active, primary, secondary, v.strength.coerceIn(1, 10),
-                        v.reasoning, v.historicalOutcome, v.causalChain, v.tradeoff, v.narration,
-                    )
+                    award(active, primary, secondary, v.strength.coerceIn(1, 10), v, assigned)
                 }.onFailure { e ->
                     state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Judging failed")
                 }
@@ -435,7 +646,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val secondary = round.options.firstOrNull { it.id == state.secondaryOptionId }?.ideology
                 ?.takeIf { it != primary }
                 ?: Ideologies.NAMES.first { it != primary }
-            award(active, primary, secondary, -1, "", "")
+            award(active, primary, secondary, -1, null, "")
         }
     }
 
@@ -453,11 +664,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         primary: String,
         secondary: String,
         strength: Int,
-        reasoning: String,
-        history: String,
-        causalChain: List<com.azadishashn.app.model.CausalStep> = emptyList(),
-        tradeoff: String = "",
-        narration: List<com.azadishashn.app.model.NarrationLine> = emptyList(),
+        verdict: Verdict?,
+        assigned: String = "",
     ) {
         val held = active.counts[primary] ?: 0
         val tableAvg = state.players.map { it.counts[primary] ?: 0 }.average()
@@ -492,8 +700,35 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 p.copy(counts = c)
             } else p
         }
+
+        // -- Political-realism effects (online verdicts only) ------------------
+        val newNation = state.nation.applied(verdict?.nationEffects)
+        val newApproval = if (verdict != null) {
+            (approvalOf(active.id) + verdict.pollDelta.coerceIn(-10, 10)).coerceIn(0, 100)
+        } else approvalOf(active.id)
+        val mergedBlocs = if (verdict != null && verdict.blocReactions.isNotEmpty()) {
+            val mine = state.blocSupport[active.id].orEmpty().toMutableMap()
+            verdict.blocReactions.forEach { r ->
+                mine[r.bloc] = (mine[r.bloc] ?: 0) + r.delta.coerceIn(-2, 2)
+            }
+            state.blocSupport + (active.id to mine)
+        } else state.blocSupport
+        val newDossier = if (verdict != null) {
+            state.dossier + DossierEntry(
+                playerId = active.id,
+                playerName = active.name,
+                roundTitle = state.current?.scenario?.title.orEmpty(),
+                ideology = primary,
+                stance = verdict.stanceSummary.ifBlank { verdict.reasoning },
+            )
+        } else state.dossier
+
         state = state.copy(
             players = updated,
+            nation = newNation,
+            approval = if (verdict != null) state.approval + (active.id to newApproval) else state.approval,
+            blocSupport = mergedBlocs,
+            dossier = newDossier,
             loading = false,
             loadingKind = null,
             lastResult = AwardResult(
@@ -505,15 +740,24 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 cardAwarded = true,
                 cardIdeology = cardIdeology,
                 diverted = diverted,
-                reasoning = reasoning,
-                historicalNote = history,
+                reasoning = verdict?.reasoning.orEmpty(),
+                historicalNote = verdict?.historicalOutcome.orEmpty(),
                 explanation = explanation,
-                causalChain = causalChain,
-                tradeoff = tradeoff,
-                narration = narration,
+                causalChain = verdict?.causalChain.orEmpty(),
+                tradeoff = verdict?.tradeoff.orEmpty(),
+                narration = verdict?.narration.orEmpty(),
+                headlines = verdict?.headlines.orEmpty(),
+                consistency = verdict?.consistency,
+                blocReactions = verdict?.blocReactions.orEmpty(),
+                pollDelta = verdict?.pollDelta ?: 0,
+                approvalAfter = if (verdict != null) newApproval else -1,
+                nationEffects = verdict?.nationEffects,
+                assigned = assigned,
             ),
             screen = Screen.Result,
         )
+        // The table now debates the verdict — perfect cover to draft the next round.
+        prefetchNext()
     }
 
     // -- Flow ----------------------------------------------------------------
@@ -540,6 +784,38 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     fun endGame() {
         state = state.copy(screen = Screen.Standings, dashboardReturn = null, finished = true)
+    }
+
+    /** Generate the closing chapter — where the nation landed, given every choice made. */
+    fun generateEpilogue() {
+        if (!settings.hasKey || state.epilogue != null || state.loading) return
+        val n = state.nation
+        val meters = "Economy ${n.economy}, Liberty ${n.liberty}, Stability ${n.stability}, Trust ${n.trust}"
+        val story = state.dossier.map { "${it.roundTitle}: ${it.playerName} (${it.ideology}) — ${it.stance}" }
+            .ifEmpty { listOf("A short, cautious government — few decisions of record.") }
+        state = state.copy(loading = true, loadingKind = "judge", error = null)
+        viewModelScope.launch {
+            runCatching {
+                ClaudeClient(settings.apiKey, settings.model)
+                    .epilogue(settings.context, meters, story, settings.language)
+            }.onSuccess { ep ->
+                state = state.copy(loading = false, loadingKind = null, epilogue = ep)
+            }.onFailure { e ->
+                state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Epilogue failed")
+            }
+        }
+    }
+
+    /**
+     * Cross-game political fingerprints: for each player NAME, how often their
+     * arguments actually served each ideology, aggregated over every saved game.
+     */
+    fun fingerprints(): Map<String, Map<String, Int>> {
+        val all = store.listSummaries().mapNotNull { store.loadGame(it.id) } + listOf(state)
+        return all.flatMap { it.dossier }
+            .groupBy { it.playerName }
+            .mapValues { (_, entries) -> entries.groupingBy { it.ideology }.eachCount() }
+            .filterValues { it.isNotEmpty() }
     }
 
     // -- Manual repair (edit current game state) -----------------------------
