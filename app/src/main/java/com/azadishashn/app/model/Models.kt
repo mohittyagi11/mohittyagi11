@@ -39,6 +39,21 @@ data class RoundData(
     val narration: List<NarrationLine> = emptyList(),
     /** 2-3 stakeholder blocs watching this decision (farmers, army, media barons…). */
     val blocs: List<String> = emptyList(),
+    /** The question's political mood: which ideology has the wind, which faces it. */
+    val mood: Mood? = null,
+)
+
+/**
+ * The moment's political weather. Arguing the [favors] ideology gets an easier
+ * bar (-1 required); arguing [suspects] a harder one (+1) — so the questioner
+ * shapes the wind with theme picks, and the answerer chooses to ride it or
+ * fight it for the card their board build needs.
+ */
+@Serializable
+data class Mood(
+    val favors: String = "",
+    val suspects: String = "",
+    val note: String = "",
 )
 
 /**
@@ -164,6 +179,19 @@ data class Scandal(
     val question: String = "",  // what the press is demanding an answer to
 )
 
+/**
+ * A politics-earned resource payout (or forfeit), instructing a physical take:
+ * whip patronage, an endorsing bloc's gift, a mandate milestone, a weathered
+ * crisis. [delta] is +1 / -1 of [ideology]'s resource.
+ */
+@Serializable
+data class ResourceGrant(
+    val label: String,
+    val ideology: String,
+    val delta: Int,
+    val note: String = "",
+)
+
 /** The generated end-of-game closing chapter. */
 @Serializable
 data class Epilogue(
@@ -267,4 +295,11 @@ data class AwardResult(
     val crisisOutcome: String = "",     // weathered | claimed | swerved
     /** Blocs that newly endorsed the player at this verdict (crossed +3). */
     val newEndorsements: List<String> = emptyList(),
+    // -- v2.2: everything cashes out into the game's real currencies --
+    /** Politics-earned resource payouts/forfeits — physical takes at the table. */
+    val bonusResources: List<ResourceGrant> = emptyList(),
+    /** Ideologue milestone hit by this card (2/4/6 of one ideology), else "". */
+    val milestone: String = "",
+    /** How the round's mood moved the bar for this argument ("" if neutral). */
+    val moodNote: String = "",
 )

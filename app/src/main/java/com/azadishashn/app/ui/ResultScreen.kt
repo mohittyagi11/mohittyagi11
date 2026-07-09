@@ -188,9 +188,35 @@ fun ResultScreen(vm: GameViewModel) {
 
                     Spacer(Modifier.height(16.dp))
                     StrengthMeter(strength = r.strength, required = r.required, ideology = r.primary)
+                    if (r.moodNote.isNotBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            r.moodNote,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 // Celebratory spark burst over the hero.
                 Particles(color = glow, modifier = Modifier.matchParentSize())
+            }
+
+            // Ideologue milestone — the board build pays off: claim the power.
+            if (r.milestone.isNotBlank()) {
+                Spacer(Modifier.height(Dim.itemGap))
+                SectionCard(glow = IdeologyTheme.of(r.cardIdeology.ifBlank { r.primary }).brand) {
+                    Text(
+                        "🏛 IDEOLOGUE MILESTONE",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = IdeologyTheme.of(r.cardIdeology.ifBlank { r.primary }).brand,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        r.milestone,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
 
             // The morning after — spin, the record, the blocs, the snap poll.
@@ -224,7 +250,8 @@ fun ResultScreen(vm: GameViewModel) {
                                 Text(
                                     when (r.whipOutcome) {
                                         "obeyed" -> "The party demanded the ${r.whip} line — and got it. " +
-                                            "The whip is satisfied. (+${r.whipPollAdj} poll)"
+                                            "The whip is satisfied: patronage flows " +
+                                            "(+1 ${Ideologies.resourceOf(r.whip)}, +${r.whipPollAdj} poll)."
                                         "rebel" -> "The party demanded ${r.whip}. ${r.playerName} defied it — " +
                                             "magnificently. The crowd loves a rebel. (+${r.whipPollAdj} poll)"
                                         else -> "The party demanded ${r.whip}. ${r.playerName} strayed — and " +
@@ -442,13 +469,20 @@ fun ResultScreen(vm: GameViewModel) {
                     tint = IdeologyTheme.container(r.secondary),
                     modifier = Modifier.weight(1f),
                 )
-                if (r.crisisOutcome == "weathered") {
-                    StatTile(
-                        label = "Crisis bonus",
-                        value = "+1 · ${Ideologies.resourceOf(r.crisisTarget)}",
-                        tint = IdeologyTheme.container(r.crisisTarget),
-                        modifier = Modifier.weight(1f),
-                    )
+            }
+            // Politics-earned payouts/forfeits — the whip's patronage, a bloc's
+            // gift, the mandate, a weathered crisis. Physical takes, same as above.
+            if (r.bonusResources.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    r.bonusResources.take(3).forEach { g ->
+                        StatTile(
+                            label = g.label,
+                            value = "${if (g.delta >= 0) "+" else ""}${g.delta} · ${Ideologies.resourceOf(g.ideology)}",
+                            tint = IdeologyTheme.container(g.ideology),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
 

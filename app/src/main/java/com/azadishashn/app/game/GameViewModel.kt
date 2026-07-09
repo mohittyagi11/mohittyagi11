@@ -336,9 +336,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             selectedThemes = emptySet(),
             screen = Screen.Round,
             // Political-realism turn resets. The whip is an EVENT, not a constant:
-            // roughly every other turn it hands the answerer sealed instructions.
+            // roughly every other turn it hands the answerer sealed instructions —
+            // and it's ADVERSARIAL to their board build: it demands one of the two
+            // ideologies they hold LEAST, pulling them off their farming track.
+            // Obey for patronage, or rebel to protect the build.
             assignedIdeology = if (settings.partyLines && settings.hasKey && Random.nextFloat() < 0.5f) {
-                Ideologies.NAMES.random()
+                val counts = state.activePlayer?.counts.orEmpty()
+                Ideologies.NAMES.sortedBy { counts[it] ?: 0 }.take(2).random()
             } else null,
             scandal = null,
             scandalResult = null,
@@ -706,7 +710,23 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         val held = active.counts[primary] ?: 0
         val tableAvg = state.players.map { it.counts[primary] ?: 0 }.average()
-        val required = (5.0 + (held - tableAvg)).roundToInt().coerceIn(1, 10)
+
+        // The question's MOOD moves the bar: the favoured ideology argues with
+        // the wind (-1 required), the suspected one against it (+1). The
+        // questioner set this weather with their theme picks; the answerer chose
+        // to ride it or fight it for the card their board build needs.
+        val mood = if (verdict != null) state.current?.mood else null
+        val moodAdj = when (primary) {
+            mood?.favors -> -1
+            mood?.suspects -> 1
+            else -> 0
+        }
+        val moodNote = when {
+            moodAdj < 0 -> "The mood favoured $primary — the bar dropped 1. ${mood?.note.orEmpty()}"
+            moodAdj > 0 -> "The mood suspected $primary — the bar rose 1. ${mood?.note.orEmpty()}"
+            else -> ""
+        }
+        val required = (5.0 + (held - tableAvg) + moodAdj).roundToInt().coerceIn(1, 10)
 
         // The nation feeds back into the cards: a meter in CRISIS empowers its
         // ideology (the hour demands it, +1 effective strength); a GOLDEN AGE
@@ -746,6 +766,16 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 c[cardIdeology] = (c[cardIdeology] ?: 0) + 1
                 p.copy(counts = c)
             } else p
+        }
+
+        // Ideologue milestone: SHASN's board powers unlock as you stack one
+        // ideology — the app celebrates and reminds the player to claim theirs.
+        val newCount = (active.counts[cardIdeology] ?: 0) + 1
+        val milestone = when (newCount) {
+            2 -> "${newCount}× $cardIdeology — claim your LEVEL 1 ideologue power on the board!"
+            4 -> "${newCount}× $cardIdeology — claim your LEVEL 2 ideologue power on the board!"
+            6 -> "${newCount}× $cardIdeology — claim your LEVEL 3 ideologue power on the board!"
+            else -> ""
         }
 
         // -- Political-realism effects (online verdicts only) ------------------
@@ -808,12 +838,35 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
         // Snap poll: the verdict's swing + the whip + the crisis, and every
         // endorsed bloc adds +1 to a POSITIVE verdict swing (your machine turns out).
+        val approvalBefore = approvalOf(active.id)
         val newApproval = if (verdict != null) {
             var delta = verdict.pollDelta.coerceIn(-10, 10)
             if (delta > 0) delta += kept.size
             delta += whipAdj + crisisPollAdj
-            (approvalOf(active.id) + delta).coerceIn(0, 100)
-        } else approvalOf(active.id)
+            (approvalBefore + delta).coerceIn(0, 100)
+        } else approvalBefore
+
+        // Everything cashes out into the game's REAL currencies: politics-earned
+        // resource payouts the player physically takes (or returns) at the table.
+        val grants = buildList {
+            if (verdict != null) {
+                if (whipOutcome == "obeyed") {
+                    add(com.azadishashn.app.model.ResourceGrant("Whip patronage", whip, 1, "the party rewards loyalty"))
+                }
+                gained.forEach { bloc ->
+                    add(com.azadishashn.app.model.ResourceGrant("Gift: $bloc", primary, 1, "the $bloc fund your machine"))
+                }
+                if (crisisOutcome == "weathered") {
+                    add(com.azadishashn.app.model.ResourceGrant("Crisis bonus", crisisTarget, 1, "courage under fire"))
+                }
+                if (approvalBefore < 65 && newApproval >= 65) {
+                    add(com.azadishashn.app.model.ResourceGrant("The mandate", primary, 1, "donors and volunteers pour in"))
+                }
+                if (approvalBefore > 35 && newApproval <= 35) {
+                    add(com.azadishashn.app.model.ResourceGrant("Donors flee", primary, -1, "give one back — the ship is listing"))
+                }
+            }
+        }
         val newDossier = if (verdict != null) {
             state.dossier + DossierEntry(
                 playerId = active.id,
@@ -861,6 +914,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 crisisTarget = crisisTarget,
                 crisisOutcome = crisisOutcome,
                 newEndorsements = if (verdict != null) gained else emptyList(),
+                bonusResources = grants,
+                milestone = milestone,
+                moodNote = moodNote,
             ),
             screen = Screen.Result,
         )

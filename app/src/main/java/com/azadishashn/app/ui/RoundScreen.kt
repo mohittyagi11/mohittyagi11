@@ -407,6 +407,41 @@ private fun RoundBody(vm: GameViewModel) {
                 color = MaterialTheme.colorScheme.tertiary,
             )
         }
+        // The question's mood — the wind the answerer must ride or fight.
+        round.mood?.let { m ->
+            if (m.favors.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Row {
+                    Text(
+                        "MOOD: ",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "${m.favors} rides the wind (bar −1)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = IdeologyTheme.of(m.favors).brand,
+                    )
+                    Text(
+                        "  ·  ",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "${m.suspects} fights it (bar +1)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = IdeologyTheme.of(m.suspects).brand,
+                    )
+                }
+                if (m.note.isNotBlank()) {
+                    Text(
+                        m.note,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
 
         when (phase) {
             RoundPhase.QUESTION -> {

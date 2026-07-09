@@ -112,7 +112,11 @@ class ClaudeClient(
               that plausibly leads), risk (what it costs). Crisp, causal, non-partisan — one line each.
             - blocs: 2-3 stakeholder blocs with real skin in THIS decision (e.g. farmers,
               industrialists, students, army, clergy, unions, urban middle class, media barons) —
-              short names, fitting the scenario. They will judge the answer from the sidelines.$avoid
+              short names, fitting the scenario. They will judge the answer from the sidelines.
+            - mood: the question's political weather, derived from the scenario's nature.
+              favors = the ONE ideology this moment naturally plays toward; suspects = the ONE
+              ideology facing headwind here (must differ); note = one crisp line why. Vary this
+              genuinely with the scenario — different questions, different moods.$avoid
             ${languageLine(language)}
             ${narrationLine(readLangs, "the scenario title", "the situation followed by the dilemma question")}
         """.trimIndent()
@@ -140,8 +144,9 @@ class ClaudeClient(
 
             Keep the same title. Produce EXACTLY 4 options, ONE for EACH ideology:
             $IDEOLOGY_BRIEF
-            Keep every field punchy. Also refresh paths and keep (or sharpen) the same 2-3
-            stakeholder blocs.
+            Keep every field punchy. Also refresh paths, keep (or sharpen) the same 2-3
+            stakeholder blocs, and RE-READ the mood: the complication may shift which ideology
+            the moment favors/suspects.
             ${languageLine(language)}
             ${narrationLine(readLangs, "the scenario title", "the situation followed by the dilemma question")}
         """.trimIndent()
@@ -603,9 +608,18 @@ class ClaudeClient(
                     "risk" to strProp(),
                 ),
             )
-            return objSchema(
-                listOf("scenario", "dilemma", "options", "paths", "narration", "blocs"),
+            val moodSchema = objSchema(
+                listOf("favors", "suspects", "note"),
                 mapOf(
+                    "favors" to ideologyEnumProp(),
+                    "suspects" to ideologyEnumProp(),
+                    "note" to strProp(),
+                ),
+            )
+            return objSchema(
+                listOf("scenario", "dilemma", "options", "paths", "narration", "blocs", "mood"),
+                mapOf(
+                    "mood" to moodSchema,
                     "scenario" to objSchema(
                         listOf("title", "dimension", "setting", "era", "situation"),
                         mapOf(
