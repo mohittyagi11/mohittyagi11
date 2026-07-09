@@ -188,8 +188,9 @@ fun SettingsScreen(vm: GameViewModel) {
             SectionCard {
                 Text("Real-politics modes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 SettingsToggle(
-                    "Party lines",
-                    "Each answerer is secretly assigned the ideology they must argue — real whip pressure.",
+                    "Party whip",
+                    "Some turns, the whip hands the answerer sealed instructions — obey quietly (+3 poll), " +
+                        "rebel magnificently (+5), or rebel weakly and pay (−4).",
                     partyLines,
                 ) { partyLines = it }
                 SettingsToggle(

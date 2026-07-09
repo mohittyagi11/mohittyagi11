@@ -186,15 +186,6 @@ fun ResultScreen(vm: GameViewModel) {
                         }
                     }
 
-                    if (r.assigned.isNotBlank()) {
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            "PARTY LINE — argued the ${r.assigned} brief",
-                            style = OverlineStyle,
-                            color = IdeologyTheme.of(r.assigned).brand,
-                        )
-                    }
-
                     Spacer(Modifier.height(16.dp))
                     StrengthMeter(strength = r.strength, required = r.required, ideology = r.primary)
                 }
@@ -204,7 +195,9 @@ fun ResultScreen(vm: GameViewModel) {
 
             // The morning after — spin, the record, the blocs, the snap poll.
             val hasPress = r.headlines.isNotEmpty() || r.blocReactions.isNotEmpty() ||
-                r.approvalAfter >= 0 || (r.consistency?.note?.isNotBlank() == true)
+                r.approvalAfter >= 0 || (r.consistency?.note?.isNotBlank() == true) ||
+                r.whipOutcome.isNotBlank() || r.crisisOutcome.isNotBlank() ||
+                r.newEndorsements.isNotEmpty()
             if (hasPress) {
                 AnimatedVisibility(
                     visible = press,
@@ -217,6 +210,69 @@ fun ResultScreen(vm: GameViewModel) {
                             style = OverlineStyle,
                             color = MaterialTheme.colorScheme.tertiary,
                         )
+
+                        // The whip is revealed — obedience, glorious rebellion, or the bill.
+                        if (r.whipOutcome.isNotBlank()) {
+                            Spacer(Modifier.height(10.dp))
+                            SectionCard(glow = IdeologyTheme.of(r.whip).brand) {
+                                Text(
+                                    "THE WHIP REVEALED",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = IdeologyTheme.of(r.whip).brand,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    when (r.whipOutcome) {
+                                        "obeyed" -> "The party demanded the ${r.whip} line — and got it. " +
+                                            "The whip is satisfied. (+${r.whipPollAdj} poll)"
+                                        "rebel" -> "The party demanded ${r.whip}. ${r.playerName} defied it — " +
+                                            "magnificently. The crowd loves a rebel. (+${r.whipPollAdj} poll)"
+                                        else -> "The party demanded ${r.whip}. ${r.playerName} strayed — and " +
+                                            "unconvincingly. The party remembers. (${r.whipPollAdj} poll)"
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+
+                        // The tripwire crisis, settled.
+                        if (r.crisisOutcome.isNotBlank()) {
+                            Spacer(Modifier.height(10.dp))
+                            SectionCard {
+                                Text(
+                                    "THE CRISIS, SETTLED",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    when (r.crisisOutcome) {
+                                        "weathered" -> "A crisis aimed at ${r.crisisTarget} broke mid-argument — " +
+                                            "and ${r.playerName} held the line anyway. Courage under fire: " +
+                                            "+1 bonus ${Ideologies.resourceOf(r.crisisTarget)} (+2 poll)."
+                                        "claimed" -> "The mid-argument crisis claimed its target: ${r.playerName} " +
+                                            "argued ${r.crisisTarget} and fumbled. The nation pays — " +
+                                            "${r.crisisTarget}'s home meter −3 (−3 poll)."
+                                        else -> "A crisis aimed at ${r.crisisTarget} broke mid-argument — " +
+                                            "${r.playerName} swerved away from it. The record will remember."
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+
+                        // New endorsements — a bloc formally comes aboard.
+                        r.newEndorsements.forEach { bloc ->
+                            Spacer(Modifier.height(10.dp))
+                            SectionCard(glow = MaterialTheme.colorScheme.tertiary) {
+                                Text(
+                                    "🤝 The $bloc ENDORSE ${r.playerName}! Their machine now amplifies " +
+                                        "every positive poll swing (+1), and endorsements break ties in the standings.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
 
                         // Two front pages — the same answer, two spins.
                         r.headlines.take(2).forEach { h ->
@@ -386,6 +442,14 @@ fun ResultScreen(vm: GameViewModel) {
                     tint = IdeologyTheme.container(r.secondary),
                     modifier = Modifier.weight(1f),
                 )
+                if (r.crisisOutcome == "weathered") {
+                    StatTile(
+                        label = "Crisis bonus",
+                        value = "+1 · ${Ideologies.resourceOf(r.crisisTarget)}",
+                        tint = IdeologyTheme.container(r.crisisTarget),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
 
             var displayLang by remember(r) { mutableStateOf(vm.language) }

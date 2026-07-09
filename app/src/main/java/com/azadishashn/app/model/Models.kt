@@ -258,4 +258,13 @@ data class AwardResult(
     val nationEffects: NationEffects? = null,
     /** Party-lines mode: the ideology the player was ASSIGNED to argue (else ""). */
     val assigned: String = "",
+    // -- The whip, revealed (v2.1) — obey quietly, or rebel and face the party --
+    val whip: String = "",              // the ideology the whip demanded ("" = no whip)
+    val whipOutcome: String = "",       // obeyed | rebel | punished
+    val whipPollAdj: Int = 0,
+    // -- Tripwire crisis stakes (v2.1) --
+    val crisisTarget: String = "",      // the ideology the crisis attacked ("" = none fired)
+    val crisisOutcome: String = "",     // weathered | claimed | swerved
+    /** Blocs that newly endorsed the player at this verdict (crossed +3). */
+    val newEndorsements: List<String> = emptyList(),
 )

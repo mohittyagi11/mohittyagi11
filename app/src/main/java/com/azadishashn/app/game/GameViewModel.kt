@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.azadishashn.app.data.CrisisDeck
 import com.azadishashn.app.data.GameStore
 import com.azadishashn.app.data.OfflineContent
 import com.azadishashn.app.data.SettingsStore
@@ -76,8 +77,19 @@ data class GameState(
     val blocSupport: Map<Int, Map<String, Int>> = emptyMap(),
     /** The public record: every position every player has taken this game. */
     val dossier: List<DossierEntry> = emptyList(),
-    /** Party-lines mode: the ideology this turn's answerer must secretly argue. */
+    /** The party whip's secret instruction for this turn's answerer (null = no whip). */
     val assignedIdeology: String? = null,
+    /** playerId -> blocs that have ENDORSED the player (support reached +3; sticky). */
+    val endorsements: Map<Int, List<String>> = emptyMap(),
+    // -- The questioner's tripwire (armed secretly during the question phase) --
+    /** "word" | "time" | null (not armed). */
+    val tripwireType: String? = null,
+    /** The landmine word/phrase (word tripwire only). */
+    val tripwireWord: String = "",
+    val tripwireFired: Boolean = false,
+    /** The crisis that fired, and the ideology it targets (the answerer's base). */
+    val crisisLine: String = "",
+    val crisisTarget: String = "",
     /** A pending scandal the active player must answer before the round starts. */
     val scandal: Scandal? = null,
     /** One-line result of the last scandal response (shown before theme pick). */
@@ -323,12 +335,20 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             usingOffline = false,
             selectedThemes = emptySet(),
             screen = Screen.Round,
-            // Political-realism turn resets.
-            assignedIdeology = if (settings.partyLines && settings.hasKey) Ideologies.NAMES.random() else null,
+            // Political-realism turn resets. The whip is an EVENT, not a constant:
+            // roughly every other turn it hands the answerer sealed instructions.
+            assignedIdeology = if (settings.partyLines && settings.hasKey && Random.nextFloat() < 0.5f) {
+                Ideologies.NAMES.random()
+            } else null,
             scandal = null,
             scandalResult = null,
             leakUsed = false,
             streamHint = null,
+            tripwireType = null,
+            tripwireWord = "",
+            tripwireFired = false,
+            crisisLine = "",
+            crisisTarget = "",
         )
         if (settings.hasKey) {
             // Show the questioner a theme picker; generation waits for [generate].
@@ -416,10 +436,17 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val n = state.nation
         val meters = "Economy ${n.economy}/100, Liberty ${n.liberty}/100, " +
             "Stability ${n.stability}/100, Institutional Trust ${n.trust}/100"
+        val crises = listOf(
+            "Economy" to n.economy, "Liberty" to n.liberty,
+            "Stability" to n.stability, "Institutional Trust" to n.trust,
+        ).filter { it.second < 25 }
+        val crisisLine = if (crises.isEmpty()) "" else
+            "\nTHE NATION IS IN CRISIS on: ${crises.joinToString(", ") { it.first }} — " +
+                "the scenario MUST confront this crisis head-on."
         val recent = state.dossier.takeLast(3).joinToString("\n") {
             "- ${it.roundTitle}: ${it.playerName} took a ${it.ideology} line — ${it.stance}"
         }
-        return "Nation meters: $meters\nRecent decisions:\n$recent"
+        return "Nation meters: $meters$crisisLine\nRecent decisions:\n$recent"
     }
 
     fun toggleTheme(theme: String) {
@@ -579,30 +606,35 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // -- The questioner's tripwire: an ambush armed BEFORE the answer ----------
+
     /**
-     * The questioner leaks a complication MID-ARGUMENT — the twist machinery with
-     * breaking-news timing. The judge is told and weighs the answerer's composure.
+     * Secretly arm a mid-argument crisis: [type] "word" fires the instant the
+     * answer contains [word]; "time" fires at a hidden random moment. The crisis
+     * TARGETS the answerer's most-stacked ideology — a strike at their base.
      */
-    fun leak() {
-        if (state.leakUsed) return
-        val round = state.current ?: return
-        if (!settings.hasKey || state.twistsUsedThisTurn >= twistLimit) return
-        state = state.copy(loading = true, loadingKind = "twist", error = null)
-        viewModelScope.launch {
-            runCatching {
-                ClaudeClient(settings.apiKey, settings.model).twistRound(round, settings.language, settings.readLangs.toList())
-            }.onSuccess { twisted ->
-                state = state.copy(
-                    current = twisted,
-                    twistsUsedThisTurn = state.twistsUsedThisTurn + 1,
-                    leakUsed = true,
-                    loading = false,
-                    loadingKind = null,
-                )
-            }.onFailure { e ->
-                state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Leak failed")
-            }
-        }
+    fun armTripwire(type: String, word: String = "") {
+        if (!settings.hasKey || state.tripwireType != null) return
+        if (type == "word" && word.isBlank()) return
+        state = state.copy(tripwireType = type, tripwireWord = word.trim())
+    }
+
+    /**
+     * The tripwire springs (called by the UI when the landmine word appears or
+     * the timebomb's moment arrives). Instant + offline: the crisis line comes
+     * from [CrisisDeck], aimed at the answerer's base. Stakes settle in [award].
+     */
+    fun fireTripwire() {
+        if (state.tripwireFired || state.tripwireType == null) return
+        val active = state.activePlayer ?: return
+        val target = active.counts.filterValues { it > 0 }.maxByOrNull { it.value }?.key
+            ?: Ideologies.NAMES.random()
+        state = state.copy(
+            tripwireFired = true,
+            leakUsed = true,
+            crisisLine = CrisisDeck.draw(target),
+            crisisTarget = target,
+        )
     }
 
     // -- Resolve (Claude judges; rivals can't stall) -------------------------
@@ -617,25 +649,23 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val pastPositions = state.dossier.filter { it.playerId == active.id }
                 .takeLast(4)
                 .map { "\"${it.roundTitle}\": served ${it.ideology} — ${it.stance}" }
-            val assigned = state.assignedIdeology.orEmpty()
-            val leaked = state.leakUsed
             viewModelScope.launch {
                 runCatching {
                     judgeClient().judge(
                         round, argument, settings.language, settings.readLangs.toList(),
                         rebuttal = rebuttal, closer = closer,
+                        rebutterName = state.questioner?.name.orEmpty(),
                         pastPositions = pastPositions,
-                        assigned = assigned, leaked = leaked,
+                        crisis = state.crisisLine,
                     )
                 }.onSuccess { v ->
-                    val actual = v.primaryIdeology.takeIf { it in Ideologies.NAMES }
+                    // The judge is pure: the card follows what the words ACTUALLY
+                    // served. The whip settles its own account in award().
+                    val primary = v.primaryIdeology.takeIf { it in Ideologies.NAMES }
                         ?: Ideologies.NAMES.first()
-                    // Party lines: the card serves the ASSIGNED ideology (strength
-                    // already measures how convincingly it was argued).
-                    val primary = if (assigned.isNotBlank()) assigned else actual
                     val secondary = v.secondaryIdeology.takeIf { it in Ideologies.NAMES && it != primary }
                         ?: Ideologies.NAMES.first { it != primary }
-                    award(active, primary, secondary, v.strength.coerceIn(1, 10), v, assigned)
+                    award(active, primary, secondary, v.strength.coerceIn(1, 10), v)
                 }.onFailure { e ->
                     state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Judging failed")
                 }
@@ -646,7 +676,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val secondary = round.options.firstOrNull { it.id == state.secondaryOptionId }?.ideology
                 ?.takeIf { it != primary }
                 ?: Ideologies.NAMES.first { it != primary }
-            award(active, primary, secondary, -1, null, "")
+            award(active, primary, secondary, -1, null)
         }
     }
 
@@ -659,23 +689,38 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
      * accumulating an ideology needs a stronger argument to keep it. [strength] < 0 is
      * offline (a simple anti-hoard rule instead of a rating).
      */
+    /** Which nation meter is [ideology]'s home turf. */
+    private fun homeMeter(ideology: String): Int = when (ideology) {
+        "Capitalist" -> state.nation.economy
+        "Supremo" -> state.nation.stability
+        "Showstopper" -> state.nation.liberty
+        else -> state.nation.trust
+    }
+
     private fun award(
         active: Player,
         primary: String,
         secondary: String,
         strength: Int,
         verdict: Verdict?,
-        assigned: String = "",
     ) {
         val held = active.counts[primary] ?: 0
         val tableAvg = state.players.map { it.counts[primary] ?: 0 }.average()
         val required = (5.0 + (held - tableAvg)).roundToInt().coerceIn(1, 10)
+
+        // The nation feeds back into the cards: a meter in CRISIS empowers its
+        // ideology (the hour demands it, +1 effective strength); a GOLDEN AGE
+        // breeds complacency (nothing to rail against, -1).
+        val home = homeMeter(primary)
+        val meterAdj = if (strength < 0) 0 else if (home < 25) 1 else if (home > 75) -1 else 0
+        val effStrength = if (strength < 0) strength else (strength + meterAdj).coerceIn(1, 10)
+
         // A card always lands; the baseline only decides whether it stays on [primary]
         // (keep stacking) or is redirected to [secondary] (you're hoarding [primary]).
         val keepPrimary = if (strength < 0) {
             held < (state.players.minOf { it.counts[primary] ?: 0 }) + 2
         } else {
-            strength >= required
+            effStrength >= required
         }
         val cardIdeology = if (keepPrimary) primary else secondary
         val diverted = !keepPrimary
@@ -683,10 +728,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val explanation = buildString {
             if (strength >= 0) {
                 if (keepPrimary) {
-                    append("Strength $strength/10 cleared the bar (needed $required). Earned 1 $primary card. ")
+                    append("Strength $effStrength/10 cleared the bar (needed $required). Earned 1 $primary card. ")
                 } else {
-                    append("Strength $strength/10 — needed $required to keep stacking $primary (you hold $held). Card goes to $secondary instead. ")
+                    append("Strength $effStrength/10 — needed $required to keep stacking $primary (you hold $held). Card goes to $secondary instead. ")
                 }
+                if (meterAdj > 0) append("(+1 crisis bonus — the nation demands $primary answers.) ")
+                if (meterAdj < 0) append("(−1 golden-age malaise — $primary has nothing to rail against.) ")
             } else {
                 append(if (keepPrimary) "Earned 1 $primary card. " else "You're hoarding $primary — card goes to $secondary instead. ")
             }
@@ -702,10 +749,46 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         // -- Political-realism effects (online verdicts only) ------------------
-        val newNation = state.nation.applied(verdict?.nationEffects)
-        val newApproval = if (verdict != null) {
-            (approvalOf(active.id) + verdict.pollDelta.coerceIn(-10, 10)).coerceIn(0, 100)
-        } else approvalOf(active.id)
+
+        // The whip settles its account: obey quietly, rebel gloriously, or pay.
+        val whip = state.assignedIdeology.orEmpty()
+        val whipOutcome = when {
+            verdict == null || whip.isBlank() -> ""
+            primary == whip -> "obeyed"
+            strength >= 7 -> "rebel"
+            else -> "punished"
+        }
+        val whipAdj = when (whipOutcome) {
+            "obeyed" -> 3
+            "rebel" -> 5
+            "punished" -> -4
+            else -> 0
+        }
+
+        // The tripwire crisis settles: hold the targeted line and clear the bar →
+        // +1 bonus resource; argue it and fumble → the nation itself takes the hit.
+        val crisisTarget = if (verdict != null) state.crisisTarget else ""
+        val crisisOutcome = when {
+            crisisTarget.isBlank() -> ""
+            primary == crisisTarget && keepPrimary -> "weathered"
+            primary == crisisTarget -> "claimed"
+            else -> "swerved"
+        }
+        val crisisPollAdj = when (crisisOutcome) {
+            "weathered" -> 2
+            "claimed" -> -3
+            else -> 0
+        }
+        val crisisMeterHit = if (crisisOutcome == "claimed") {
+            when (crisisTarget) {
+                "Capitalist" -> com.azadishashn.app.model.NationEffects(economy = -3)
+                "Supremo" -> com.azadishashn.app.model.NationEffects(stability = -3)
+                "Showstopper" -> com.azadishashn.app.model.NationEffects(liberty = -3)
+                else -> com.azadishashn.app.model.NationEffects(trust = -3)
+            }
+        } else null
+
+        val newNation = state.nation.applied(verdict?.nationEffects).applied(crisisMeterHit)
         val mergedBlocs = if (verdict != null && verdict.blocReactions.isNotEmpty()) {
             val mine = state.blocSupport[active.id].orEmpty().toMutableMap()
             verdict.blocReactions.forEach { r ->
@@ -713,6 +796,24 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             }
             state.blocSupport + (active.id to mine)
         } else state.blocSupport
+
+        // Endorsements: +3 support wins a bloc's sticky backing; below 0 loses it.
+        val myBlocs = mergedBlocs[active.id].orEmpty()
+        val had = state.endorsements[active.id].orEmpty()
+        val kept = had.filter { (myBlocs[it] ?: 0) >= 0 }
+        val gained = myBlocs.filterValues { it >= 3 }.keys.filterNot { it in kept }
+        val myEndorsements = kept + gained
+        val newEndorsementsMap =
+            if (verdict != null) state.endorsements + (active.id to myEndorsements) else state.endorsements
+
+        // Snap poll: the verdict's swing + the whip + the crisis, and every
+        // endorsed bloc adds +1 to a POSITIVE verdict swing (your machine turns out).
+        val newApproval = if (verdict != null) {
+            var delta = verdict.pollDelta.coerceIn(-10, 10)
+            if (delta > 0) delta += kept.size
+            delta += whipAdj + crisisPollAdj
+            (approvalOf(active.id) + delta).coerceIn(0, 100)
+        } else approvalOf(active.id)
         val newDossier = if (verdict != null) {
             state.dossier + DossierEntry(
                 playerId = active.id,
@@ -729,6 +830,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             nation = newNation,
             approval = if (verdict != null) state.approval + (active.id to newApproval) else state.approval,
             blocSupport = mergedBlocs,
+            endorsements = newEndorsementsMap,
             dossier = newDossier,
             loading = false,
             loadingKind = null,
@@ -736,7 +838,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 playerName = active.name,
                 primary = primary,
                 secondary = secondary,
-                strength = strength,
+                strength = if (strength < 0) strength else effStrength,
                 required = required,
                 cardAwarded = true,
                 cardIdeology = cardIdeology,
@@ -753,7 +855,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 pollDelta = verdict?.pollDelta ?: 0,
                 approvalAfter = if (verdict != null) newApproval else -1,
                 nationEffects = verdict?.nationEffects,
-                assigned = assigned,
+                whip = whip.takeIf { whipOutcome.isNotBlank() }.orEmpty(),
+                whipOutcome = whipOutcome,
+                whipPollAdj = whipAdj,
+                crisisTarget = crisisTarget,
+                crisisOutcome = crisisOutcome,
+                newEndorsements = if (verdict != null) gained else emptyList(),
             ),
             screen = Screen.Result,
         )

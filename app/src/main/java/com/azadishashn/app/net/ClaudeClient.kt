@@ -162,14 +162,15 @@ class ClaudeClient(
         readLangs: List<String> = listOf("en"),
         rebuttal: String = "",
         closer: String = "",
+        rebutterName: String = "",
         pastPositions: List<String> = emptyList(),
-        assigned: String = "",
-        leaked: Boolean = false,
+        crisis: String = "",
     ): Verdict = withContext(Dispatchers.IO) {
         val opts = round.options.joinToString("\n") { "- ${it.ideology}: ${it.label}" }
         val blocList = round.blocs.ifEmpty { listOf("the public") }
+        val who = rebutterName.ifBlank { "An opponent" }
         val exchange = buildString {
-            if (rebuttal.isNotBlank()) append("\nAn OPPONENT then rebutted: \"$rebuttal\"")
+            if (rebuttal.isNotBlank()) append("\nThe QUESTIONER $who then cross-examined: \"$rebuttal\"")
             if (closer.isNotBlank()) append("\nThe player CLOSED: \"$closer\"")
             if (isNotEmpty()) append(
                 "\nWeigh the full exchange — a strong rebuttal left unanswered weakens the case; " +
@@ -179,13 +180,9 @@ class ClaudeClient(
         val record = if (pastPositions.isEmpty()) "" else
             "\nTHE PLAYER'S PUBLIC RECORD this game (their past positions, on the books):\n" +
                 pastPositions.joinToString("\n") { "- $it" }
-        val partyLine = if (assigned.isBlank()) "" else
-            "\nPARTY LINES MODE: the player was secretly ASSIGNED to argue the $assigned line. " +
-                "Score `strength` by how convincingly the words served $assigned (not their own heart). " +
-                "primary_ideology stays your honest read of what the words actually served."
-        val leakLine = if (!leaked) "" else
-            "\nA complication was LEAKED mid-argument (the scenario's current situation already " +
-                "includes it). Weigh how composedly the answer absorbed the breaking news."
+        val leakLine = if (crisis.isBlank()) "" else
+            "\nMID-ARGUMENT, this BREAKING news dropped on the player: \"$crisis\" — they had to " +
+                "absorb it live. Weigh how composedly the answer handled the ambush."
         val user = """
             Scenario: ${round.scenario.title} — ${round.scenario.situation}
             Question: ${round.dilemma.question}
@@ -194,7 +191,7 @@ class ClaudeClient(
             $opts
 
             The player answered the question in their OWN words (they were NOT shown the list above):
-            "$argument"$exchange$record$partyLine$leakLine
+            "$argument"$exchange$record$leakLine
 
             Be an impartial judge — ignore who benefits in the game. Judge the player's actual words.
             1. primary_ideology: the ONE of the four ideologies (Capitalist, Supremo, Showstopper,

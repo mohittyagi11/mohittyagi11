@@ -75,12 +75,17 @@ import com.azadishashn.app.ui.components.LangChips
 import com.azadishashn.app.ui.components.causal.PathsFanOut
 import com.azadishashn.app.ui.theme.Dim
 import com.azadishashn.app.ui.theme.IdeologyTheme
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.delay
 
-private enum class RoundPhase { QUESTION, ANSWER, REBUTTAL, CLOSER }
+private enum class RoundPhase { QUESTION, ANSWER, HANDOFF_REBUT, REBUTTAL, HANDOFF_CLOSE, CLOSER }
 
 /**
  * A small countdown ring — debate pressure, not enforcement: it turns red and
@@ -349,6 +354,22 @@ private fun RoundBody(vm: GameViewModel) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        // Nation crisis fronts — the ideology that owns each gets +1 strength.
+        run {
+            val n = s.nation
+            val fronts = listOf(
+                "ECONOMY" to n.economy, "LIBERTY" to n.liberty,
+                "STABILITY" to n.stability, "TRUST" to n.trust,
+            ).filter { it.second < 25 }
+            if (fronts.isNotEmpty()) {
+                Text(
+                    "⚠ ${fronts.joinToString(" · ") { it.first }} CRISIS — the nation demands answers " +
+                        "(its ideology argues at +1 strength)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
         Spacer(Modifier.height(Dim.tight))
 
         var displayLang by remember(round) { mutableStateOf(vm.language) }
@@ -422,6 +443,57 @@ private fun RoundBody(vm: GameViewModel) {
                 }
                 s.error?.let { ErrorLine(it) }
 
+                // The questioner's ambush: secretly arm a mid-argument crisis.
+                if (vm.hasKey) {
+                    Spacer(Modifier.height(Dim.itemGap))
+                    if (s.tripwireType == null) {
+                        Collapsible(
+                            "Arm a tripwire (${s.questioner?.name} only — secret)",
+                            Icons.Filled.AutoAwesome,
+                            initiallyExpanded = false,
+                        ) {
+                            Column {
+                                Text(
+                                    "A crisis will ambush ${s.activePlayer?.name} MID-ARGUMENT, aimed at " +
+                                        "their strongest ideology. Hold the line through it and clear the " +
+                                        "bar → +1 bonus resource. Argue it and fumble → the nation takes the hit.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.height(Dim.tight))
+                                var landmine by remember(roundKey) { mutableStateOf("") }
+                                OutlinedTextField(
+                                    value = landmine,
+                                    onValueChange = { landmine = it },
+                                    label = { Text("Landmine word — fires if they say it") },
+                                    singleLine = true,
+                                    shape = MaterialTheme.shapes.medium,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dim.tight)) {
+                                    OutlinedButton(
+                                        onClick = { vm.armTripwire("word", landmine) },
+                                        enabled = landmine.isNotBlank(),
+                                        shape = MaterialTheme.shapes.large,
+                                        modifier = Modifier.weight(1f),
+                                    ) { Text("Arm landmine") }
+                                    OutlinedButton(
+                                        onClick = { vm.armTripwire("time") },
+                                        shape = MaterialTheme.shapes.large,
+                                        modifier = Modifier.weight(1f),
+                                    ) { Text("Arm timebomb") }
+                                }
+                            }
+                        }
+                    } else {
+                        Text(
+                            "Tripwire armed ✓ (keep it secret)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                }
+
                 if (round.paths.isNotEmpty()) {
                     Spacer(Modifier.height(Dim.itemGap))
                     Collapsible("Compare the four paths", Icons.Filled.AccountTree, initiallyExpanded = false) {
@@ -440,30 +512,68 @@ private fun RoundBody(vm: GameViewModel) {
             RoundPhase.ANSWER -> {
                 Spacer(Modifier.height(Dim.sectionGap))
 
-                // Party lines: the answerer's secret brief — tap to peek, tap to hide.
+                // The tripwire watchers: a landmine word fires the instant it's
+                // typed/dictated; a timebomb at a hidden random moment.
+                val haptics = LocalHapticFeedback.current
+                if (s.tripwireType == "word" && !s.tripwireFired) {
+                    LaunchedEffect(argument) {
+                        if (s.tripwireWord.isNotBlank() && argument.contains(s.tripwireWord, ignoreCase = true)) {
+                            vm.fireTripwire()
+                        }
+                    }
+                }
+                if (s.tripwireType == "time" && !s.tripwireFired) {
+                    val fuse = remember(roundKey) { (25..70).random() }
+                    LaunchedEffect(roundKey) {
+                        delay(fuse * 1000L)
+                        vm.fireTripwire()
+                    }
+                }
+                if (s.tripwireFired) {
+                    LaunchedEffect(roundKey) {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    }
+                }
+
+                // The whip's sealed envelope — press & HOLD so no neighbour can peek.
                 if (s.assignedIdeology != null && vm.hasKey) {
                     var peek by remember(roundKey) { mutableStateOf(false) }
                     val brand = IdeologyTheme.of(s.assignedIdeology).brand
-                    OutlinedButton(
-                        onClick = { peek = !peek },
-                        shape = MaterialTheme.shapes.large,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            if (peek) "PARTY BRIEF: argue the ${s.assignedIdeology} line (tap to hide)"
-                            else "🔒 ${s.activePlayer?.name} only — tap for your secret party brief",
-                            color = if (peek) brand else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text(
+                        if (peek) "📜 THE WHIP DEMANDS THE ${s.assignedIdeology.uppercase()} LINE. " +
+                            "Obey quietly (+3 poll) — or rebel; do it magnificently and the crowd loves you (+5)."
+                        else "📜 ${s.activePlayer?.name} only: the party whip has instructions — press & hold to read",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (peek) brand else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .pointerInput(roundKey) {
+                                detectTapGestures(
+                                    onPress = {
+                                        peek = true
+                                        tryAwaitRelease()
+                                        peek = false
+                                    },
+                                )
+                            }
+                            .padding(vertical = 6.dp),
+                    )
                     Spacer(Modifier.height(Dim.tight))
                 }
 
-                // Breaking-news banner after a mid-argument leak.
-                if (s.leakUsed) {
+                // BREAKING — the tripwire crisis, targeted at the answerer's base.
+                if (s.tripwireFired && s.crisisLine.isNotBlank()) {
                     Text(
-                        "⚡ BREAKING — the situation just changed. The judge will watch how you absorb it.",
-                        style = MaterialTheme.typography.bodySmall,
+                        "⚡ ${s.crisisLine}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        "TARGETS ${s.crisisTarget.uppercase()} — hold that line and clear the bar for " +
+                            "+1 bonus resource; argue it and fumble, and the nation pays.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(Dim.tight))
                 }
@@ -503,13 +613,6 @@ private fun RoundBody(vm: GameViewModel) {
                     minLines = 2,
                 )
 
-                // The questioner's dirty trick: leak a complication mid-argument.
-                if (vm.hasKey && !s.leakUsed && s.twistsUsedThisTurn < 2) {
-                    Spacer(Modifier.height(Dim.tight))
-                    TextButton(onClick = vm::leak, modifier = Modifier.fillMaxWidth()) {
-                        Text("${s.questioner?.name}: leak a complication mid-argument ⚡")
-                    }
-                }
 
                 if (!vm.hasKey) {
                     Spacer(Modifier.height(Dim.itemGap))
@@ -560,11 +663,11 @@ private fun RoundBody(vm: GameViewModel) {
                 )
                 if (vm.hasKey) {
                     OutlinedButton(
-                        onClick = { phase = RoundPhase.REBUTTAL },
+                        onClick = { phase = RoundPhase.HANDOFF_REBUT },
                         enabled = argument.isNotBlank(),
                         shape = MaterialTheme.shapes.large,
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Cross-examine first — open the floor") }
+                    ) { Text("Cross-examine — ${s.questioner?.name} takes the floor") }
                 }
                 TextButton(
                     onClick = { phase = RoundPhase.QUESTION },
@@ -573,12 +676,24 @@ private fun RoundBody(vm: GameViewModel) {
                 Spacer(Modifier.height(Dim.sectionGap))
             }
 
+            RoundPhase.HANDOFF_REBUT -> {
+                HandoffCard(
+                    toName = s.questioner?.name.orEmpty(),
+                    role = "CROSS-EXAMINATION",
+                    brief = "You posed this question — now prosecute the answer. " +
+                        "20 seconds to rebut when you take the floor.",
+                    cta = "I have the floor",
+                    onTake = { phase = RoundPhase.REBUTTAL },
+                    onSkip = { rebuttal = ""; vm.resolve(argument) },
+                    skipLabel = "Waive cross-examination — resolve now",
+                )
+            }
+
             RoundPhase.REBUTTAL -> {
                 Spacer(Modifier.height(Dim.sectionGap))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "The floor is open: ONE opponent gets a 20-second rebuttal of " +
-                            "${s.activePlayer?.name}'s answer.",
+                        "${s.questioner?.name}: 20 seconds to tear the answer apart.",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
@@ -606,15 +721,28 @@ private fun RoundBody(vm: GameViewModel) {
                 s.error?.let { ErrorLine(it) }
                 Spacer(Modifier.height(Dim.sectionGap))
                 PrimaryCta(
-                    text = "To ${s.activePlayer?.name}'s closing statement",
-                    onClick = { phase = RoundPhase.CLOSER },
+                    text = "Done — back to ${s.activePlayer?.name}",
+                    onClick = { phase = RoundPhase.HANDOFF_CLOSE },
                     enabled = rebuttal.isNotBlank(),
                 )
                 TextButton(
                     onClick = { rebuttal = ""; vm.resolve(argument) },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("No takers — resolve now") }
+                ) { Text("Withdraw — resolve now") }
                 Spacer(Modifier.height(Dim.sectionGap))
+            }
+
+            RoundPhase.HANDOFF_CLOSE -> {
+                HandoffCard(
+                    toName = s.activePlayer?.name.orEmpty(),
+                    role = "CLOSING STATEMENT",
+                    brief = "${s.questioner?.name} has attacked your answer. " +
+                        "15 seconds to answer the rebuttal and close.",
+                    cta = "I have the floor",
+                    onTake = { phase = RoundPhase.CLOSER },
+                    onSkip = { closer = ""; vm.resolve(argument, rebuttal) },
+                    skipLabel = "No closer — let the judge weigh it as it stands",
+                )
             }
 
             RoundPhase.CLOSER -> {
@@ -691,6 +819,50 @@ private fun OptionRow(option: OptionCard, selected: Boolean, onClick: () -> Unit
             Spacer(Modifier.height(Dim.tight))
             Text(option.label, style = MaterialTheme.typography.titleSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
         }
+    }
+}
+
+/**
+ * A pass-the-phone interstitial: who takes the floor, in what role, with what
+ * brief — the previous speaker's words stay hidden behind it.
+ */
+@Composable
+private fun HandoffCard(
+    toName: String,
+    role: String,
+    brief: String,
+    cta: String,
+    onTake: () -> Unit,
+    onSkip: () -> Unit,
+    skipLabel: String,
+) {
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(role, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Pass the phone to",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            toName,
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            brief,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(Dim.sectionGap))
+        PrimaryCta(text = "$cta — $toName", onClick = onTake)
+        TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) { Text(skipLabel) }
     }
 }
 

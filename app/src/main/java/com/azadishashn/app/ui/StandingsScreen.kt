@@ -47,7 +47,12 @@ import com.azadishashn.app.ui.theme.NumberStyle
 fun StandingsScreen(vm: GameViewModel) {
     val s = vm.state
     val midGame = s.dashboardReturn != null
-    val ranked = s.players.sortedByDescending { it.total }
+    // Cards decide the rank; endorsements break ties; approval breaks those.
+    val ranked = s.players.sortedWith(
+        compareByDescending<com.azadishashn.app.model.Player> { it.total }
+            .thenByDescending { s.endorsements[it.id]?.size ?: 0 }
+            .thenByDescending { vm.approvalOf(it.id) },
+    )
 
     AzadiScaffold(
         title = if (midGame) "Dashboard" else "Final standings",
@@ -60,7 +65,7 @@ fun StandingsScreen(vm: GameViewModel) {
                 .padding(pad)
                 .padding(horizontal = Dim.screenH),
         ) {
-            // The living nation — where the table's choices have pushed the meters.
+            // The living nation — each meter is one ideology's home turf.
             if (s.dossier.isNotEmpty()) {
                 SectionCard {
                     Text(
@@ -69,10 +74,17 @@ fun StandingsScreen(vm: GameViewModel) {
                         color = MaterialTheme.colorScheme.tertiary,
                     )
                     Spacer(Modifier.height(8.dp))
-                    NationMeter("Economy", s.nation.economy)
-                    NationMeter("Liberty", s.nation.liberty)
-                    NationMeter("Stability", s.nation.stability)
-                    NationMeter("Trust", s.nation.trust)
+                    NationMeter("Economy", s.nation.economy, "Capitalist")
+                    NationMeter("Liberty", s.nation.liberty, "Showstopper")
+                    NationMeter("Stability", s.nation.stability, "Supremo")
+                    NationMeter("Trust", s.nation.trust, "Idealist")
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Each meter is an ideology's home turf: a CRISIS (<25) empowers it " +
+                            "(+1 strength); a GOLDEN AGE (>75) breeds complacency (−1).",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 Spacer(Modifier.height(Dim.itemGap))
             }
@@ -189,6 +201,16 @@ fun StandingsScreen(vm: GameViewModel) {
                                 if (c > 0) IdeologyBadge(name, count = c, showLabel = false)
                             }
                         }
+                        // The blocs formally behind this player.
+                        val backed = s.endorsements[player.id].orEmpty()
+                        if (backed.isNotEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "🤝 " + backed.joinToString("  ·  "),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
+                        }
                     }
                 }
             }
@@ -231,9 +253,10 @@ fun StandingsScreen(vm: GameViewModel) {
     }
 }
 
-/** One slim nation meter row: label, 0..100 bar, value. */
+/** One slim nation meter row, tinted by its home ideology, with state badges. */
 @Composable
-private fun NationMeter(label: String, value: Int) {
+private fun NationMeter(label: String, value: Int, ideology: String) {
+    val brand = com.azadishashn.app.ui.theme.IdeologyTheme.of(ideology).brand
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
         Text(
             label,
@@ -243,10 +266,25 @@ private fun NationMeter(label: String, value: Int) {
         )
         androidx.compose.material3.LinearProgressIndicator(
             progress = { value / 100f },
+            color = brand,
             modifier = Modifier.weight(1f).height(6.dp),
         )
         Spacer(Modifier.width(8.dp))
         Text("$value", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        when {
+            value < 25 -> Text(
+                "  CRISIS",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error,
+            )
+            value > 75 -> Text(
+                "  GOLDEN",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Gold,
+            )
+        }
     }
 }
 
@@ -270,11 +308,9 @@ private fun gameAwards(vm: GameViewModel): List<Pair<String, String>> {
     s.players.maxByOrNull { vm.approvalOf(it.id) }?.let {
         if (s.approval.isNotEmpty()) awards += "People's Favourite (${vm.approvalOf(it.id)}%)" to it.name
     }
-    s.players.mapNotNull { p ->
-        val support = s.blocSupport[p.id]?.values?.sum() ?: return@mapNotNull null
-        p.name to support
-    }.maxByOrNull { it.second }?.let { (name, n) ->
-        if (n > 0) awards += "Coalition Builder (+$n bloc support)" to name
-    }
+    s.players.map { p -> p.name to (s.endorsements[p.id]?.size ?: 0) }
+        .maxByOrNull { it.second }?.let { (name, n) ->
+            if (n > 0) awards += "Coalition Builder ($n endorsement${if (n == 1) "" else "s"})" to name
+        }
     return awards
 }
