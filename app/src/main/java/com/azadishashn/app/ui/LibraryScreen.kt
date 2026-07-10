@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.EmojiEvents
@@ -130,6 +131,11 @@ fun LibraryScreen(vm: GameViewModel) {
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                TextButton(onClick = vm::openPlaybook) {
+                    Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.height(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Playbook")
+                }
                 TextButton(onClick = vm::openSettings) {
                     Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.height(18.dp))
                     Spacer(Modifier.width(6.dp))

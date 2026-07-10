@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -50,10 +52,12 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.azadishashn.app.data.Lessons
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.model.Ideologies
 import kotlinx.coroutines.delay
 import com.azadishashn.app.ui.components.AzadiScaffold
+import com.azadishashn.app.ui.components.CoachMark
 import com.azadishashn.app.ui.components.Collapsible
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
@@ -103,6 +107,9 @@ fun ResultScreen(vm: GameViewModel) {
     )
     val reveal = ((pop - 0.55f) / 0.45f).coerceIn(0f, 1f)
     val glow = IdeologyTheme.of(cardIdeo).brand
+    // First-encounter coach cards: at most 2 per verdict, so the morning-after
+    // stack doesn't become a rules wall — the rest teach on a later verdict.
+    val coachBudget = remember(r) { mutableIntStateOf(0) }
 
     AzadiScaffold(title = "Verdict") { pad ->
         Column(
@@ -196,9 +203,38 @@ fun ResultScreen(vm: GameViewModel) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    // The bar math is always inspectable — award() already wrote
+                    // the full plain-words explanation; this just unfolds it.
+                    if (r.explanation.isNotBlank()) {
+                        var why by remember(r) { mutableStateOf(false) }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (why) "WHY THIS VERDICT ▾" else "WHY THIS VERDICT ▸",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier
+                                .clickable { why = !why }
+                                .padding(vertical = 4.dp),
+                        )
+                        AnimatedVisibility(visible = why) {
+                            Text(
+                                r.explanation,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
                 // Celebratory spark burst over the hero.
                 Particles(color = glow, modifier = Modifier.matchParentSize())
+            }
+            // The bar decided who kept the card — teach it on the first verdict.
+            if (r.strength >= 0) {
+                CoachMark(
+                    Lessons.BAR, vm::hasSeenLesson, vm::markLessonSeen, coachBudget,
+                    highlight = if (r.diverted) 1 else 0,
+                )
             }
 
             // Ideologue milestone — the board build pays off: claim the power.
@@ -217,6 +253,7 @@ fun ResultScreen(vm: GameViewModel) {
                         fontWeight = FontWeight.Bold,
                     )
                 }
+                CoachMark(Lessons.MILESTONE, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
             }
 
             // The morning after — spin, the record, the blocs, the snap poll.
@@ -260,6 +297,14 @@ fun ResultScreen(vm: GameViewModel) {
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                             }
+                            CoachMark(
+                                Lessons.WHIP, vm::hasSeenLesson, vm::markLessonSeen, coachBudget,
+                                highlight = when (r.whipOutcome) {
+                                    "obeyed" -> 0
+                                    "rebel" -> 1
+                                    else -> 2
+                                },
+                            )
                         }
 
                         // The tripwire crisis, settled.
@@ -286,6 +331,14 @@ fun ResultScreen(vm: GameViewModel) {
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                             }
+                            CoachMark(
+                                Lessons.TRIPWIRE_FIRE, vm::hasSeenLesson, vm::markLessonSeen, coachBudget,
+                                highlight = when (r.crisisOutcome) {
+                                    "weathered" -> 0
+                                    "claimed" -> 1
+                                    else -> 2
+                                },
+                            )
                         }
 
                         // New endorsements — a bloc formally comes aboard (or defects!).
@@ -307,6 +360,12 @@ fun ResultScreen(vm: GameViewModel) {
                                     fontWeight = FontWeight.Bold,
                                 )
                             }
+                        }
+                        if (r.newEndorsements.isNotEmpty()) {
+                            CoachMark(
+                                Lessons.DEFECTION, vm::hasSeenLesson, vm::markLessonSeen, coachBudget,
+                                highlight = if (r.defections.isNotEmpty()) 1 else 0,
+                            )
                         }
 
                         // Two front pages — the same answer, two spins.
@@ -384,6 +443,7 @@ fun ResultScreen(vm: GameViewModel) {
                                     )
                                 }
                             }
+                            CoachMark(Lessons.BLOCS, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
                         }
 
                         // Snap poll + how the nation moved.
@@ -492,6 +552,7 @@ fun ResultScreen(vm: GameViewModel) {
                         )
                     }
                 }
+                CoachMark(Lessons.GRANTS, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
             }
 
             var displayLang by remember(r) { mutableStateOf(vm.language) }

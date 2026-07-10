@@ -13,6 +13,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -203,6 +204,22 @@ fun SettingsScreen(vm: GameViewModel) {
                     "Verdicts use the fastest model — snappier rounds; scenarios keep the model above.",
                     fastJudge,
                 ) { fastJudge = it }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            SectionCard {
+                Text("The Playbook", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Every house rule — the bar, the whip, tripwires, blocs, the nation — " +
+                        "taught by scenario, all branches spelled out.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(
+                    onClick = vm::openPlaybook,
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                ) { Text("Open the Playbook") }
             }
 
             Spacer(Modifier.height(20.dp))

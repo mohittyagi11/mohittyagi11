@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.ImportExport
@@ -23,15 +24,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.azadishashn.app.data.Lessons
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.model.Ideologies
 import com.azadishashn.app.ui.components.AnimatedCounter
 import com.azadishashn.app.ui.components.Avatar
 import com.azadishashn.app.ui.components.AzadiScaffold
+import com.azadishashn.app.ui.components.CoachMark
+import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.IdeologyDistributionBar
 import com.azadishashn.app.ui.components.PrimaryCta
@@ -62,7 +68,11 @@ fun StandingsScreen(vm: GameViewModel) {
         title = if (midGame) "Dashboard" else "Final standings",
         subtitle = if (midGame) "Round ${s.round} · next up: ${s.activePlayer?.name ?: ""}" else "Ideology cards per player",
         onBack = if (midGame) vm::leaveDashboard else null,
+        actions = {
+            IconActionButton(Icons.AutoMirrored.Filled.HelpOutline, "Playbook", vm::openPlaybook)
+        },
     ) { pad ->
+        val coachBudget = remember { mutableIntStateOf(0) }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -90,7 +100,11 @@ fun StandingsScreen(vm: GameViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                CoachMark(Lessons.NATION, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
                 Spacer(Modifier.height(Dim.itemGap))
+            }
+            if (s.players.isNotEmpty()) {
+                CoachMark(Lessons.LADDER, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
             }
 
             LazyColumn(

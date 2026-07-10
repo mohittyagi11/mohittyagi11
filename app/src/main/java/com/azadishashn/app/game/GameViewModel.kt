@@ -31,7 +31,7 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 
 @Serializable
-enum class Screen { Library, Setup, Settings, Round, Result, Standings, Edit, Transfer }
+enum class Screen { Library, Setup, Settings, Round, Result, Standings, Edit, Transfer, Playbook }
 
 @Serializable
 data class GameState(
@@ -68,6 +68,8 @@ data class GameState(
     val dashboardReturn: Screen? = null,
     /** When set, the Export/Import screen is open; closing returns here. */
     val transferReturn: Screen? = null,
+    /** When set, the Playbook (house-rules reference) is open; closing returns here. */
+    val playbookReturn: Screen? = null,
     // -- The living nation (political-realism systems) ------------------------
     /** Four 0..100 meters the table's choices push around; conditions generation. */
     val nation: NationState = NationState(),
@@ -228,6 +230,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         store.setActive(id)
         var restored = saved.copy(loading = false, loadingKind = null, error = null)
         if (restored.screen == Screen.Library) restored = restored.copy(screen = Screen.Round)
+        if (restored.screen == Screen.Playbook) {
+            restored = restored.copy(screen = restored.playbookReturn ?: Screen.Round, playbookReturn = null)
+        }
         if (restored.screen == Screen.Round && restored.current == null &&
             settings.hasKey && restored.availableThemes.isEmpty()
         ) {
@@ -322,6 +327,34 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun closeSettings() {
         val back = if (state.players.isEmpty()) Screen.Setup else Screen.Round
         state = state.copy(screen = back)
+    }
+
+    // -- The Playbook & coach cards (natural learning for the house rules) ----
+
+    /** Dismissed coach-card lesson ids, mirrored into state so the UI recomposes. */
+    private var seenLessonsState by mutableStateOf(settings.seenLessons)
+
+    fun hasSeenLesson(id: String): Boolean = id in seenLessonsState
+
+    fun markLessonSeen(id: String) {
+        settings.seenLessons = settings.seenLessons + id
+        seenLessonsState = settings.seenLessons
+    }
+
+    /** Re-arm every coach card (Playbook's "replay" button). */
+    fun resetLessons() {
+        settings.seenLessons = emptySet()
+        seenLessonsState = emptySet()
+    }
+
+    /** Open the house-rules reference; closing returns to wherever we were. */
+    fun openPlaybook() {
+        if (state.screen == Screen.Playbook) return
+        state = state.copy(playbookReturn = state.screen, screen = Screen.Playbook)
+    }
+
+    fun closePlaybook() {
+        state = state.copy(screen = state.playbookReturn ?: Screen.Library, playbookReturn = null)
     }
 
     // -- A turn --------------------------------------------------------------
@@ -1087,6 +1120,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             screen = if (state.current != null) Screen.Round else Screen.Standings,
             transferReturn = null,
             dashboardReturn = null,
+            playbookReturn = null,
             loading = false,
             error = null,
         )
@@ -1110,6 +1144,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             error = null,
             transferReturn = null,
             dashboardReturn = null,
+            playbookReturn = null,
         )
         return true
     }
@@ -1127,6 +1162,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             Screen.Standings -> state.copy(screen = state.dashboardReturn ?: Screen.Library, dashboardReturn = null)
             Screen.Edit -> state.copy(screen = Screen.Standings)
             Screen.Transfer -> state.copy(screen = state.transferReturn ?: Screen.Library, transferReturn = null)
+            Screen.Playbook -> state.copy(screen = state.playbookReturn ?: Screen.Library, playbookReturn = null)
             Screen.Setup -> state.copy(screen = Screen.Library)
             Screen.Library -> state
         }

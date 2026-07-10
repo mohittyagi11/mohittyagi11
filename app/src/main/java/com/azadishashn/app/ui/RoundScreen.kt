@@ -28,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Autorenew
@@ -57,10 +58,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
+import com.azadishashn.app.data.Lessons
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.model.OptionCard
 import com.azadishashn.app.ui.components.Avatar
 import com.azadishashn.app.ui.components.AzadiScaffold
+import com.azadishashn.app.ui.components.CoachMark
 import com.azadishashn.app.ui.components.GeneratingView
 import com.azadishashn.app.ui.components.drawDiffractionBase
 import com.azadishashn.app.ui.components.IconActionButton
@@ -129,6 +132,7 @@ fun RoundScreen(vm: GameViewModel) {
         title = "Round ${s.round}",
         subtitle = subtitle,
         actions = {
+            IconActionButton(Icons.AutoMirrored.Filled.HelpOutline, "Playbook", vm::openPlaybook)
             IconActionButton(Icons.Filled.BarChart, "Dashboard", vm::openDashboard)
             IconActionButton(Icons.Filled.Settings, "Settings", vm::openSettings)
         },
@@ -158,6 +162,7 @@ fun RoundScreen(vm: GameViewModel) {
 private fun ScandalCard(vm: GameViewModel) {
     val sc = vm.state.scandal ?: return
     var response by remember(sc) { mutableStateOf("") }
+    val coachBudget = remember(sc) { mutableIntStateOf(0) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -167,6 +172,10 @@ private fun ScandalCard(vm: GameViewModel) {
             "BREAKING — SCANDAL",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.error,
+        )
+        CoachMark(
+            Lessons.SCANDAL, vm::hasSeenLesson, vm::markLessonSeen, coachBudget,
+            force = true,
         )
         Spacer(Modifier.height(Dim.tight))
         Text(
@@ -288,6 +297,9 @@ private fun RoundBody(vm: GameViewModel) {
     var voiceHint by remember(roundKey) { mutableStateOf<String?>(null) }
     // Which field the mic feeds: 0 = argument, 1 = rebuttal, 2 = closer.
     var voiceTarget by remember(roundKey) { mutableStateOf(0) }
+    // First-encounter coach cards: at most 2 per question so a rule-dense turn
+    // doesn't become a wall — the rest teach on their next occurrence.
+    val coachBudget = remember(roundKey) { mutableIntStateOf(0) }
 
     val speechLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -368,6 +380,7 @@ private fun RoundBody(vm: GameViewModel) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                 )
+                CoachMark(Lessons.NATION, vm::hasSeenLesson, vm::markLessonSeen, coachBudget, highlight = 0)
             }
         }
         Spacer(Modifier.height(Dim.tight))
@@ -421,6 +434,7 @@ private fun RoundBody(vm: GameViewModel) {
                     fontWeight = FontWeight.Bold,
                     color = IdeologyTheme.of(mp.key).brand,
                 )
+                CoachMark(Lessons.MATCHPOINT, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
             }
         }
         // The question's mood — the wind the answerer must ride or fight.
@@ -456,6 +470,7 @@ private fun RoundBody(vm: GameViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                CoachMark(Lessons.MOOD, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
             }
         }
 
@@ -498,6 +513,7 @@ private fun RoundBody(vm: GameViewModel) {
                 if (vm.hasKey) {
                     Spacer(Modifier.height(Dim.itemGap))
                     if (s.tripwireType == null) {
+                        CoachMark(Lessons.TRIPWIRE_ARM, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
                         Collapsible(
                             "Arm a tripwire (${s.questioner?.name} only — secret)",
                             Icons.Filled.AutoAwesome,
@@ -609,6 +625,12 @@ private fun RoundBody(vm: GameViewModel) {
                             }
                             .padding(vertical = 6.dp),
                     )
+                    // The choice is NOW — teach the whip before they argue (forced
+                    // past the budget; the moment won't come back).
+                    CoachMark(
+                        Lessons.WHIP, vm::hasSeenLesson, vm::markLessonSeen, coachBudget,
+                        force = true,
+                    )
                     Spacer(Modifier.height(Dim.tight))
                 }
 
@@ -625,6 +647,10 @@ private fun RoundBody(vm: GameViewModel) {
                             "+1 bonus resource; argue it and fumble, and the nation pays.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    CoachMark(
+                        Lessons.TRIPWIRE_FIRE, vm::hasSeenLesson, vm::markLessonSeen, coachBudget,
+                        force = true,
                     )
                     Spacer(Modifier.height(Dim.tight))
                 }
@@ -728,6 +754,10 @@ private fun RoundBody(vm: GameViewModel) {
             }
 
             RoundPhase.HANDOFF_REBUT -> {
+                CoachMark(
+                    Lessons.CROSSEXAM, vm::hasSeenLesson, vm::markLessonSeen, coachBudget,
+                    force = true,
+                )
                 HandoffCard(
                     toName = s.questioner?.name.orEmpty(),
                     role = "CROSS-EXAMINATION",

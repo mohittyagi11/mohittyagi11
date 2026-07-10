@@ -13,8 +13,8 @@ android {
         applicationId = "com.azadishashn.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 25
-        versionName = "2.3"
+        versionCode = 26
+        versionName = "2.4"
     }
 
     signingConfigs {

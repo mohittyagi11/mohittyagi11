@@ -80,6 +80,17 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_SCANDALS, true)
         set(value) = prefs.edit().putBoolean(KEY_SCANDALS, value).apply()
 
+    /**
+     * Coach-card lessons already dismissed (ids from [Lessons]). Device-wide,
+     * NOT per-game: a house rule is new once, and the flags deliberately don't
+     * travel with an exported game — a recipient still gets taught.
+     */
+    var seenLessons: Set<String>
+        get() = prefs.getString(KEY_SEEN_LESSONS, null)
+            ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet()
+            ?: emptySet()
+        set(value) = prefs.edit().putString(KEY_SEEN_LESSONS, value.joinToString(",")).apply()
+
     val hasKey: Boolean get() = apiKey.isNotBlank()
 
     companion object {
@@ -93,6 +104,7 @@ class SettingsStore(context: Context) {
         private const val KEY_PARTY = "party_lines"
         private const val KEY_FAST_JUDGE = "fast_judge"
         private const val KEY_SCANDALS = "scandals"
+        private const val KEY_SEEN_LESSONS = "seen_lessons"
 
         const val DEFAULT_MODEL = "claude-opus-4-8"
         const val DEFAULT_CONTEXT = "India"
