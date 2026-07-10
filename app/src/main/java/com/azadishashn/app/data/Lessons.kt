@@ -143,7 +143,9 @@ object Lessons {
             branches = listOf(
                 LessonBranch(
                     "The landmine",
-                    "Type a secret word. The instant their answer contains it — boom.",
+                    "Type a secret word — or a whole sentence: ANY key word of it " +
+                        "stands guard (filler like \"the\" doesn't count). The " +
+                        "instant their answer hits one — boom.",
                 ),
                 LessonBranch(
                     "The timebomb",

@@ -540,7 +540,7 @@ private fun RoundBody(vm: GameViewModel) {
                                 OutlinedTextField(
                                     value = landmine,
                                     onValueChange = { landmine = it },
-                                    label = { Text("Landmine word — fires if they say it") },
+                                    label = { Text("Landmine — a word or sentence; ANY key word fires it") },
                                     singleLine = true,
                                     shape = MaterialTheme.shapes.medium,
                                     modifier = Modifier.fillMaxWidth(),
@@ -561,8 +561,15 @@ private fun RoundBody(vm: GameViewModel) {
                             }
                         }
                     } else {
+                        val watching = if (s.tripwireType == "word") {
+                            com.azadishashn.app.data.Tripwire.watchedWords(s.tripwireWord).size
+                        } else 0
                         Text(
-                            "Tripwire armed ✓ (keep it secret)",
+                            if (watching > 0) {
+                                "Tripwire armed ✓ — watching $watching word${if (watching == 1) "" else "s"} (keep it secret)"
+                            } else {
+                                "Tripwire armed ✓ (keep it secret)"
+                            },
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.tertiary,
                         )
@@ -592,7 +599,9 @@ private fun RoundBody(vm: GameViewModel) {
                 val haptics = LocalHapticFeedback.current
                 if (s.tripwireType == "word" && !s.tripwireFired) {
                     LaunchedEffect(argument) {
-                        if (s.tripwireWord.isNotBlank() && argument.contains(s.tripwireWord, ignoreCase = true)) {
+                        // Any significant word of the armed text detonates —
+                        // arming a whole sentence watches each of its key words.
+                        if (com.azadishashn.app.data.Tripwire.matches(s.tripwireWord, argument)) {
                             vm.fireTripwire()
                         }
                     }
