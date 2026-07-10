@@ -288,13 +288,21 @@ fun ResultScreen(vm: GameViewModel) {
                             }
                         }
 
-                        // New endorsements — a bloc formally comes aboard.
+                        // New endorsements — a bloc formally comes aboard (or defects!).
                         r.newEndorsements.forEach { bloc ->
                             Spacer(Modifier.height(10.dp))
+                            val stolenFrom = r.defections[bloc]
                             SectionCard(glow = MaterialTheme.colorScheme.tertiary) {
                                 Text(
-                                    "🤝 The $bloc ENDORSE ${r.playerName}! Their machine now amplifies " +
-                                        "every positive poll swing (+1), and endorsements break ties in the standings.",
+                                    if (stolenFrom != null) {
+                                        "🔥 DEFECTION! The $bloc abandon $stolenFrom and endorse " +
+                                            "${r.playerName}. Their machine now amplifies every positive " +
+                                            "poll swing (+1)."
+                                    } else {
+                                        "🤝 The $bloc ENDORSE ${r.playerName}! Their machine now amplifies " +
+                                            "every positive poll swing (+1), and endorsements break ties " +
+                                            "in the standings."
+                                    },
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
                                 )

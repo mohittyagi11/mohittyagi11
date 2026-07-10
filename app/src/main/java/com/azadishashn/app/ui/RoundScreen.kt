@@ -407,6 +407,22 @@ private fun RoundBody(vm: GameViewModel) {
                 color = MaterialTheme.colorScheme.tertiary,
             )
         }
+        // PUBLIC match point: the answerer is one card from a power level — the
+        // whole table (especially the questioner) should know a lunge is coming.
+        run {
+            val counts = s.activePlayer?.counts.orEmpty()
+            val mp = counts.entries.firstOrNull { (_, c) -> c == 1 || c == 3 || c == 5 }
+            if (mp != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "⚡ MATCH POINT: ${s.activePlayer?.name} is 1 card from " +
+                        "L${listOf(2, 4, 6).indexOf(mp.value + 1) + 1} ${mp.key}",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = IdeologyTheme.of(mp.key).brand,
+                )
+            }
+        }
         // The question's mood — the wind the answerer must ride or fight.
         round.mood?.let { m ->
             if (m.favors.isNotBlank()) {

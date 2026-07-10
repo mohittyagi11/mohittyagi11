@@ -47,9 +47,13 @@ import com.azadishashn.app.ui.theme.NumberStyle
 fun StandingsScreen(vm: GameViewModel) {
     val s = vm.state
     val midGame = s.dashboardReturn != null
-    // Cards decide the rank; endorsements break ties; approval breaks those.
+    // The POWER LADDER decides the rank (L1=1, L2=2, L3=3 per ideology set) —
+    // total cards is constant by construction (one always lands), so it can't.
+    // Endorsements break ties; approval breaks those.
+    fun powerPoints(p: com.azadishashn.app.model.Player): Int =
+        p.counts.values.sumOf { c -> (if (c >= 2) 1 else 0) + (if (c >= 4) 2 else 0) + (if (c >= 6) 3 else 0) }
     val ranked = s.players.sortedWith(
-        compareByDescending<com.azadishashn.app.model.Player> { it.total }
+        compareByDescending<com.azadishashn.app.model.Player> { powerPoints(it) }
             .thenByDescending { s.endorsements[it.id]?.size ?: 0 }
             .thenByDescending { vm.approvalOf(it.id) },
     )
@@ -179,12 +183,12 @@ fun StandingsScreen(vm: GameViewModel) {
                                 )
                             }
                             AnimatedCounter(
-                                value = player.total,
+                                value = powerPoints(player),
                                 style = NumberStyle,
                                 color = MaterialTheme.colorScheme.primary,
                             )
                             Text(
-                                if (player.total == 1) " card" else " cards",
+                                " power · ${player.total} cards",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -199,6 +203,26 @@ fun StandingsScreen(vm: GameViewModel) {
                             Ideologies.NAMES.forEach { name ->
                                 val c = player.counts[name] ?: 0
                                 if (c > 0) IdeologyBadge(name, count = c, showLabel = false)
+                            }
+                        }
+                        // The ladder: distance to each set's next level.
+                        run {
+                            val near = com.azadishashn.app.model.Ideologies.NAMES.mapNotNull { ideo ->
+                                val c = player.counts[ideo] ?: 0
+                                val next = listOf(2, 4, 6).firstOrNull { it > c } ?: return@mapNotNull null
+                                if (c == 0) null else Triple(ideo, c, next)
+                            }.sortedBy { it.third - it.second }
+                            if (near.isNotEmpty()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    near.joinToString("  ·  ") { (ideo, c, next) ->
+                                        val away = next - c
+                                        if (away == 1) "⚡ $ideo $c — MATCH POINT for L${listOf(2, 4, 6).indexOf(next) + 1}"
+                                        else "$ideo $c — $away away from L${listOf(2, 4, 6).indexOf(next) + 1}"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                         // The blocs formally behind this player.

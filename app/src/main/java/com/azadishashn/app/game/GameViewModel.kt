@@ -79,8 +79,11 @@ data class GameState(
     val dossier: List<DossierEntry> = emptyList(),
     /** The party whip's secret instruction for this turn's answerer (null = no whip). */
     val assignedIdeology: String? = null,
-    /** playerId -> blocs that have ENDORSED the player (support reached +3; sticky). */
+    /** playerId -> blocs that have ENDORSED the player. EXCLUSIVE: one patron per
+     *  bloc; a rival steals it by strictly out-courting the incumbent. */
     val endorsements: Map<Int, List<String>> = emptyMap(),
+    /** Ideologies that received a card in the CURRENT round — neglected fronts decay. */
+    val cardsThisRound: List<String> = emptyList(),
     // -- The questioner's tripwire (armed secretly during the question phase) --
     /** "word" | "time" | null (not armed). */
     val tripwireType: String? = null,
@@ -726,7 +729,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             moodAdj > 0 -> "The mood suspected $primary — the bar rose 1. ${mood?.note.orEmpty()}"
             else -> ""
         }
-        val required = (5.0 + (held - tableAvg) + moodAdj).roundToInt().coerceIn(1, 10)
+        // CALIBRATED bar: the anchor follows this table's recent judged strengths
+        // (rolling median of the last 8 verdicts, −1 for breathing room), so a
+        // table of orators and a shy table live on the same drama curve
+        // (~72% to close L1, ~59% L2, ~46% L3 — simulation-verified).
+        val recent = state.dossier.takeLast(8).map { it.strength }.filter { it > 0 }
+        val anchor = if (recent.size >= 4) recent.sorted()[recent.size / 2] - 1.0 else 5.0
+        val required = (anchor + (held - tableAvg) + moodAdj).roundToInt().coerceIn(1, 10)
 
         // The nation feeds back into the cards: a meter in CRISIS empowers its
         // ideology (the hour demands it, +1 effective strength); a GOLDEN AGE
@@ -827,14 +836,33 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             state.blocSupport + (active.id to mine)
         } else state.blocSupport
 
-        // Endorsements: +3 support wins a bloc's sticky backing; below 0 loses it.
+        // Endorsements are EXCLUSIVE: each bloc backs ONE patron. You win it at
+        // +3 support — or STEAL it by strictly out-courting the incumbent. You
+        // lose it if your support with the bloc turns negative.
         val myBlocs = mergedBlocs[active.id].orEmpty()
         val had = state.endorsements[active.id].orEmpty()
         val kept = had.filter { (myBlocs[it] ?: 0) >= 0 }
-        val gained = myBlocs.filterValues { it >= 3 }.keys.filterNot { it in kept }
+        val defections = mutableMapOf<String, String>()   // bloc -> name it defected FROM
+        val gained = mutableListOf<String>()
+        if (verdict != null) {
+            myBlocs.filterValues { it >= 3 }.keys.filterNot { it in kept }.forEach { bloc ->
+                val holder = state.players.firstOrNull { pl ->
+                    pl.id != active.id && bloc in state.endorsements[pl.id].orEmpty()
+                }
+                val holderSupport = holder?.let { state.blocSupport[it.id]?.get(bloc) } ?: Int.MIN_VALUE
+                if (holder == null || (myBlocs[bloc] ?: 0) > holderSupport) {
+                    gained += bloc
+                    if (holder != null) defections[bloc] = holder.name
+                }
+            }
+        }
         val myEndorsements = kept + gained
-        val newEndorsementsMap =
-            if (verdict != null) state.endorsements + (active.id to myEndorsements) else state.endorsements
+        val newEndorsementsMap = if (verdict != null) {
+            val stripped = state.endorsements.mapValues { (pid, blocs) ->
+                if (pid == active.id) blocs else blocs.filterNot { it in gained }
+            }
+            stripped + (active.id to myEndorsements)
+        } else state.endorsements
 
         // Snap poll: the verdict's swing + the whip + the crisis, and every
         // endorsed bloc adds +1 to a POSITIVE verdict swing (your machine turns out).
@@ -914,10 +942,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 crisisTarget = crisisTarget,
                 crisisOutcome = crisisOutcome,
                 newEndorsements = if (verdict != null) gained else emptyList(),
+                defections = defections,
                 bonusResources = grants,
                 milestone = milestone,
                 moodNote = moodNote,
             ),
+            cardsThisRound = state.cardsThisRound + cardIdeology,
             screen = Screen.Result,
         )
         // The table now debates the verdict — perfect cover to draft the next round.
@@ -931,8 +961,28 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val nextIndex = (state.activeIndex + 1) % n
         val starterIdx = state.players.indexOfFirst { it.id == state.starterId }.coerceAtLeast(0)
         // A round completes when the turn returns to whoever started.
-        val nextRound = if (nextIndex == starterIdx) state.round + 1 else state.round
-        state = state.copy(activeIndex = nextIndex, round = nextRound)
+        val roundDone = nextIndex == starterIdx
+        val nextRound = if (roundDone) state.round + 1 else state.round
+
+        // NEGLECT DECAY: when a round completes, every ideology that received NO
+        // cards this round sees its home nation-meter rot (−3). Monoculture lets
+        // the untended fronts slide into crisis — which then empowers exactly
+        // those ideologies (+1 strength). The world pushes back on the farm.
+        var nation = state.nation
+        var cards = state.cardsThisRound
+        if (roundDone && state.dossier.isNotEmpty()) {
+            Ideologies.NAMES.filterNot { it in cards }.forEach { ideo ->
+                nation = when (ideo) {
+                    "Capitalist" -> nation.copy(economy = (nation.economy - 3).coerceAtLeast(0))
+                    "Supremo" -> nation.copy(stability = (nation.stability - 3).coerceAtLeast(0))
+                    "Showstopper" -> nation.copy(liberty = (nation.liberty - 3).coerceAtLeast(0))
+                    else -> nation.copy(trust = (nation.trust - 3).coerceAtLeast(0))
+                }
+            }
+            cards = emptyList()
+        }
+
+        state = state.copy(activeIndex = nextIndex, round = nextRound, nation = nation, cardsThisRound = cards)
         beginTurn()
     }
 

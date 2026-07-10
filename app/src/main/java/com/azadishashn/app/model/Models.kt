@@ -295,6 +295,8 @@ data class AwardResult(
     val crisisOutcome: String = "",     // weathered | claimed | swerved
     /** Blocs that newly endorsed the player at this verdict (crossed +3). */
     val newEndorsements: List<String> = emptyList(),
+    /** Blocs STOLEN from a rival this verdict: bloc -> the name it defected from. */
+    val defections: Map<String, String> = emptyMap(),
     // -- v2.2: everything cashes out into the game's real currencies --
     /** Politics-earned resource payouts/forfeits — physical takes at the table. */
     val bonusResources: List<ResourceGrant> = emptyList(),
