@@ -204,6 +204,41 @@ fun StrengthMeter(strength: Int, required: Int, ideology: String, modifier: Modi
     }
 }
 
+/** One slim nation meter row, tinted by its home ideology, with state badges. */
+@Composable
+fun NationMeter(label: String, value: Int, ideology: String, modifier: Modifier = Modifier) {
+    val brand = IdeologyTheme.of(ideology).brand
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.padding(vertical = 2.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(64.dp),
+        )
+        androidx.compose.material3.LinearProgressIndicator(
+            progress = { value / 100f },
+            color = brand,
+            modifier = Modifier.weight(1f).height(6.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text("$value", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        when {
+            value < 25 -> Text(
+                "  CRISIS",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error,
+            )
+            value > 75 -> Text(
+                "  GOLDEN",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Gold,
+            )
+        }
+    }
+}
+
 /** Gold / silver / bronze disc for the top three; outlined disc otherwise. */
 @Composable
 fun RankMedallion(rank: Int, modifier: Modifier = Modifier) {

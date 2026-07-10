@@ -60,6 +60,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import com.azadishashn.app.data.Lessons
 import com.azadishashn.app.game.GameViewModel
+import com.azadishashn.app.model.Ideologies
 import com.azadishashn.app.model.OptionCard
 import com.azadishashn.app.ui.components.Avatar
 import com.azadishashn.app.ui.components.AzadiScaffold
@@ -70,6 +71,7 @@ import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.GlassChip
 import com.azadishashn.app.ui.components.IdeologyChip
+import com.azadishashn.app.ui.components.LiveBarRow
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.ScenarioStory
 import com.azadishashn.app.ui.components.TurnProgress
@@ -473,6 +475,12 @@ private fun RoundBody(vm: GameViewModel) {
                 CoachMark(Lessons.MOOD, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
             }
         }
+        // TONIGHT'S BAR — the live number each line demands of the answerer,
+        // the exact math the verdict will use. Public info; nobody argues blind.
+        if (vm.hasKey) {
+            Spacer(Modifier.height(Dim.tight))
+            LiveBarRow(vm.liveBars())
+        }
 
         when (phase) {
             RoundPhase.QUESTION -> {
@@ -608,7 +616,8 @@ private fun RoundBody(vm: GameViewModel) {
                     val brand = IdeologyTheme.of(s.assignedIdeology).brand
                     Text(
                         if (peek) "📜 THE WHIP DEMANDS THE ${s.assignedIdeology.uppercase()} LINE. " +
-                            "Obey quietly (+3 poll) — or rebel; do it magnificently and the crowd loves you (+5)."
+                            "Obey: +3 poll, +1 ${Ideologies.resourceOf(s.assignedIdeology)}. " +
+                            "Rebel at strength 7+: +5 poll, glory. Rebel under 7: −4 poll — the party remembers."
                         else "📜 ${s.activePlayer?.name} only: the party whip has instructions — press & hold to read",
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (peek) brand else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -643,8 +652,9 @@ private fun RoundBody(vm: GameViewModel) {
                         color = MaterialTheme.colorScheme.error,
                     )
                     Text(
-                        "TARGETS ${s.crisisTarget.uppercase()} — hold that line and clear the bar for " +
-                            "+1 bonus resource; argue it and fumble, and the nation pays.",
+                        "TARGETS ${s.crisisTarget.uppercase()} — hold that line AND clear the bar → " +
+                            "+1 ${Ideologies.resourceOf(s.crisisTarget)}, +2 poll. Argue it and fumble → " +
+                            "its meter −3, poll −3. Swerve away → no hit, but the record remembers.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -733,19 +743,16 @@ private fun RoundBody(vm: GameViewModel) {
                 )
 
                 Spacer(Modifier.height(Dim.sectionGap))
+                // The answerer never skips their own prosecution: resting the
+                // case hands the phone BACK to the questioner, who decides —
+                // cross-examine, or send it straight to the judge.
                 PrimaryCta(
-                    text = if (vm.hasKey) "Resolve — Claude decides" else "Resolve",
-                    onClick = { vm.resolve(argument) },
+                    text = if (vm.hasKey) "Rest my case — pass to ${s.questioner?.name}" else "Resolve",
+                    onClick = {
+                        if (vm.hasKey) phase = RoundPhase.HANDOFF_REBUT else vm.resolve(argument)
+                    },
                     enabled = if (vm.hasKey) argument.isNotBlank() else s.championedOptionId != null,
                 )
-                if (vm.hasKey) {
-                    OutlinedButton(
-                        onClick = { phase = RoundPhase.HANDOFF_REBUT },
-                        enabled = argument.isNotBlank(),
-                        shape = MaterialTheme.shapes.large,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Cross-examine — ${s.questioner?.name} takes the floor") }
-                }
                 TextButton(
                     onClick = { phase = RoundPhase.QUESTION },
                     modifier = Modifier.fillMaxWidth(),
@@ -758,15 +765,17 @@ private fun RoundBody(vm: GameViewModel) {
                     Lessons.CROSSEXAM, vm::hasSeenLesson, vm::markLessonSeen, coachBudget,
                     force = true,
                 )
+                s.error?.let { ErrorLine(it) }
                 HandoffCard(
                     toName = s.questioner?.name.orEmpty(),
-                    role = "CROSS-EXAMINATION",
-                    brief = "You posed this question — now prosecute the answer. " +
-                        "20 seconds to rebut when you take the floor.",
-                    cta = "I have the floor",
+                    role = "YOUR CALL, PROSECUTOR",
+                    brief = "${s.activePlayer?.name} rests. You posed this question — " +
+                        "cross-examine the answer (20 seconds to tear it apart, they get 15 to close), " +
+                        "or send it straight to the judge.",
+                    cta = "Cross-examine",
                     onTake = { phase = RoundPhase.REBUTTAL },
                     onSkip = { rebuttal = ""; vm.resolve(argument) },
-                    skipLabel = "Waive cross-examination — resolve now",
+                    skipLabel = "Straight to the judge — resolve now",
                 )
             }
 

@@ -33,6 +33,20 @@ import kotlin.random.Random
 @Serializable
 enum class Screen { Library, Setup, Settings, Round, Result, Standings, Edit, Transfer, Playbook }
 
+/**
+ * What one ideology demands of the current answerer RIGHT NOW: the [required]
+ * strength to KEEP its card, how many they [held], and the visible modifiers —
+ * [moodAdj] (±1 already folded into [required]) and [meterAdj] (crisis +1 /
+ * golden-age −1 applied to argued STRENGTH, not the bar).
+ */
+data class LiveBar(
+    val ideology: String,
+    val required: Int,
+    val held: Int,
+    val moodAdj: Int,
+    val meterAdj: Int,
+)
+
 @Serializable
 data class GameState(
     val screen: Screen = Screen.Setup,
@@ -737,6 +751,43 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         else -> state.nation.trust
     }
 
+    /**
+     * The bar for [player] arguing [ideology] RIGHT NOW — the exact math
+     * [award] settles with (calibrated anchor + hoarding + mood), plus the
+     * nation's strength modifier. One function for both the live Round-screen
+     * display and the verdict, so they can never drift.
+     */
+    private fun barFor(player: Player, ideology: String, useMood: Boolean): LiveBar {
+        val held = player.counts[ideology] ?: 0
+        val tableAvg = state.players.map { it.counts[ideology] ?: 0 }.average()
+        val mood = if (useMood) state.current?.mood else null
+        val moodAdj = when (ideology) {
+            mood?.favors -> -1
+            mood?.suspects -> 1
+            else -> 0
+        }
+        // CALIBRATED bar: the anchor follows this table's recent judged
+        // strengths (rolling median of the last 8 verdicts, −1 for breathing
+        // room), so a table of orators and a shy table live on the same drama
+        // curve (~72% to close L1, ~59% L2, ~46% L3 — simulation-verified).
+        val recent = state.dossier.takeLast(8).map { it.strength }.filter { it > 0 }
+        val anchor = if (recent.size >= 4) recent.sorted()[recent.size / 2] - 1.0 else 5.0
+        val required = (anchor + (held - tableAvg) + moodAdj).roundToInt().coerceIn(1, 10)
+        val home = homeMeter(ideology)
+        val meterAdj = if (home < 25) 1 else if (home > 75) -1 else 0
+        return LiveBar(ideology, required, held, moodAdj, meterAdj)
+    }
+
+    /**
+     * Live bars for the CURRENT answerer across all four ideologies — shown on
+     * the Round screen so nobody argues blind. Everything here is public table
+     * knowledge (cards, the record, the mood, the meters); the whip stays sealed.
+     */
+    fun liveBars(): List<LiveBar> {
+        val p = state.activePlayer ?: return emptyList()
+        return Ideologies.NAMES.map { barFor(p, it, useMood = true) }
+    }
+
     private fun award(
         active: Player,
         primary: String,
@@ -744,37 +795,24 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         strength: Int,
         verdict: Verdict?,
     ) {
-        val held = active.counts[primary] ?: 0
-        val tableAvg = state.players.map { it.counts[primary] ?: 0 }.average()
-
-        // The question's MOOD moves the bar: the favoured ideology argues with
-        // the wind (-1 required), the suspected one against it (+1). The
-        // questioner set this weather with their theme picks; the answerer chose
-        // to ride it or fight it for the card their board build needs.
+        // The SAME live-bar math the Round screen displays — mood moves the
+        // bar (the questioner set that weather); the calibrated anchor follows
+        // the table; hoarding raises your own bar.
+        val bar = barFor(active, primary, useMood = verdict != null)
+        val held = bar.held
+        val moodAdj = bar.moodAdj
+        val required = bar.required
         val mood = if (verdict != null) state.current?.mood else null
-        val moodAdj = when (primary) {
-            mood?.favors -> -1
-            mood?.suspects -> 1
-            else -> 0
-        }
         val moodNote = when {
             moodAdj < 0 -> "The mood favoured $primary — the bar dropped 1. ${mood?.note.orEmpty()}"
             moodAdj > 0 -> "The mood suspected $primary — the bar rose 1. ${mood?.note.orEmpty()}"
             else -> ""
         }
-        // CALIBRATED bar: the anchor follows this table's recent judged strengths
-        // (rolling median of the last 8 verdicts, −1 for breathing room), so a
-        // table of orators and a shy table live on the same drama curve
-        // (~72% to close L1, ~59% L2, ~46% L3 — simulation-verified).
-        val recent = state.dossier.takeLast(8).map { it.strength }.filter { it > 0 }
-        val anchor = if (recent.size >= 4) recent.sorted()[recent.size / 2] - 1.0 else 5.0
-        val required = (anchor + (held - tableAvg) + moodAdj).roundToInt().coerceIn(1, 10)
 
         // The nation feeds back into the cards: a meter in CRISIS empowers its
         // ideology (the hour demands it, +1 effective strength); a GOLDEN AGE
         // breeds complacency (nothing to rail against, -1).
-        val home = homeMeter(primary)
-        val meterAdj = if (strength < 0) 0 else if (home < 25) 1 else if (home > 75) -1 else 0
+        val meterAdj = if (strength < 0) 0 else bar.meterAdj
         val effStrength = if (strength < 0) strength else (strength + meterAdj).coerceIn(1, 10)
 
         // A card always lands; the baseline only decides whether it stays on [primary]

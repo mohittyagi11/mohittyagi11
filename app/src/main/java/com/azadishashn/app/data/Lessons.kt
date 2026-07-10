@@ -1,19 +1,27 @@
 package com.azadishashn.app.data
 
-/** One outcome branch of a house rule: what you did / what happened → what it pays or costs. */
-data class LessonBranch(val label: String, val outcome: String)
+/**
+ * One outcome branch of a house rule. [polarity] tints it in the Playbook:
+ * "gain" (it pays), "cost" (it bills), "mixed" (depends), "" (neutral fact).
+ */
+data class LessonBranch(
+    val label: String,
+    val outcome: String,
+    val polarity: String = "",
+)
 
 /**
- * A teachable house rule. None of these mechanics are in the SHASN rulebook,
- * so the app teaches them by scenario — the SAME content renders as a one-time
+ * A teachable house rule, narrated comic-book style — second person, present
+ * tense, every number real. None of these mechanics are in the SHASN rulebook,
+ * so the app teaches them by scenario: the SAME content renders as a one-time
  * [com.azadishashn.app.ui.components.CoachMark] the first time the rule fires,
- * and as the full reference in the Playbook screen. One source of truth: the
+ * and as an illustrated strip in the Playbook. One source of truth — the
  * numbers here can never drift from what the coach cards say.
  */
 data class Lesson(
     val id: String,
     val title: String,
-    /** A one-line "you are there" micro-scenario that sets the scene. */
+    /** The "you are there" caption panel that opens the strip. */
     val scenario: String,
     /** Every branch the rule can take, with its real numbers. */
     val branches: List<LessonBranch>,
@@ -41,259 +49,348 @@ object Lessons {
         Lesson(
             id = BAR,
             title = "The bar — who keeps the card",
-            scenario = "You argued Capitalist at strength 6. A card ALWAYS lands — " +
-                "the bar only decides whether it stays on the ideology you argued.",
+            scenario = "You've just argued your case. The judge scores it 1–10. " +
+                "A card ALWAYS lands — the only question is whether it stays on " +
+                "the line you argued.",
             branches = listOf(
                 LessonBranch(
-                    "Cleared the bar",
-                    "Strength ≥ the bar: the card stays on your primary — keep stacking.",
+                    "You clear the bar",
+                    "Strength meets the number. The card stays on your primary. " +
+                        "Your stack grows.",
+                    polarity = "gain",
                 ),
                 LessonBranch(
-                    "Fell short",
-                    "The card diverts to your SECONDARY ideology instead. Nothing is " +
-                        "lost — but the stack you were building didn't grow.",
+                    "You fall short",
+                    "The card slips to your SECONDARY line instead. Nothing is " +
+                        "lost — but the stack you're building didn't move.",
+                    polarity = "mixed",
                 ),
                 LessonBranch(
-                    "Where the bar sits",
-                    "Your own table's recent level (median of the last 8 verdicts, −1), " +
-                        "+1 for every card you hold above the table average. " +
-                        "Hoarding one ideology raises YOUR bar for it.",
+                    "Who sets the bar",
+                    "Your own table does: the middle of its last 8 verdicts, " +
+                        "minus 1 — then +1 for every card you hold over the table " +
+                        "average. Hoard a line, and that line gets expensive.",
                 ),
             ),
-            why = "The judge isn't dice: a table of orators scores high across the " +
-                "board, so the bar follows the table — every table lives on the same " +
-                "drama curve. And the more you farm one ideology, the harder it gets " +
-                "to keep it.",
+            why = "The judge isn't dice: a table of orators scores high across " +
+                "the board, so the bar follows the table — every table lives on " +
+                "the same drama curve. And the deeper you farm one ideology, the " +
+                "harder it fights to stay yours.",
         ),
         Lesson(
             id = MOOD,
             title = "The question's mood",
-            scenario = "Every question has a mood — one ideology rides the wind " +
-                "tonight, one fights it.",
+            scenario = "Every question blows a wind. Tonight one ideology rides " +
+                "it and one fights it — the room decided before you opened your " +
+                "mouth.",
             branches = listOf(
-                LessonBranch("Argue the favoured line", "The bar drops 1 — an easy card."),
-                LessonBranch("Argue the suspected line", "The bar rises 1 — you're fighting the room."),
-                LessonBranch("Argue anything else", "The bar is unchanged."),
+                LessonBranch(
+                    "Ride the wind",
+                    "Argue the favoured line: the bar drops 1. The cheap card.",
+                    polarity = "gain",
+                ),
+                LessonBranch(
+                    "Fight it",
+                    "Argue the suspected line: the bar climbs 1. Do it anyway if " +
+                        "your build needs exactly that card.",
+                    polarity = "cost",
+                ),
+                LessonBranch(
+                    "Stay out of it",
+                    "Any other line argues at the plain bar.",
+                ),
             ),
-            why = "The questioner set this weather with their theme picks. Ride it " +
-                "for the cheap card — or fight it, because your board build needs a " +
-                "different ideology than the room wants to hear.",
+            why = "The questioner set this weather with their theme picks. The " +
+                "mood is the table's cheapest mind game: dangle an easy card off " +
+                "someone's build, or tax the line they need.",
         ),
         Lesson(
             id = WHIP,
             title = "The party whip",
-            scenario = "A sealed envelope: the party demands a line — always one of " +
-                "the TWO ideologies you hold least, pulling you off your build. " +
-                "Argue however you want; the table finds out at the verdict.",
+            scenario = "A sealed envelope lands in YOUR hand — press and hold; " +
+                "nobody else sees it. The party demands a line, and it's always " +
+                "one of the two you hold LEAST. Argue however you like. The " +
+                "verdict tells the table what the envelope said.",
             branches = listOf(
                 LessonBranch(
-                    "Obey — argue the whip's line",
-                    "+3 poll and +1 resource of the whip's ideology. Patronage flows.",
+                    "Obey",
+                    "Argue the whip's line: +3 poll, +1 resource of that line. " +
+                        "Patronage flows.",
+                    polarity = "gain",
                 ),
                 LessonBranch(
-                    "Rebel, magnificently — defy at strength 7+",
-                    "+5 poll. The crowd loves a rebel.",
+                    "Rebel — magnificently",
+                    "Defy it at strength 7 or better: +5 poll. The crowd loves " +
+                        "a rebel.",
+                    polarity = "mixed",
                 ),
                 LessonBranch(
-                    "Rebel, weakly — defy under strength 7",
-                    "−4 poll. The party remembers.",
+                    "Rebel — and fumble",
+                    "Defy it under strength 7: −4 poll. The party remembers.",
+                    polarity = "cost",
                 ),
             ),
-            why = "Obeying pays but bends your card away from the stack you're " +
-                "farming; rebelling protects the build but only pays if you're " +
-                "brilliant. Peek with press-and-hold so the table can't see.",
+            why = "The whip is aimed at your build on purpose: obeying pays but " +
+                "bends your card off the stack you're farming; rebelling protects " +
+                "the build and only pays if you're brilliant.",
         ),
         Lesson(
             id = TRIPWIRE_ARM,
-            title = "The tripwire — the questioner's ambush",
-            scenario = "You're asking. Secretly arm a crisis that will ambush the " +
-                "answerer MID-ARGUMENT — aimed at their most-stacked ideology.",
+            title = "The tripwire — your ambush",
+            scenario = "You're asking tonight. Before you hand the phone over, " +
+                "set a trap: a crisis wired to detonate MID-ARGUMENT, aimed " +
+                "square at the answerer's strongest ideology.",
             branches = listOf(
-                LessonBranch("Landmine word", "Fires the instant their answer contains your secret word."),
-                LessonBranch("Timebomb", "Fires at a hidden random moment, 25–70 seconds in."),
                 LessonBranch(
-                    "The target",
-                    "Always their STRONGEST ideology — you're striking their base. " +
-                        "How it settles: see \"A crisis breaks\".",
+                    "The landmine",
+                    "Type a secret word. The instant their answer contains it — boom.",
+                ),
+                LessonBranch(
+                    "The timebomb",
+                    "No word, just a hidden fuse: 25 to 70 seconds in.",
+                ),
+                LessonBranch(
+                    "The blast",
+                    "It always targets their most-stacked line — you're striking " +
+                        "the base. See A CRISIS BREAKS for the bill.",
+                    polarity = "cost",
                 ),
             ),
-            why = "Arm it when they're at match point: they must either argue their " +
-                "targeted line through the storm or swerve off it.",
+            why = "Arm it when they're at match point: they either argue their " +
+                "targeted line through the storm, or swerve off the card they need.",
         ),
         Lesson(
             id = TRIPWIRE_FIRE,
             title = "A crisis breaks",
-            scenario = "⚡ BREAKING, mid-argument — a crisis targets your " +
-                "most-stacked ideology. Three ways it settles at the verdict:",
+            scenario = "⚡ BREAKING — mid-sentence, the world lurches. The crisis " +
+                "has your name on it and your strongest ideology in its sights. " +
+                "Three ways this ends at the verdict:",
             branches = listOf(
                 LessonBranch(
                     "Weathered",
-                    "You argued the targeted ideology AND kept the card: +1 bonus " +
-                        "resource and +2 poll. Courage under fire.",
+                    "You argue the targeted line AND keep the card: +1 resource, " +
+                        "+2 poll. Courage under fire.",
+                    polarity = "gain",
                 ),
                 LessonBranch(
                     "Claimed",
-                    "You argued it and the card diverted: that ideology's home " +
-                        "nation-meter −3, and −3 poll.",
+                    "You argue it and the card diverts: its home meter −3, your " +
+                        "poll −3. The nation pays for your fumble.",
+                    polarity = "cost",
                 ),
                 LessonBranch(
                     "Swerved",
-                    "You argued something else: no hit now — but the record " +
-                        "remembers the pivot.",
+                    "You argue something else. No hit today — but the record " +
+                        "remembers a politician who ran.",
+                    polarity = "mixed",
                 ),
             ),
         ),
         Lesson(
             id = MATCHPOINT,
             title = "Match point — and it's public",
-            scenario = "⚡ One card from a power level (2/4/6 cards of one ideology " +
-                "→ L1/L2/L3). The WHOLE table can see it — including the questioner.",
+            scenario = "⚡ You're one card from a power level — and the chip is " +
+                "on the screen where EVERYONE can read it, including the person " +
+                "writing your question.",
             branches = listOf(
-                LessonBranch("Convert", "Keep the card and claim the level's board power."),
                 LessonBranch(
-                    "Expect fire",
-                    "Match point is public on purpose: expect tripwires, hostile " +
-                        "moods and hard questions aimed at your lunge.",
+                    "Convert",
+                    "Keep the card, claim the level: 2/4/6 cards of one line → " +
+                        "its L1/L2/L3 board power.",
+                    polarity = "gain",
+                ),
+                LessonBranch(
+                    "Survive the fire",
+                    "Match point is public on purpose. Expect tripwires, hostile " +
+                        "moods, and questions built to make you swerve.",
+                    polarity = "cost",
                 ),
             ),
         ),
         Lesson(
             id = BLOCS,
             title = "The blocs are watching",
-            scenario = "Named blocs — farmers, traders, students — watch every " +
-                "answer and shift −2..+2 toward or away from you at each verdict.",
+            scenario = "Farmers. Traders. Students. Named blocs watch every " +
+                "answer, and every verdict moves each one −2..+2 toward or away " +
+                "from you.",
             branches = listOf(
-                LessonBranch("Reach +3 support", "The bloc ENDORSES you — exclusively."),
+                LessonBranch(
+                    "Hit +3 support",
+                    "The bloc ENDORSES you — and a bloc backs ONE patron only.",
+                    polarity = "gain",
+                ),
                 LessonBranch(
                     "While endorsed",
-                    "Every POSITIVE poll swing you get is amplified +1 per " +
-                        "endorsement, and endorsements break ties in the standings.",
+                    "Every positive poll swing you take amplifies +1 per " +
+                        "endorsement, and endorsements break standings ties.",
+                    polarity = "gain",
                 ),
-                LessonBranch("Drop below 0", "An endorsement you held is lost."),
+                LessonBranch(
+                    "Fall below 0",
+                    "The endorsement dies.",
+                    polarity = "cost",
+                ),
             ),
         ),
         Lesson(
             id = DEFECTION,
             title = "Endorsements can be stolen",
-            scenario = "A bloc backs ONE patron at a time. Rivals can court the " +
-                "same bloc out from under you.",
+            scenario = "An endorsement is not a trophy — it's a hostage. A bloc " +
+                "backs one patron at a time, and your rivals can court it out " +
+                "from under you.",
             branches = listOf(
                 LessonBranch(
-                    "Won",
-                    "Reach +3 with an unclaimed bloc and it's yours — plus a +1 " +
+                    "Win one",
+                    "Reach +3 with an unclaimed bloc: it's yours — plus a +1 " +
                         "resource gift that turn.",
+                    polarity = "gain",
                 ),
                 LessonBranch(
-                    "Stolen",
-                    "A rival whose support STRICTLY exceeds yours takes the bloc. " +
-                        "🔥 Defection — their machine now works for them.",
+                    "Steal one",
+                    "Beat the incumbent's support outright and the bloc walks " +
+                        "across the floor. 🔥 DEFECTION.",
+                    polarity = "mixed",
                 ),
-                LessonBranch("Lost", "Let your support with the bloc fall below 0 and they walk."),
+                LessonBranch(
+                    "Lose one",
+                    "Let your support with the bloc sink below 0 and it's gone.",
+                    polarity = "cost",
+                ),
             ),
         ),
         Lesson(
             id = NATION,
             title = "The nation is a player",
-            scenario = "Four meters, each one ideology's home turf: " +
-                "Economy↔Capitalist, Stability↔Supremo, Liberty↔Showstopper, " +
-                "Trust↔Idealist.",
+            scenario = "Four meters, four home turfs: the Economy is Capitalist " +
+                "country, Stability belongs to the Supremo, Liberty to the " +
+                "Showstopper, Trust to the Idealist. The nation is playing too.",
             branches = listOf(
                 LessonBranch(
-                    "Crisis (meter < 25)",
-                    "That ideology argues at +1 strength — the hour demands it — " +
-                        "and scenarios confront the crisis head-on.",
+                    "Crisis — meter under 25",
+                    "That ideology argues at +1 strength (the hour demands it), " +
+                        "and the scenarios come hunting for the crisis.",
+                    polarity = "mixed",
                 ),
                 LessonBranch(
-                    "Golden age (meter > 75)",
-                    "−1 strength. Complacency: nothing to rail against.",
+                    "Golden age — meter over 75",
+                    "−1 strength. Fat and happy — nothing to rail against.",
+                    polarity = "cost",
                 ),
                 LessonBranch(
                     "Neglect decay",
-                    "Each completed round, every ideology that received NO card " +
-                        "rots its home meter −3. Monoculture breeds crises.",
+                    "Every completed round, each line that won NO card rots its " +
+                        "home meter −3. Farm one line, and the fronts you ignore " +
+                        "catch fire.",
+                    polarity = "cost",
                 ),
             ),
-            why = "Farm one ideology and the untended fronts slide into crisis — " +
-                "which then empowers exactly the ideologies you neglected. The " +
-                "world pushes back.",
+            why = "Monoculture breeds crises — which then empower exactly the " +
+                "ideologies you neglected. The world pushes back on the farm.",
         ),
         Lesson(
             id = LADDER,
             title = "The power ladder",
-            scenario = "Cards are the score — but RANK is power. 2/4/6 cards of " +
-                "one ideology unlock its Level 1/2/3 board power.",
+            scenario = "Cards are the score — POWER is the ranking. Two, four, " +
+                "six cards of one line unlock its Level 1, 2, 3 board power.",
             branches = listOf(
                 LessonBranch(
                     "Power points",
-                    "L1 = 1, L2 = 2, L3 = 3, summed across your ideologies — " +
-                        "that's the ranking.",
+                    "L1 = 1, L2 = 2, L3 = 3, summed across your lines. Highest " +
+                        "total leads the house.",
                 ),
-                LessonBranch("Ties", "Broken by endorsements, then by approval."),
                 LessonBranch(
-                    "Why not total cards",
-                    "Everyone earns exactly one card per turn — the total can't " +
-                        "separate anyone. Depth in a set is what counts.",
+                    "Ties",
+                    "Broken by endorsements, then by approval.",
+                ),
+                LessonBranch(
+                    "Why not count cards",
+                    "Everyone banks exactly one card per turn — totals tie " +
+                        "forever. DEPTH in a set is what separates you.",
                 ),
             ),
         ),
         Lesson(
             id = MILESTONE,
             title = "Milestone — claim your power",
-            scenario = "🏛 You just completed a set: 2, 4 or 6 cards of one ideology.",
+            scenario = "🏛 The set is complete: 2, 4 or 6 cards of one ideology, " +
+                "banked.",
             branches = listOf(
                 LessonBranch(
-                    "On the board",
-                    "Physically claim that ideology's L1/L2/L3 ideologue power in " +
-                        "SHASN — the app announces it; you take it.",
+                    "Claim it on the board",
+                    "Take that line's L1/L2/L3 ideologue power in SHASN, " +
+                        "physically. The app announces; you collect.",
+                    polarity = "gain",
                 ),
             ),
         ),
         Lesson(
             id = GRANTS,
             title = "Politics pays in resources",
-            scenario = "Beyond the standard +2 primary / +1 secondary every " +
-                "verdict, the politics itself pays out — take (or return) these " +
-                "physically:",
+            scenario = "The verdict always pays +2 primary, +1 secondary. But " +
+                "politics tips on the side — when a tile appears under a verdict, " +
+                "take it (or hand it back) at the table:",
             branches = listOf(
-                LessonBranch("Whip patronage", "+1 resource for obeying the whip."),
-                LessonBranch("Bloc gift", "+1 resource with each newly-won endorsement."),
-                LessonBranch("Crisis bonus", "+1 resource for weathering a crisis."),
+                LessonBranch(
+                    "Whip patronage",
+                    "+1 resource for obeying the whip.",
+                    polarity = "gain",
+                ),
+                LessonBranch(
+                    "Bloc gift",
+                    "+1 resource when a bloc newly endorses you.",
+                    polarity = "gain",
+                ),
+                LessonBranch(
+                    "Crisis bonus",
+                    "+1 resource for weathering a crisis.",
+                    polarity = "gain",
+                ),
                 LessonBranch(
                     "The mandate",
-                    "Cross 65% approval → +1 resource (donors pour in). Sink to " +
-                        "35% → give one back (donors flee).",
+                    "Cross 65% approval → +1 resource, donors pour in. Sink to " +
+                        "35% → give one back. Donors flee.",
+                    polarity = "mixed",
                 ),
             ),
         ),
         Lesson(
             id = SCANDAL,
             title = "Scandals",
-            scenario = "About one turn in four, a skeleton surfaces from YOUR own " +
-                "record — a stand you actually took earlier this game. The press " +
-                "wants an answer before the round starts.",
+            scenario = "About one turn in four, the press digs up something YOU " +
+                "actually said earlier this game — and wants an answer before " +
+                "the round begins.",
             branches = listOf(
                 LessonBranch(
                     "Face the press",
-                    "Your response is judged purely as damage control — the snap " +
+                    "Your response is judged as pure damage control — the snap " +
                         "poll moves on how you handle it.",
+                    polarity = "mixed",
                 ),
-                LessonBranch("\"No comment.\"", "−3 approval. The press smells blood."),
+                LessonBranch(
+                    "\"No comment.\"",
+                    "−3 approval, instantly. The press smells blood.",
+                    polarity = "cost",
+                ),
             ),
         ),
         Lesson(
             id = CROSSEXAM,
             title = "Cross-examination",
-            scenario = "After the answer, the QUESTIONER may take the floor to " +
-                "prosecute — pass the phone; the argument stays hidden behind the " +
-                "handoff.",
+            scenario = "You rest your case — and the phone goes BACK to the " +
+                "questioner. Every answer ends up in front of its prosecutor; " +
+                "they decide what happens next.",
             branches = listOf(
-                LessonBranch("Rebuttal", "The questioner gets 20 seconds to tear the answer apart."),
                 LessonBranch(
-                    "Closer",
-                    "The answerer gets 15 seconds to close; the judge weighs the " +
-                        "WHOLE exchange.",
+                    "Cross-examine",
+                    "The questioner takes the floor: 20 seconds to tear the " +
+                        "answer apart, then you get 15 to close. The judge weighs " +
+                        "the WHOLE exchange.",
+                    polarity = "mixed",
                 ),
-                LessonBranch("Waive", "Either side can skip — the argument stands as given."),
+                LessonBranch(
+                    "Straight to the judge",
+                    "The questioner waives. The argument stands as given.",
+                ),
             ),
         ),
     )

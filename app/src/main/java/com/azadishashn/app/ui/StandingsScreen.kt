@@ -40,6 +40,7 @@ import com.azadishashn.app.ui.components.CoachMark
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.IdeologyDistributionBar
+import com.azadishashn.app.ui.components.NationMeter
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.RankMedallion
 import com.azadishashn.app.ui.components.SealMark
@@ -287,41 +288,6 @@ fun StandingsScreen(vm: GameViewModel) {
                 Text("Back to library")
             }
             Spacer(Modifier.height(8.dp))
-        }
-    }
-}
-
-/** One slim nation meter row, tinted by its home ideology, with state badges. */
-@Composable
-private fun NationMeter(label: String, value: Int, ideology: String) {
-    val brand = com.azadishashn.app.ui.theme.IdeologyTheme.of(ideology).brand
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(64.dp),
-        )
-        androidx.compose.material3.LinearProgressIndicator(
-            progress = { value / 100f },
-            color = brand,
-            modifier = Modifier.weight(1f).height(6.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text("$value", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-        when {
-            value < 25 -> Text(
-                "  CRISIS",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.error,
-            )
-            value > 75 -> Text(
-                "  GOLDEN",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = Gold,
-            )
         }
     }
 }
