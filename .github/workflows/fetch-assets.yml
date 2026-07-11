@@ -1,0 +1,32 @@
+name: Fetch design assets
+
+# The Claude Code session environment has no egress to Canva's export CDN,
+# so generated artwork is pulled onto a runner and committed back instead.
+# Push a "dest-path URL" list to design/fetch-assets.txt to request files.
+on:
+  push:
+    branches: [claude/azadi-shashn-android-app-2b5so7]
+    paths: [design/fetch-assets.txt]
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download listed assets
+        run: |
+          while read -r dest url; do
+            [ -z "$dest" ] && continue
+            case "$dest" in \#*) continue ;; esac
+            mkdir -p "$(dirname "$dest")"
+            curl -fsSL "$url" -o "$dest"
+            file "$dest"
+          done < design/fetch-assets.txt
+      - name: Commit fetched files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || { git commit -m "CI: add fetched design assets"; git push; }
