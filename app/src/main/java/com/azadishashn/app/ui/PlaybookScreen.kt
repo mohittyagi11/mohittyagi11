@@ -1,5 +1,6 @@
 package com.azadishashn.app.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -28,9 +29,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.azadishashn.app.R
 import com.azadishashn.app.data.Lesson
 import com.azadishashn.app.data.LessonBranch
 import com.azadishashn.app.data.Lessons
@@ -383,6 +387,21 @@ private fun LessonDemo(id: String) {
 private fun TurnFlowStrip() {
     BlueprintSurface(accent = LaserBlue, modifier = Modifier.padding(bottom = 8.dp)) {
         ExhibitHeader(kicker = "EXHIBIT · THE FLOW", title = "One turn, played out", accent = LaserBlue)
+        Spacer(Modifier.height(8.dp))
+        // The shape of the turn, as a picture first: the question, the mic,
+        // the ⚡ crisis, the price paid, the polls. The panels below play the
+        // same flow out with real numbers.
+        Image(
+            painter = painterResource(R.drawable.flow_poster),
+            contentDescription = "One turn as a flow diagram: question, argument, crisis, the price, the polls",
+            modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large),
+            contentScale = ContentScale.FillWidth,
+        )
+        DemoCaption(
+            "Read it top to bottom: the QUESTION lands, someone takes the MIC, the ⚡ CRISIS breaks " +
+                "mid-sentence, the verdict prices it, and the POLLS move. Then it loops. The panels " +
+                "below play this exact flow with real numbers.",
+        )
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Avatar("Ravi", seed = 1, size = 24.dp)

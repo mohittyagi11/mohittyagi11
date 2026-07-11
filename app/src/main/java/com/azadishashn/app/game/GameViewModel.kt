@@ -45,6 +45,10 @@ data class LiveBar(
     val held: Int,
     val moodAdj: Int,
     val meterAdj: Int,
+    /** The calibrated table anchor the bar starts from (median of recent verdicts − 1). */
+    val anchor: Double,
+    /** The table's average holding of this ideology — [held] above it raises the bar. */
+    val tableAvg: Double,
 )
 
 @Serializable
@@ -233,6 +237,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val now = System.currentTimeMillis()
         val id = store.newId()
         nextPlayerId = 0
+        ackedBars = emptyMap()
         store.setActive(id)
         state = GameState(screen = Screen.Setup, id = id, createdAt = now, updatedAt = now)
     }
@@ -241,6 +246,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun resumeGame(id: String) {
         val saved = store.loadGame(id)?.takeIf { it.players.isNotEmpty() } ?: return
         nextPlayerId = (saved.players.maxOfOrNull { it.id } ?: -1) + 1
+        ackedBars = emptyMap()
         store.setActive(id)
         var restored = saved.copy(loading = false, loadingKind = null, error = null)
         if (restored.screen == Screen.Library) restored = restored.copy(screen = Screen.Round)
@@ -775,7 +781,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val required = (anchor + (held - tableAvg) + moodAdj).roundToInt().coerceIn(1, 10)
         val home = homeMeter(ideology)
         val meterAdj = if (home < 25) 1 else if (home > 75) -1 else 0
-        return LiveBar(ideology, required, held, moodAdj, meterAdj)
+        return LiveBar(ideology, required, held, moodAdj, meterAdj, anchor, tableAvg)
     }
 
     /**
@@ -785,7 +791,23 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun liveBars(): List<LiveBar> {
         val p = state.activePlayer ?: return emptyList()
-        return Ideologies.NAMES.map { barFor(p, it, useMood = true) }
+        return liveBarsFor(p)
+    }
+
+    /** The same live bars for ANY player — what tonight's question would demand of them. */
+    fun liveBarsFor(player: Player): List<LiveBar> =
+        Ideologies.NAMES.map { barFor(player, it, useMood = true) }
+
+    /**
+     * Bar-change acknowledgements (session-scoped): key -> the signature the
+     * user last tapped. A tile whose current signature differs pulses until
+     * tapped, so a moved bar or a fired crisis can't slip by unnoticed.
+     */
+    var ackedBars by mutableStateOf<Map<String, Int>>(emptyMap())
+        private set
+
+    fun acknowledgeBar(key: String, signature: Int) {
+        ackedBars = ackedBars + (key to signature)
     }
 
     private fun award(

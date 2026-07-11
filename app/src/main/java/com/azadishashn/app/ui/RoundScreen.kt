@@ -476,10 +476,20 @@ private fun RoundBody(vm: GameViewModel) {
             }
         }
         // TONIGHT'S BAR — the live number each line demands of the answerer,
-        // the exact math the verdict will use. Public info; nobody argues blind.
+        // the exact math the verdict will use, visible through every phase.
+        // Public info; nobody argues blind. Tiles pulse until their news
+        // (first look, a moved bar, a crisis landing) is tapped-acknowledged.
         if (vm.hasKey) {
             Spacer(Modifier.height(Dim.tight))
-            LiveBarRow(vm.liveBars())
+            LiveBarRow(
+                bars = vm.liveBars(),
+                forName = s.activePlayer?.name.orEmpty(),
+                playerId = s.activePlayer?.id ?: -1,
+                crisisTarget = s.crisisTarget.takeIf { s.tripwireFired && it.isNotBlank() },
+                acked = vm.ackedBars,
+                onAck = vm::acknowledgeBar,
+                table = s.players.map { Triple(it.id, it.name, vm.liveBarsFor(it)) },
+            )
         }
 
         when (phase) {
