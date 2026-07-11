@@ -36,6 +36,7 @@ import com.azadishashn.app.data.LessonBranch
 import com.azadishashn.app.data.Lessons
 import com.azadishashn.app.game.GameViewModel
 import com.azadishashn.app.model.CausalStep
+import com.azadishashn.app.ui.components.Avatar
 import com.azadishashn.app.ui.components.AzadiScaffold
 import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.IdeologyDistributionBar
@@ -168,6 +169,10 @@ fun PlaybookScreen(vm: GameViewModel) {
                 ChainLink("meanwhile, on the side…")
                 NodeCard(4, CausalStep("Blocs, polls, the whip and the nation pay resources in — and out"), Gold)
             }
+
+            // -- One turn, played out (the flow diagram) --------------------
+            Spacer(Modifier.height(Dim.itemGap))
+            TurnFlowStrip()
 
             // -- The rules, drawn out --------------------------------------
             Spacer(Modifier.height(Dim.itemGap))
@@ -366,6 +371,179 @@ private fun LessonDemo(id: String) {
             }
         }
         else -> Unit
+    }
+}
+
+/**
+ * "ONE TURN, PLAYED OUT" — the gameplay flow diagram: a worked example turn
+ * (Ravi asks, Asha answers) drawn as numbered nodes with fork panels at every
+ * choice point. Every number here is consistent with the real rules.
+ */
+@Composable
+private fun TurnFlowStrip() {
+    BlueprintSurface(accent = LaserBlue, modifier = Modifier.padding(bottom = 8.dp)) {
+        ExhibitHeader(kicker = "EXHIBIT · THE FLOW", title = "One turn, played out", accent = LaserBlue)
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Avatar("Ravi", seed = 1, size = 24.dp)
+            Spacer(Modifier.width(4.dp))
+            Text("Ravi asks", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("   ·   ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Avatar("Asha", seed = 2, size = 24.dp)
+            Spacer(Modifier.width(4.dp))
+            Text("Asha answers", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Asha holds 3 Supremo — ⚡ MATCH POINT for L2, and the whole table can see it.",
+            style = MaterialTheme.typography.bodySmall,
+            fontStyle = FontStyle.Italic,
+        )
+        Spacer(Modifier.height(10.dp))
+
+        FlowNode(
+            1, "Ravi", 1, "Picks themes — the question generates",
+            "It arrives with a MOOD: favours Idealist (bar −1), suspects Supremo " +
+                "(bar +1). Asha's lunge just got taxed.",
+            LaserBlue,
+        )
+        FlowFork(
+            "Twist (×2)" to "make the easy answer costly",
+            "Change" to "swap for a fresh card",
+        )
+        ChainLink("happy with the question…")
+        FlowNode(
+            2, "Ravi", 1, "Sets a trap — secret",
+            "Arms a landmine on \"farmers\" — she's at match point, strike the " +
+                "base. Any key word of an armed sentence fires.",
+            LaserBlue,
+        )
+        ChainLink("pass the phone")
+        FlowNode(
+            3, "Asha", 2, "Answers — 90 seconds",
+            "TONIGHT'S BAR: Supremo needs 7 (table anchor 5, +1 hoarding, +1 " +
+                "mood). The whip's sealed envelope demands Capitalist — she " +
+                "argues Supremo anyway. Her build needs the card.",
+            LaserBlue,
+        )
+        FlowFork(
+            "Obey the whip" to "+3 poll · +1 Funds",
+            "Rebel" to "at 7+: +5 poll · under 7: −4",
+        )
+        ChainLink("mid-argument, she says \"farmers\"…")
+        FlowNode(
+            4, null, 0, "⚡ BREAKING — the tripwire fires",
+            "The crisis targets SUPREMO, her base. Hold the line and clear the " +
+                "bar → +1 Clout, +2 poll. Fumble → meter −3, poll −3. Swerve → " +
+                "the record remembers.",
+            LaserRed,
+        )
+        ChainLink("she rests her case — the phone goes back")
+        FlowNode(
+            5, "Ravi", 1, "The prosecutor's call",
+            "He posed the question, he decides: cross-examine, or send it " +
+                "straight to the judge. Ravi prosecutes.",
+            LaserBlue,
+        )
+        FlowFork(
+            "Cross-examine" to "20s rebuttal → Asha closes in 15s",
+            "Straight to the judge" to "the argument stands as given",
+        )
+        ChainLink("the judge weighs the whole exchange")
+        FlowNode(
+            6, null, 0, "The verdict",
+            "Strength 8, primary Supremo. The bar was 7 — CLEARED, the card " +
+                "stays. Her 4th Supremo → 🏛 L2 MILESTONE: claim the board power.",
+            Gold,
+        )
+        Spacer(Modifier.height(6.dp))
+        StrengthMeter(strength = 8, required = 7, ideology = "Supremo")
+        DemoCaption("Strength 8 against the bar of 7 — the tick sits behind the fill. Card kept.")
+        ChainLink("the morning after")
+        FlowNode(
+            7, null, 0, "The payouts land",
+            "Whip revealed: she rebelled at strength 8 → +5 poll. Crisis " +
+                "weathered → +1 Clout, +2 poll. The Farmers hit +3 → 🤝 " +
+                "endorsement + gift. Snap poll 58% (+9). Take at the table:",
+            LaserGreen,
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatTile("Supremo", "+2 · Clout", IdeologyTheme.container("Supremo"), Modifier.weight(1f))
+            StatTile("Crisis bonus", "+1 · Clout", IdeologyTheme.container("Supremo"), Modifier.weight(1f))
+            StatTile("Gift: Farmers", "+1 · Clout", IdeologyTheme.container("Supremo"), Modifier.weight(1f))
+        }
+        ChainLink("next player — and when the round wraps…")
+        FlowNode(
+            8, null, 0, "The world pushes back",
+            "Nobody argued Showstopper this round → LIBERTY rots −3. Starve a " +
+                "front long enough and its crisis empowers exactly the ideology " +
+                "you ignored.",
+            LaserAmber,
+        )
+    }
+}
+
+/** One step of the worked turn: numbered disc, optional owner avatar, story beat. */
+@Composable
+private fun FlowNode(step: Int, who: String?, seed: Int, title: String, detail: String, accent: Color) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(accent.copy(alpha = 0.06f))
+            .border(1.dp, accent.copy(alpha = 0.35f), MaterialTheme.shapes.medium)
+            .padding(10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            Modifier.size(22.dp).clip(CircleShape).background(accent.copy(alpha = 0.25f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("$step", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = accent)
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (who != null) {
+                    Avatar(who, seed = seed, size = 20.dp)
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            }
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** A choice point in the flow: slim side-by-side option panels. */
+@Composable
+private fun FlowFork(vararg options: Pair<String, String>) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        options.forEach { (label, note) ->
+            Column(
+                Modifier
+                    .weight(1f)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), MaterialTheme.shapes.medium)
+                    .padding(8.dp),
+            ) {
+                Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    note,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
