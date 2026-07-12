@@ -342,4 +342,8 @@ data class AwardResult(
     val challengerName: String? = null,
     /** Human-readable settlement of the wager ("Ravi pays: −4 approval; Asha +4 & +1 Funds"). */
     val wagerLine: String? = null,
+    /** The case as rested — strength BEFORE the clash re-ruled it (ruled trials only). */
+    val provisionalStrength: Int? = null,
+    /** The court's one line on who drew blood in the exchange (ruled trials only). */
+    val clashReasoning: String? = null,
 )

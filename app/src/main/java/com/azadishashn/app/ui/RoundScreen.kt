@@ -8,6 +8,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
@@ -72,7 +81,9 @@ import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.GlassChip
 import com.azadishashn.app.ui.components.IdeologyChip
 import com.azadishashn.app.ui.components.IdeologyDot
+import com.azadishashn.app.ui.components.SealMark
 import com.azadishashn.app.ui.components.SectionCard
+import com.azadishashn.app.ui.components.StrengthMeter
 import com.azadishashn.app.ui.components.LiveBarRow
 import com.azadishashn.app.ui.components.TableEntry
 import com.azadishashn.app.ui.components.PrimaryCta
@@ -425,6 +436,31 @@ private fun RoundBody(vm: GameViewModel) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        // THE MICS — the rights, always on the table: each cause's Champion
+        // holds standing to cross-examine any answer that serves it.
+        if (vm.hasKey) {
+            Spacer(Modifier.height(Dim.tight))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Ideologies.NAMES.forEach { cause ->
+                    val champ = vm.championOf(cause)
+                    InfoChip(
+                        if (champ != null) "📣 ${cause.take(3).uppercase()} · ${champ.name}"
+                        else "🎙 ${cause.take(3).uppercase()} · open",
+                        if (champ != null) IdeologyTheme.of(cause).brand
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Text(
+                "THE MICS — most kept cards on a cause makes you its CHAMPION: the sole right " +
+                    "to cross-examine any answer that serves it. Ties leave a mic open.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         // Nation crisis fronts — the ideology that owns each gets +1 strength.
         run {
             val n = s.nation
@@ -645,29 +681,14 @@ private fun RoundBody(vm: GameViewModel) {
             RoundPhase.ANSWER -> {
                 Spacer(Modifier.height(Dim.sectionGap))
 
-                // The whip's sealed envelope — press & HOLD so no neighbour can peek.
+                // The whip arrives as a DELIVERED envelope: courier, seal,
+                // public prices — and the demand itself readable only under a
+                // press-&-hold, so no neighbour can peek.
                 if (s.assignedIdeology != null && vm.hasKey) {
-                    var peek by remember(roundKey) { mutableStateOf(false) }
-                    val brand = IdeologyTheme.of(s.assignedIdeology).brand
-                    Text(
-                        if (peek) "📜 THE WHIP DEMANDS THE ${s.assignedIdeology.uppercase()} LINE. " +
-                            "Obey: +3 poll, +1 ${Ideologies.resourceOf(s.assignedIdeology)}. " +
-                            "Rebel at strength 7+: +5 poll, glory. Rebel under 7: −4 poll — the party remembers."
-                        else "📜 ${s.activePlayer?.name} only: the party whip has instructions — press & hold to read",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (peek) brand else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .pointerInput(roundKey) {
-                                detectTapGestures(
-                                    onPress = {
-                                        peek = true
-                                        tryAwaitRelease()
-                                        peek = false
-                                    },
-                                )
-                            }
-                            .padding(vertical = 6.dp),
+                    WhipEnvelope(
+                        playerName = s.activePlayer?.name.orEmpty(),
+                        ideology = s.assignedIdeology,
+                        keyId = roundKey,
                     )
                     // The choice is NOW — teach the whip before they argue (forced
                     // past the budget; the moment won't come back).
@@ -709,6 +730,15 @@ private fun RoundBody(vm: GameViewModel) {
                     )
                     Spacer(Modifier.width(10.dp))
                     DebateTimer(seconds = 90, running = true)
+                }
+                if (vm.hasKey) {
+                    Spacer(Modifier.height(Dim.tight))
+                    Text(
+                        "Answer on a championed cause and its Champion may put you on trial — " +
+                            "THE MICS above show who holds what.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 Spacer(Modifier.height(Dim.itemGap))
 
@@ -811,20 +841,70 @@ private fun RoundBody(vm: GameViewModel) {
                 val challenger = s.players.firstOrNull { it.id == s.challengerId }
                 if (v != null && challenger != null) {
                     val cause = v.primaryIdeology
-                    // The topic reveal — everyone learns whose turf tonight's answer was on.
-                    Spacer(Modifier.height(Dim.itemGap))
-                    Text(
-                        "THE JUDGE RULES: this answer served the ${cause.uppercase()} cause — " +
-                            "strength ${v.strength}/10.",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = IdeologyTheme.of(cause).brand,
+                    // The topic reveal stamps in — everyone learns whose turf
+                    // tonight's answer was on — and the mic pulses for its holder.
+                    var revealed by remember(roundKey) { mutableStateOf(false) }
+                    LaunchedEffect(roundKey) {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        revealed = true
+                    }
+                    val stampIn by animateFloatAsState(
+                        targetValue = if (revealed) 1f else 1.5f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                        label = "topicStamp",
                     )
+                    val fadeIn by animateFloatAsState(
+                        targetValue = if (revealed) 1f else 0f,
+                        animationSpec = tween(240),
+                        label = "topicFade",
+                    )
+                    val mic = rememberInfiniteTransition(label = "mic").animateFloat(
+                        initialValue = 1f,
+                        targetValue = 1.15f,
+                        animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+                        label = "micPulse",
+                    )
+                    Spacer(Modifier.height(Dim.itemGap))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "📣",
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.graphicsLayer {
+                                scaleX = mic.value; scaleY = mic.value
+                            },
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "THE JUDGE RULES: this answer served the ${cause.uppercase()} " +
+                                "cause — strength ${v.strength}/10.",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = IdeologyTheme.of(cause).brand,
+                            modifier = Modifier.graphicsLayer {
+                                scaleX = stampIn; scaleY = stampIn
+                                alpha = fadeIn
+                                rotationZ = (1f - fadeIn) * -6f
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                            },
+                        )
+                    }
+                    // The arithmetic behind the right — who earned this mic, and how.
+                    val myCards = challenger.counts[cause] ?: 0
+                    val answererCards = s.activePlayer?.counts?.get(cause) ?: 0
+                    val nextBest = s.players
+                        .filter { it.id != challenger.id }
+                        .maxOfOrNull { it.counts[cause] ?: 0 } ?: 0
+                    val standingWhy = if (answererCards > myCards) {
+                        "${s.activePlayer?.name} leads the cause ($answererCards cards) but stands " +
+                            "accused — as runner-up ($myCards), the mic passes to you."
+                    } else {
+                        "You hold $myCards $cause card${if (myCards == 1) "" else "s"} — the most at " +
+                            "this table (next best: $nextBest). The cause is yours to defend."
+                    }
                     HandoffCard(
                         toName = challenger.name,
                         role = "📣 CHAMPION OF THE ${cause.uppercase()} CAUSE",
-                        brief = "You hold the most $cause cards at this table — on this topic, " +
-                            "YOU are the press. Rise and cross-examine ${s.activePlayer?.name} " +
+                        brief = "$standingWhy Rise and cross-examine ${s.activePlayer?.name} " +
                             "(20 seconds), or waive and let the ruling stand.",
                         cta = "Rise — cross-examine",
                         onTake = { phase = RoundPhase.REBUTTAL },
@@ -895,6 +975,9 @@ private fun RoundBody(vm: GameViewModel) {
                         cause = v.primaryIdeology,
                         secondary = v.secondaryIdeology,
                         terms = vm.wagerTerms(category, v.primaryIdeology),
+                        provisional = v.strength,
+                        required = vm.liveBars()
+                            .firstOrNull { it.ideology == v.primaryIdeology }?.required ?: 0,
                         onAccept = { phase = RoundPhase.CLOSER },
                         onCompromise = { vm.compromise() },
                     )
@@ -1035,6 +1118,92 @@ private fun HandoffCard(
     }
 }
 
+/**
+ * The whip's sealed envelope, DELIVERED: a courier card with a wax seal; breaking
+ * it (answerer only) reveals the public terms — while the demanded line itself
+ * stays behind a press-&-hold, so no neighbour can peek. After the first read,
+ * the table publicly knows orders were taken; only the reader knows what they say.
+ */
+@Composable
+private fun WhipEnvelope(playerName: String, ideology: String, keyId: String) {
+    var opened by remember(keyId) { mutableStateOf(false) }
+    var readOnce by remember(keyId) { mutableStateOf(false) }
+    var peek by remember(keyId) { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    val brand = IdeologyTheme.of(ideology).brand
+    SectionCard {
+        Column(Modifier.animateContentSize()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SealMark(size = 34.dp)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "📨 A PARTY COURIER ARRIVES",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                    Text(
+                        if (opened) "Seal broken. The terms are on the table; the demand is not."
+                        else "Sealed instructions for $playerName — their eyes only.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (!opened) {
+                Spacer(Modifier.height(Dim.tight))
+                OutlinedButton(
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        opened = true
+                    },
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Break the seal — $playerName only") }
+            } else {
+                Spacer(Modifier.height(Dim.tight))
+                Text(
+                    "THE WHIP'S TERMS (public): obey the demanded line → +3 poll, +1 of its " +
+                        "resource · rebel at strength 7+ → +5, glory · rebel under 7 → −4, " +
+                        "the party remembers.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(Dim.tight))
+                Text(
+                    if (peek) "📜 THE WHIP DEMANDS THE ${ideology.uppercase()} LINE " +
+                        "(+1 ${Ideologies.resourceOf(ideology)} if obeyed)."
+                    else "🔏 $playerName: press & HOLD to read the demand — release to hide.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (peek) FontWeight.Bold else null,
+                    color = if (peek) brand else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pointerInput(keyId) {
+                            detectTapGestures(
+                                onPress = {
+                                    peek = true
+                                    tryAwaitRelease()
+                                    peek = false
+                                    readOnce = true
+                                },
+                            )
+                        }
+                        .padding(vertical = 6.dp),
+                )
+                if (readOnce) {
+                    Text(
+                        "✓ Instructions read — the table saw $playerName take orders.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+            }
+        }
+    }
+}
+
 /** 📣 + cause dots — the causes a player champions, worn next to their avatar. */
 @Composable
 private fun ChampionBadge(causes: List<String>) {
@@ -1065,6 +1234,8 @@ private fun WagerCard(
     cause: String,
     secondary: String,
     terms: Pair<String, String>,
+    provisional: Int,
+    required: Int,
     onAccept: () -> Unit,
     onCompromise: () -> Unit,
 ) {
@@ -1073,6 +1244,23 @@ private fun WagerCard(
         "HERESY" -> IdeologyTheme.of(cause).brand
         else -> MaterialTheme.colorScheme.tertiary
     }
+    // The qualification STAMPS onto the page — a gavel moment, felt in the hand.
+    var stamped by remember(category) { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    LaunchedEffect(category) {
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        stamped = true
+    }
+    val stamp by animateFloatAsState(
+        targetValue = if (stamped) 1f else 1.7f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "wagerStamp",
+    )
+    val ink by animateFloatAsState(
+        targetValue = if (stamped) 1f else 0f,
+        animationSpec = tween(260),
+        label = "wagerInk",
+    )
     Column(Modifier.fillMaxWidth().padding(vertical = Dim.sectionGap)) {
         Text(
             "THE COURT QUALIFIES THE CHALLENGE",
@@ -1084,6 +1272,12 @@ private fun WagerCard(
             style = MaterialTheme.typography.displaySmall,
             fontWeight = FontWeight.Bold,
             color = tint,
+            modifier = Modifier.graphicsLayer {
+                scaleX = stamp; scaleY = stamp
+                alpha = ink
+                rotationZ = (1f - ink) * -10f
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+            },
         )
         if (conditions.isNotBlank()) {
             Spacer(Modifier.height(Dim.tight))
@@ -1091,6 +1285,18 @@ private fun WagerCard(
                 conditions,
                 style = MaterialTheme.typography.bodyMedium,
                 fontStyle = FontStyle.Italic,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // The tension, in one picture: where the case stands against the bar
+        // RIGHT NOW — the ruling can move it either way.
+        if (provisional > 0 && required > 0) {
+            Spacer(Modifier.height(Dim.itemGap))
+            StrengthMeter(strength = provisional, required = required, ideology = cause)
+            Text(
+                "Your case stands at $provisional/10 against a bar of $required. The ruling " +
+                    "re-scores it — fall below $required and the card falls.",
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

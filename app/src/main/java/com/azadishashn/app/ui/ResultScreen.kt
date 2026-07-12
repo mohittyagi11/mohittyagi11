@@ -199,7 +199,50 @@ fun ResultScreen(vm: GameViewModel) {
                     }
 
                     Spacer(Modifier.height(16.dp))
-                    StrengthMeter(strength = r.strength, required = r.required, ideology = r.primary)
+                    // A ruled trial shows the clash as a SHIFT: the case as
+                    // rested, the delta the exchange caused, and where it ended
+                    // against the same bar — the ruling made visible.
+                    val ruled = r.clashOutcome == "held" || r.clashOutcome == "fell"
+                    val prov = r.provisionalStrength
+                    if (ruled && prov != null) {
+                        Text(
+                            "CASE AS RESTED",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        StrengthMeter(strength = prov, required = r.required, ideology = r.primary)
+                        Spacer(Modifier.height(8.dp))
+                        val shift = r.strength - prov
+                        val (glyph, verdictLine, tint) = when {
+                            shift < 0 -> Triple("▼${-shift}", "the challenge drew blood", MaterialTheme.colorScheme.error)
+                            shift > 0 -> Triple("▲$shift", "the closer landed", MaterialTheme.colorScheme.primary)
+                            else -> Triple("—", "the exchange moved nothing", MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text(
+                            "$glyph · $verdictLine",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = tint,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "AFTER THE CLASH",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        StrengthMeter(strength = r.strength, required = r.required, ideology = r.primary)
+                        r.clashReasoning?.let {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "The court: “$it”",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontStyle = FontStyle.Italic,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        StrengthMeter(strength = r.strength, required = r.required, ideology = r.primary)
+                    }
                     if (r.moodNote.isNotBlank()) {
                         Spacer(Modifier.height(6.dp))
                         Text(

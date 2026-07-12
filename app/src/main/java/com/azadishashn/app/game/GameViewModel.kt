@@ -1344,6 +1344,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 clashOutcome = trialOutcome,
                 challengerName = challenger?.name.takeIf { trialOutcome != null },
                 wagerLine = wagerLine,
+                provisionalStrength = verdict?.strength.takeIf { clashOutcome == "ruled" },
+                clashReasoning = clashRuling?.reasoning?.takeIf { it.isNotBlank() },
             ),
             cardsThisRound = state.cardsThisRound + cardIdeology,
             screen = Screen.Result,
