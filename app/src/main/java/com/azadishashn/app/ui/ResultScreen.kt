@@ -384,13 +384,17 @@ fun ResultScreen(vm: GameViewModel) {
                                     ),
                                 )
                             }
-                            if (r.pressCreditEarned) {
+                            if (r.pressCreditReasons.isNotEmpty()) {
                                 add(
                                     OutcomeChipData(
                                         label = "PRESS CREDIT",
-                                        line = "+1 · earned",
-                                        detail = "Keeping the card restocks ${r.playerName}'s right to " +
-                                            "cross-examine (max 2). Spend it when a rival rests their case.",
+                                        line = if (r.pressCreditsGained > 0) {
+                                            "+${r.pressCreditsGained} · feat earned"
+                                        } else {
+                                            "Feat — but at the cap"
+                                        },
+                                        detail = r.pressCreditReasons.joinToString(". ") + ". " +
+                                            "Credits buy cross-examinations of rivals (hold at most 2).",
                                         tint = MaterialTheme.colorScheme.tertiary,
                                     ),
                                 )

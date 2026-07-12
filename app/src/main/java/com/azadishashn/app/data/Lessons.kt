@@ -380,8 +380,10 @@ object Lessons {
             title = "Cross-examination",
             scenario = "You rest your case — and the phone goes BACK to the " +
                 "questioner. Every answer ends up in front of its prosecutor — " +
-                "but prosecuting is EARNED: it costs a press credit. You start " +
-                "with one; KEEPING a card restocks it (max 2).",
+                "but prosecuting is EARNED: it costs a press credit (📰, shown " +
+                "by every avatar). You start with one; FEATS restock it, max 2: " +
+                "clear a bar of 7+, survive a cross-examination, weather a " +
+                "crisis, or rebel against the whip at strength 7+.",
             branches = listOf(
                 LessonBranch(
                     "Cross-examine (1 credit)",

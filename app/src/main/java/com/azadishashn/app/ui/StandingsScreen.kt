@@ -230,6 +230,14 @@ fun StandingsScreen(vm: GameViewModel) {
                                     }
                                 }
                             }
+                            if (s.pressCredits.isNotEmpty()) {
+                                Text(
+                                    "📰${vm.pressCreditsOf(player.id)} ",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (vm.pressCreditsOf(player.id) > 0) MaterialTheme.colorScheme.tertiary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                             if (s.approval.containsKey(player.id)) {
                                 Text(
                                     "${vm.approvalOf(player.id)}% ",

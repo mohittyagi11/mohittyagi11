@@ -72,6 +72,7 @@ import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.GlassChip
 import com.azadishashn.app.ui.components.IdeologyChip
 import com.azadishashn.app.ui.components.LiveBarRow
+import com.azadishashn.app.ui.components.TableEntry
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.ScenarioStory
 import com.azadishashn.app.ui.components.TurnProgress
@@ -382,14 +383,23 @@ private fun RoundBody(vm: GameViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                s.questioner?.let { Avatar(it.name, seed = it.id, size = 28.dp) }
+                // 📰 = press credits, live next to each face: the questioner's
+                // buy tonight's cross-examination; the answerer's show what
+                // their feats have banked.
+                s.questioner?.let {
+                    Avatar(it.name, seed = it.id, size = 28.dp)
+                    if (vm.hasKey) PressCreditBadge(vm.pressCreditsOf(it.id))
+                }
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = "asks",
                     modifier = Modifier.padding(horizontal = 6.dp).height(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                s.activePlayer?.let { Avatar(it.name, seed = it.id, size = 28.dp) }
+                s.activePlayer?.let {
+                    Avatar(it.name, seed = it.id, size = 28.dp)
+                    if (vm.hasKey) PressCreditBadge(vm.pressCreditsOf(it.id))
+                }
                 Spacer(Modifier.weight(1f))
                 TurnProgress(total = n, current = turnInRound)
             }
@@ -493,7 +503,9 @@ private fun RoundBody(vm: GameViewModel) {
                 crisisTarget = s.crisisTarget.takeIf { s.tripwireFired && it.isNotBlank() },
                 acked = vm.ackedBars,
                 onAck = vm::acknowledgeBar,
-                table = s.players.map { Triple(it.id, it.name, vm.liveBarsFor(it)) },
+                table = s.players.map {
+                    TableEntry(it.id, it.name, vm.pressCreditsOf(it.id), vm.liveBarsFor(it))
+                },
             )
         }
 
@@ -625,7 +637,7 @@ private fun RoundBody(vm: GameViewModel) {
                     Text(
                         if (peek) "📜 THE WHIP DEMANDS THE ${s.assignedIdeology.uppercase()} LINE. " +
                             "Obey: +3 poll, +1 ${Ideologies.resourceOf(s.assignedIdeology)}. " +
-                            "Rebel at strength 7+: +5 poll, glory. Rebel under 7: −4 poll — the party remembers."
+                            "Rebel at strength 7+: +5 poll, glory, 📰+1. Rebel under 7: −4 poll — the party remembers."
                         else "📜 ${s.activePlayer?.name} only: the party whip has instructions — press & hold to read",
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (peek) brand else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -802,7 +814,8 @@ private fun RoundBody(vm: GameViewModel) {
                     ctaNote = if (credits > 0) {
                         "The clash will make the papers."
                     } else {
-                        "No standing to cross-examine — KEEP a card on your own turn to earn a press credit."
+                        "No standing to cross-examine — press credit is earned by FEATS: clear a bar " +
+                            "of 7+, survive a cross-examination, weather a crisis, or rebel gloriously."
                     },
                 )
             }
@@ -994,6 +1007,19 @@ private fun HandoffCard(
         }
         TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) { Text(skipLabel) }
     }
+}
+
+/** "📰n" — a player's press credits, worn next to their avatar. */
+@Composable
+private fun PressCreditBadge(credits: Int) {
+    Text(
+        "📰$credits",
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = if (credits > 0) MaterialTheme.colorScheme.tertiary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 3.dp),
+    )
 }
 
 /** A tiny tinted status chip for the turn's weather row. */

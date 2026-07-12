@@ -50,6 +50,14 @@ import kotlin.math.roundToInt
  *  - THE TABLE fold shows what tonight's question would demand of every
  *    player, so the whole room argues with open books.
  */
+/** One player's row in THE TABLE fold: identity, press credits, four bars. */
+data class TableEntry(
+    val id: Int,
+    val name: String,
+    val credits: Int,
+    val bars: List<LiveBar>,
+)
+
 @Composable
 fun LiveBarRow(
     bars: List<LiveBar>,
@@ -58,7 +66,7 @@ fun LiveBarRow(
     crisisTarget: String?,
     acked: Map<String, Int>,
     onAck: (String, Int) -> Unit,
-    table: List<Triple<Int, String, List<LiveBar>>>,
+    table: List<TableEntry>,
     modifier: Modifier = Modifier,
 ) {
     if (bars.isEmpty()) return
@@ -186,23 +194,31 @@ fun LiveBarRow(
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
                     .padding(8.dp),
             ) {
-                table.forEach { (id, name, rows) ->
-                    val answering = id == playerId
+                table.forEach { entry ->
+                    val answering = entry.id == playerId
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(vertical = 2.dp),
                     ) {
-                        Avatar(name, seed = id, size = 18.dp)
+                        Avatar(entry.name, seed = entry.id, size = 18.dp)
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            name,
+                            entry.name,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = if (answering) FontWeight.Bold else null,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
                         )
-                        rows.forEach { b ->
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "📰${entry.credits}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (entry.credits > 0) MaterialTheme.colorScheme.tertiary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        entry.bars.forEach { b ->
                             IdeologyDot(b.ideology, size = 7.dp)
                             Spacer(Modifier.width(2.dp))
                             Text(
@@ -216,7 +232,8 @@ fun LiveBarRow(
                     }
                 }
                 Text(
-                    "What each line would demand of them tonight, mood included — hoarders pay more.",
+                    "What each line would demand of them tonight (hoarders pay more) — and " +
+                        "📰 press credits: spent to cross-examine, earned by feats.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -460,10 +460,11 @@ private fun TurnFlowStrip() {
         ChainLink("she rests her case — the phone goes back")
         FlowNode(
             5, "Ravi", 1, "The prosecutor's call",
-            "He posed the question, he decides: spend a press credit to " +
-                "cross-examine, or send it straight to the judge. Ravi has a " +
-                "credit (everyone starts with 1; keeping a card restocks it, " +
-                "max 2) — he prosecutes, and the clash will make the papers.",
+            "He posed the question, he decides: spend a press credit (📰) to " +
+                "cross-examine, or send it straight to the judge. Everyone " +
+                "starts with 1; FEATS restock it (max 2) — clear a bar of 7+, " +
+                "survive a cross-examination, weather a crisis, rebel " +
+                "gloriously. Ravi spends his — the clash will make the papers.",
             LaserBlue,
         )
         FlowFork(

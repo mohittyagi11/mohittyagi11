@@ -743,7 +743,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                         ?: Ideologies.NAMES.first()
                     val secondary = v.secondaryIdeology.takeIf { it in Ideologies.NAMES && it != primary }
                         ?: Ideologies.NAMES.first { it != primary }
-                    award(active, primary, secondary, v.strength.coerceIn(1, 10), v)
+                    award(active, primary, secondary, v.strength.coerceIn(1, 10), v, prosecuted = rebuttal.isNotBlank())
                 }.onFailure { e ->
                     state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Judging failed")
                 }
@@ -834,6 +834,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         secondary: String,
         strength: Int,
         verdict: Verdict?,
+        prosecuted: Boolean = false,
     ) {
         // The SAME live-bar math the Round screen displays — mood moves the
         // bar (the questioner set that weather); the calibrated anchor follows
@@ -1017,16 +1018,33 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             )
         } else state.dossier
 
-        // The papers go to the archive; a kept card restocks the answerer's
-        // press credit (the right to prosecute is earned at the lectern).
+        // The papers go to the archive.
         val newNews = if (verdict != null) {
             state.news + verdict.headlines.map {
                 NewsItem(state.round, active.name, it.outlet, it.slant, it.headline)
             }
         } else state.news
-        val creditEarned = verdict != null && keepPrimary && pressCreditsOf(active.id) < 2
-        val newCredits = if (creditEarned) {
-            state.pressCredits + (active.id to pressCreditsOf(active.id) + 1)
+
+        // Press credits are earned by FEATS, not routine: only a night worth
+        // reporting buys the right to prosecute someone else's (held cap 2).
+        val creditReasons = if (verdict == null) emptyList() else buildList {
+            if (keepPrimary && required >= 7) {
+                add("Cleared a bar of $required — a big night at the lectern")
+            }
+            if (keepPrimary && prosecuted) {
+                add("Survived a cross-examination with the card intact")
+            }
+            if (crisisOutcome == "weathered") {
+                add("Weathered a crisis without dropping the line")
+            }
+            if (whipOutcome == "rebel") {
+                add("Rebelled against the whip — gloriously")
+            }
+        }
+        val creditsGained = creditReasons.size
+            .coerceAtMost((2 - pressCreditsOf(active.id)).coerceAtLeast(0))
+        val newCredits = if (creditsGained > 0) {
+            state.pressCredits + (active.id to pressCreditsOf(active.id) + creditsGained)
         } else state.pressCredits
 
         state = state.copy(
@@ -1071,7 +1089,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 bonusResources = grants,
                 milestone = milestone,
                 moodNote = moodNote,
-                pressCreditEarned = creditEarned,
+                pressCreditsGained = creditsGained,
+                pressCreditReasons = creditReasons,
             ),
             cardsThisRound = state.cardsThisRound + cardIdeology,
             screen = Screen.Result,

@@ -314,6 +314,8 @@ data class AwardResult(
     val milestone: String = "",
     /** How the round's mood moved the bar for this argument ("" if neutral). */
     val moodNote: String = "",
-    /** True when keeping the card restocked the answerer's press credit. */
-    val pressCreditEarned: Boolean = false,
+    /** Press credits banked tonight (0 when nothing was feat-worthy or the cap bit). */
+    val pressCreditsGained: Int = 0,
+    /** The feats that earned them — shown so the table knows WHY. */
+    val pressCreditReasons: List<String> = emptyList(),
 )
