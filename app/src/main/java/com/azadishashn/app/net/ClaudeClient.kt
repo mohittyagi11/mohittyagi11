@@ -5,6 +5,8 @@ import com.azadishashn.app.model.Ideologies
 import com.azadishashn.app.model.OptionCard
 import com.azadishashn.app.model.RoundData
 import com.azadishashn.app.model.Scandal
+import com.azadishashn.app.model.ChallengeQualification
+import com.azadishashn.app.model.ClashRuling
 import com.azadishashn.app.model.ScandalVerdict
 import com.azadishashn.app.model.Verdict
 import kotlinx.coroutines.Dispatchers
@@ -165,33 +167,17 @@ class ClaudeClient(
         argument: String,
         language: String = "en",
         readLangs: List<String> = listOf("en"),
-        rebuttal: String = "",
-        closer: String = "",
-        rebutterName: String = "",
         pastPositions: List<String> = emptyList(),
         crisis: String = "",
     ): Verdict = withContext(Dispatchers.IO) {
         val opts = round.options.joinToString("\n") { "- ${it.ideology}: ${it.label}" }
         val blocList = round.blocs.ifEmpty { listOf("the public") }
-        val who = rebutterName.ifBlank { "An opponent" }
-        val exchange = buildString {
-            if (rebuttal.isNotBlank()) append("\nThe QUESTIONER $who then cross-examined: \"$rebuttal\"")
-            if (closer.isNotBlank()) append("\nThe player CLOSED: \"$closer\"")
-            if (isNotEmpty()) append(
-                "\nWeigh the full exchange — a strong rebuttal left unanswered weakens the case; " +
-                    "a sharp closer restores it.",
-            )
-        }
         val record = if (pastPositions.isEmpty()) "" else
             "\nTHE PLAYER'S PUBLIC RECORD this game (their past positions, on the books):\n" +
                 pastPositions.joinToString("\n") { "- $it" }
         val leakLine = if (crisis.isBlank()) "" else
             "\nMID-ARGUMENT, this BREAKING news dropped on the player: \"$crisis\" — they had to " +
                 "absorb it live. Weigh how composedly the answer handled the ambush."
-        // When a cross-examination happened, the papers must cover the fight itself.
-        val clashLine = if (rebuttal.isBlank()) "" else
-            " A cross-examination HAPPENED tonight: at least ONE of the two front pages MUST " +
-                "cover the CLASH itself — name $who, and say who drew blood in the exchange."
         val user = """
             Scenario: ${round.scenario.title} — ${round.scenario.situation}
             Question: ${round.dilemma.question}
@@ -200,7 +186,7 @@ class ClaudeClient(
             $opts
 
             The player answered the question in their OWN words (they were NOT shown the list above):
-            "$argument"$exchange$record$leakLine
+            "$argument"$record$leakLine
 
             Be an impartial judge — ignore who benefits in the game. Judge the player's actual words.
             1. primary_ideology: the ONE of the four ideologies (Capitalist, Supremo, Showstopper,
@@ -220,7 +206,7 @@ class ClaudeClient(
             8. stance_summary: ONE line recording, for the public record, the position the player took.
             9. headlines: EXACTLY 2 partisan front pages reporting this answer from OPPOSITE outlets
                (invent outlet names that fit the setting; slant = the outlet's leaning). Same answer,
-               two spins — punchy, real-tabloid energy, one flattering and one brutal.$clashLine
+               two spins — punchy, real-tabloid energy, one flattering and one brutal.
             10. consistency: how this answer sits against the player's public record above. verdict:
                first_stand (no record yet) | consistent | evolved (a pivot argued well — reward it) |
                flipflop (a naked U-turn). note: one wry line, as the press would put it.
@@ -236,6 +222,100 @@ class ClaudeClient(
         """.trimIndent()
 
         requestJson<Verdict>(ADJUDICATE_SYSTEM, user, judgeSchema())
+    }
+
+    /**
+     * The Champion's Court, act one: a standing challenger has spoken their
+     * cross-examination. The judge QUALIFIES it — names the category of attack it
+     * actually is — and writes the conditions of trial. The wager numbers are
+     * predefined per category in the app; the judge only classifies and narrates.
+     */
+    suspend fun qualifyChallenge(
+        round: RoundData,
+        argument: String,
+        verdict: Verdict,
+        rebuttal: String,
+        answererName: String,
+        challengerName: String,
+        pastPositions: List<String> = emptyList(),
+        nationReaction: String = "",
+        language: String = "en",
+    ): ChallengeQualification = withContext(Dispatchers.IO) {
+        val record = if (pastPositions.isEmpty()) "" else
+            "\n$answererName's PUBLIC RECORD this game:\n" +
+                pastPositions.joinToString("\n") { "- $it" }
+        val nation = if (nationReaction.isBlank()) "" else
+            "\nTHE NATION'S CURRENT MOOD: $nationReaction"
+        val user = """
+            Scenario: ${round.scenario.title} — ${round.scenario.situation}
+            Question: ${round.dilemma.question}
+
+            $answererName answered: "$argument"
+            Your provisional ruling: the answer served the ${verdict.primaryIdeology} cause,
+            strength ${verdict.strength}/10.
+
+            $challengerName — the table's CHAMPION of the ${verdict.primaryIdeology} cause, the
+            voice most familiar with this topic — rose and cross-examined:
+            "$rebuttal"$record$nation
+
+            QUALIFY the cross-examination. Judge what the challenger's words ACTUALLY are, not
+            what they claim to be:
+            - CONTRADICTION: it convincingly cites the answerer's own record or words against
+              them — the heaviest charge. Only qualify this if the record genuinely supports it.
+            - HERESY: it argues the answer betrays the very cause (${verdict.primaryIdeology})
+              it was ruled to serve — an attack on substance from inside the doctrine.
+            - SMEAR: theatre — an attack on the person, tone, or vibes, thin on substance.
+              Recklessness gets priced as recklessness.
+            Return:
+            1. category: CONTRADICTION | HERESY | SMEAR.
+            2. conditions: ONE line, spoken as the court — why it qualifies as that category and
+               how the nation's present mood colours this trial.
+            3. compromise_headline: the front-page line IF the answerer settles out of court
+               rather than face the wager (a dodge always makes the papers).
+            ${languageLine(language)}
+        """.trimIndent()
+        requestJson<ChallengeQualification>(ADJUDICATE_SYSTEM, user, qualifySchema())
+    }
+
+    /**
+     * The Champion's Court, act two: the answerer accepted the wager and closed.
+     * The judge re-rules the SAME answer in light of the full exchange — the returned
+     * final_strength replaces the provisional strength against the unchanged bar.
+     */
+    suspend fun ruleClash(
+        round: RoundData,
+        argument: String,
+        verdict: Verdict,
+        category: String,
+        rebuttal: String,
+        closer: String,
+        answererName: String,
+        challengerName: String,
+        language: String = "en",
+    ): ClashRuling = withContext(Dispatchers.IO) {
+        val user = """
+            Scenario: ${round.scenario.title} — ${round.scenario.situation}
+            Question: ${round.dilemma.question}
+
+            $answererName answered: "$argument"
+            Your provisional ruling: ${verdict.primaryIdeology}, strength ${verdict.strength}/10.
+
+            $challengerName, Champion of the ${verdict.primaryIdeology} cause, cross-examined
+            (qualified by this court as $category): "$rebuttal"
+            $answererName closed: "${closer.ifBlank { "(declined to close — stood on the answer)" }}"
+
+            RULE THE CLASH. Weigh the full exchange impartially: a strong challenge left
+            unanswered wounds the case; a sharp closer restores or even strengthens it.
+            1. final_strength: 1-10 — the answer's strength for the ${verdict.primaryIdeology}
+               cause AFTER the exchange. It may fall below, stay at, or rise above the
+               provisional ${verdict.strength}.
+            2. reasoning: one line on who drew blood and why.
+            3. headlines: EXACTLY 2 partisan front pages from OPPOSITE outlets. At least ONE
+               must cover the CLASH itself — name both $challengerName and $answererName, and
+               say who walked away bleeding.
+            ${languageLine(language)}
+        """.trimIndent()
+        requestJson<ClashRuling>(ADJUDICATE_SYSTEM, user, clashSchema())
     }
 
     /** A scandal surfaced from the player's own record; the press demands an answer. */
@@ -700,6 +780,30 @@ class ClaudeClient(
                         ),
                     ),
                     "narration" to arraySchema(narrationItemSchema()),
+                ),
+            )
+        }
+
+        private fun qualifySchema(): JsonObject = objSchema(
+            listOf("category", "conditions", "compromise_headline"),
+            mapOf(
+                "category" to enumProp(listOf("CONTRADICTION", "HERESY", "SMEAR")),
+                "conditions" to strProp(),
+                "compromise_headline" to strProp(),
+            ),
+        )
+
+        private fun clashSchema(): JsonObject {
+            val headlineSchema = objSchema(
+                listOf("outlet", "slant", "headline"),
+                mapOf("outlet" to strProp(), "slant" to strProp(), "headline" to strProp()),
+            )
+            return objSchema(
+                listOf("final_strength", "reasoning", "headlines"),
+                mapOf(
+                    "final_strength" to intProp(),
+                    "reasoning" to strProp(),
+                    "headlines" to arraySchema(headlineSchema),
                 ),
             )
         }

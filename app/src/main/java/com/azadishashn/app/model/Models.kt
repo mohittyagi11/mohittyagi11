@@ -245,6 +245,26 @@ data class Verdict(
     val narration: List<NarrationLine> = emptyList(),
 )
 
+/**
+ * The court's qualification of a cross-examination: which category of attack
+ * the challenger's words actually are. The wager per category is predefined
+ * in the app; the judge only classifies and narrates.
+ */
+@Serializable
+data class ChallengeQualification(
+    val category: String, // CONTRADICTION | HERESY | SMEAR
+    val conditions: String,
+    @SerialName("compromise_headline") val compromiseHeadline: String,
+)
+
+/** The final ruling after an accepted wager: the answer re-scored post-exchange. */
+@Serializable
+data class ClashRuling(
+    @SerialName("final_strength") val finalStrength: Int,
+    val reasoning: String,
+    val headlines: List<Headline> = emptyList(),
+)
+
 // ---------------------------------------------------------------------------
 // Game state — lives in memory, driven by the ViewModel.
 // ---------------------------------------------------------------------------
@@ -314,8 +334,12 @@ data class AwardResult(
     val milestone: String = "",
     /** How the round's mood moved the bar for this argument ("" if neutral). */
     val moodNote: String = "",
-    /** Press credits banked tonight (0 when nothing was feat-worthy or the cap bit). */
-    val pressCreditsGained: Int = 0,
-    /** The feats that earned them — shown so the table knows WHY. */
-    val pressCreditReasons: List<String> = emptyList(),
+    /** The Champion's Court: category of the cross-examination, if one was qualified. */
+    val clashCategory: String? = null,
+    /** "held" | "fell" | "compromise" — how the trial ended (null: no challenge). */
+    val clashOutcome: String? = null,
+    /** The standing challenger who rose (Champion of the topic, or runner-up). */
+    val challengerName: String? = null,
+    /** Human-readable settlement of the wager ("Ravi pays: −4 approval; Asha +4 & +1 Funds"). */
+    val wagerLine: String? = null,
 )

@@ -457,25 +457,27 @@ private fun TurnFlowStrip() {
                 "the record remembers.",
             LaserRed,
         )
-        ChainLink("she rests her case — the phone goes back")
+        ChainLink("she rests her case — the judge names the topic")
         FlowNode(
-            5, "Ravi", 1, "The prosecutor's call",
-            "He posed the question, he decides: spend a press credit (📰) to " +
-                "cross-examine, or send it straight to the judge. Everyone " +
-                "starts with 1; FEATS restock it (max 2) — clear a bar of 7+, " +
-                "survive a cross-examination, weather a crisis, rebel " +
-                "gloriously. Ravi spends his — the clash will make the papers.",
+            5, "Ravi", 1, "The Champion's Court",
+            "The judge rules the answer served SUPREMO, strength 8. The mic " +
+                "goes to that cause's CHAMPION (📣 most kept cards) — Asha " +
+                "leads Supremo herself, so the runner-up Ravi takes it: on " +
+                "this topic, HE is the press. He rises and attacks; the court " +
+                "QUALIFIES it as HERESY and posts the wager BEFORE anything " +
+                "settles: loser pays 3 approval, winner takes +1 Clout.",
             LaserBlue,
         )
         FlowFork(
-            "Cross-examine (1 credit)" to "20s rebuttal → Asha closes in 15s",
-            "Straight to the judge" to "free — the argument stands as given",
+            "Accept the wager" to "Asha closes in 15s → the court rules the clash",
+            "Compromise" to "no wager paid, but her card DEFLECTS to her secondary — the dodge makes the papers",
         )
-        ChainLink("the judge weighs the whole exchange")
+        ChainLink("she accepts — the court weighs the whole exchange")
         FlowNode(
-            6, null, 0, "The verdict",
-            "Strength 8, primary Supremo. The bar was 7 — CLEARED, the card " +
-                "stays. Her 4th Supremo → 🏛 L2 MILESTONE: claim the board power.",
+            6, null, 0, "The ruling",
+            "Final strength 8, primary Supremo. The bar was 7 — CLEARED, the " +
+                "card HELD: Ravi pays the wager (−3 approval; Asha +3 and +1 " +
+                "Clout). Her 4th Supremo → 🏛 L2 MILESTONE: claim the board power.",
             Gold,
         )
         Spacer(Modifier.height(6.dp))

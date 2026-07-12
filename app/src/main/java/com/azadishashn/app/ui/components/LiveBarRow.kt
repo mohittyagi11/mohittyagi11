@@ -50,11 +50,11 @@ import kotlin.math.roundToInt
  *  - THE TABLE fold shows what tonight's question would demand of every
  *    player, so the whole room argues with open books.
  */
-/** One player's row in THE TABLE fold: identity, press credits, four bars. */
+/** One player's row in THE TABLE fold: identity, championed causes, four bars. */
 data class TableEntry(
     val id: Int,
     val name: String,
-    val credits: Int,
+    val champions: List<String>,
     val bars: List<LiveBar>,
 )
 
@@ -209,14 +209,14 @@ fun LiveBarRow(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            "📰${entry.credits}",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = if (entry.credits > 0) MaterialTheme.colorScheme.tertiary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        if (entry.champions.isNotEmpty()) {
+                            Spacer(Modifier.width(4.dp))
+                            Text("📣", style = MaterialTheme.typography.labelSmall)
+                            entry.champions.forEach { cause ->
+                                Spacer(Modifier.width(2.dp))
+                                IdeologyDot(cause, size = 7.dp)
+                            }
+                        }
                         Spacer(Modifier.weight(1f))
                         entry.bars.forEach { b ->
                             IdeologyDot(b.ideology, size = 7.dp)
@@ -232,8 +232,9 @@ fun LiveBarRow(
                     }
                 }
                 Text(
-                    "What each line would demand of them tonight (hoarders pay more) — and " +
-                        "📰 press credits: spent to cross-examine, earned by feats.",
+                    "What each line would demand of them tonight (hoarders pay more). " +
+                        "📣 marks a cause's CHAMPION — most kept cards; they alone hold " +
+                        "standing to cross-examine answers on that cause.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

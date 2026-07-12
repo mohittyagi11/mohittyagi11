@@ -384,18 +384,24 @@ fun ResultScreen(vm: GameViewModel) {
                                     ),
                                 )
                             }
-                            if (r.pressCreditReasons.isNotEmpty()) {
+                            if (r.clashOutcome != null) {
                                 add(
                                     OutcomeChipData(
-                                        label = "PRESS CREDIT",
-                                        line = if (r.pressCreditsGained > 0) {
-                                            "+${r.pressCreditsGained} · feat earned"
-                                        } else {
-                                            "Feat — but at the cap"
+                                        label = "THE TRIAL",
+                                        line = when (r.clashOutcome) {
+                                            "held" -> "${r.clashCategory} · card HELD"
+                                            "fell" -> "${r.clashCategory} · card FELL"
+                                            else -> "COMPROMISE · settled"
                                         },
-                                        detail = r.pressCreditReasons.joinToString(". ") + ". " +
-                                            "Credits buy cross-examinations of rivals (hold at most 2).",
-                                        tint = MaterialTheme.colorScheme.tertiary,
+                                        detail = buildString {
+                                            r.challengerName?.let { append("$it rose as Champion of the ${r.primary} cause. ") }
+                                            r.wagerLine?.let { append(it) }
+                                        },
+                                        tint = when (r.clashOutcome) {
+                                            "held" -> MaterialTheme.colorScheme.primary
+                                            "fell" -> MaterialTheme.colorScheme.error
+                                            else -> MaterialTheme.colorScheme.tertiary
+                                        },
                                     ),
                                 )
                             }

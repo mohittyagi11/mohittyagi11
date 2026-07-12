@@ -71,6 +71,8 @@ import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.GlassChip
 import com.azadishashn.app.ui.components.IdeologyChip
+import com.azadishashn.app.ui.components.IdeologyDot
+import com.azadishashn.app.ui.components.SectionCard
 import com.azadishashn.app.ui.components.LiveBarRow
 import com.azadishashn.app.ui.components.TableEntry
 import com.azadishashn.app.ui.components.PrimaryCta
@@ -94,7 +96,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.delay
 
-private enum class RoundPhase { QUESTION, ANSWER, HANDOFF_REBUT, REBUTTAL, HANDOFF_CLOSE, CLOSER }
+/**
+ * The Champion's Court turn: QUESTION → ANSWER → (judge rules the topic) →
+ * CHALLENGE window (the cause's Champion rises or waives) → REBUTTAL →
+ * (judge qualifies + posts the wager) → WAGER (accept or compromise) → CLOSER.
+ */
+private enum class RoundPhase { QUESTION, ANSWER, CHALLENGE, REBUTTAL, WAGER, CLOSER }
 
 /**
  * A small countdown ring — debate pressure, not enforcement: it turns red and
@@ -307,6 +314,15 @@ private fun RoundBody(vm: GameViewModel) {
     // doesn't become a wall — the rest teach on their next occurrence.
     val coachBudget = remember(roundKey) { mutableIntStateOf(0) }
 
+    // The Champion's Court drives the phase across VM roundtrips: a provisional
+    // verdict with a standing challenger opens the CHALLENGE window; the court's
+    // qualification arriving moves the trial to the WAGER decision.
+    LaunchedEffect(s.pendingVerdict != null, s.challengeCategory != null) {
+        if (s.pendingVerdict != null) {
+            phase = if (s.challengeCategory == null) RoundPhase.CHALLENGE else RoundPhase.WAGER
+        }
+    }
+
     val speechLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
@@ -383,12 +399,11 @@ private fun RoundBody(vm: GameViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // 📰 = press credits, live next to each face: the questioner's
-                // buy tonight's cross-examination; the answerer's show what
-                // their feats have banked.
+                // 📣 = championed causes, worn next to each face: the table
+                // always sees who holds standing to cross-examine on what.
                 s.questioner?.let {
                     Avatar(it.name, seed = it.id, size = 28.dp)
-                    if (vm.hasKey) PressCreditBadge(vm.pressCreditsOf(it.id))
+                    if (vm.hasKey) ChampionBadge(vm.championsOf(it.id))
                 }
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowForward,
@@ -398,7 +413,7 @@ private fun RoundBody(vm: GameViewModel) {
                 )
                 s.activePlayer?.let {
                     Avatar(it.name, seed = it.id, size = 28.dp)
-                    if (vm.hasKey) PressCreditBadge(vm.pressCreditsOf(it.id))
+                    if (vm.hasKey) ChampionBadge(vm.championsOf(it.id))
                 }
                 Spacer(Modifier.weight(1f))
                 TurnProgress(total = n, current = turnInRound)
@@ -504,7 +519,7 @@ private fun RoundBody(vm: GameViewModel) {
                 acked = vm.ackedBars,
                 onAck = vm::acknowledgeBar,
                 table = s.players.map {
-                    TableEntry(it.id, it.name, vm.pressCreditsOf(it.id), vm.liveBarsFor(it))
+                    TableEntry(it.id, it.name, vm.championsOf(it.id), vm.liveBarsFor(it))
                 },
             )
         }
@@ -637,7 +652,7 @@ private fun RoundBody(vm: GameViewModel) {
                     Text(
                         if (peek) "📜 THE WHIP DEMANDS THE ${s.assignedIdeology.uppercase()} LINE. " +
                             "Obey: +3 poll, +1 ${Ideologies.resourceOf(s.assignedIdeology)}. " +
-                            "Rebel at strength 7+: +5 poll, glory, 📰+1. Rebel under 7: −4 poll — the party remembers."
+                            "Rebel at strength 7+: +5 poll, glory. Rebel under 7: −4 poll — the party remembers."
                         else "📜 ${s.activePlayer?.name} only: the party whip has instructions — press & hold to read",
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (peek) brand else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -763,19 +778,18 @@ private fun RoundBody(vm: GameViewModel) {
                 )
 
                 Spacer(Modifier.height(Dim.sectionGap))
-                // The answerer never skips their own prosecution: resting the
-                // case hands the phone BACK to the questioner, who decides —
-                // cross-examine, or send it straight to the judge.
+                // Resting the case sends the answer to the judge, who names the
+                // topic — and with it, who (if anyone) holds standing to
+                // cross-examine: the cause's Champion, not the questioner.
                 PrimaryCta(
-                    text = if (vm.hasKey) "Rest my case — pass to ${s.questioner?.name}" else "Resolve",
+                    text = if (vm.hasKey) "Rest my case — to the judge" else "Resolve",
                     onClick = {
                         when {
-                            !vm.hasKey -> vm.resolve(argument)
                             // The backstop: an unexploded timebomb detonates the
                             // moment they stand up — the phone rings mid-motion.
                             // Resting is interrupted once; the next tap proceeds.
-                            s.tripwireType == "time" && !s.tripwireFired -> vm.fireTripwire()
-                            else -> phase = RoundPhase.HANDOFF_REBUT
+                            vm.hasKey && s.tripwireType == "time" && !s.tripwireFired -> vm.fireTripwire()
+                            else -> vm.submitAnswer(argument)
                         }
                     },
                     enabled = if (vm.hasKey) argument.isNotBlank() else s.championedOptionId != null,
@@ -787,44 +801,48 @@ private fun RoundBody(vm: GameViewModel) {
                 Spacer(Modifier.height(Dim.sectionGap))
             }
 
-            RoundPhase.HANDOFF_REBUT -> {
+            RoundPhase.CHALLENGE -> {
                 CoachMark(
                     Lessons.CROSSEXAM, vm::hasSeenLesson, vm::markLessonSeen, coachBudget,
                     force = true,
                 )
                 s.error?.let { ErrorLine(it) }
-                // Cross-examination is EARNED: the prosecutor spends a press
-                // credit (start with 1; keeping a card restocks it, max 2).
-                val prosecutorId = s.questioner?.id ?: -1
-                val credits = vm.pressCreditsOf(prosecutorId)
-                HandoffCard(
-                    toName = s.questioner?.name.orEmpty(),
-                    role = "YOUR CALL, PROSECUTOR",
-                    brief = "${s.activePlayer?.name} rests. You posed this question — " +
-                        "cross-examine the answer (20 seconds to tear it apart, they get 15 to close), " +
-                        "or send it straight to the judge.",
-                    cta = "Cross-examine (1 credit · you have $credits)",
-                    onTake = {
-                        vm.spendPressCredit(prosecutorId)
-                        phase = RoundPhase.REBUTTAL
-                    },
-                    onSkip = { rebuttal = ""; vm.resolve(argument) },
-                    skipLabel = "Straight to the judge — resolve now",
-                    ctaEnabled = credits > 0,
-                    ctaNote = if (credits > 0) {
-                        "The clash will make the papers."
-                    } else {
-                        "No standing to cross-examine — press credit is earned by FEATS: clear a bar " +
-                            "of 7+, survive a cross-examination, weather a crisis, or rebel gloriously."
-                    },
-                )
+                val v = s.pendingVerdict
+                val challenger = s.players.firstOrNull { it.id == s.challengerId }
+                if (v != null && challenger != null) {
+                    val cause = v.primaryIdeology
+                    // The topic reveal — everyone learns whose turf tonight's answer was on.
+                    Spacer(Modifier.height(Dim.itemGap))
+                    Text(
+                        "THE JUDGE RULES: this answer served the ${cause.uppercase()} cause — " +
+                            "strength ${v.strength}/10.",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = IdeologyTheme.of(cause).brand,
+                    )
+                    HandoffCard(
+                        toName = challenger.name,
+                        role = "📣 CHAMPION OF THE ${cause.uppercase()} CAUSE",
+                        brief = "You hold the most $cause cards at this table — on this topic, " +
+                            "YOU are the press. Rise and cross-examine ${s.activePlayer?.name} " +
+                            "(20 seconds), or waive and let the ruling stand.",
+                        cta = "Rise — cross-examine",
+                        onTake = { phase = RoundPhase.REBUTTAL },
+                        onSkip = { vm.waiveChallenge() },
+                        skipLabel = "Waive — let the ruling stand",
+                        ctaNote = "The court will QUALIFY your attack and post its wager " +
+                            "before anything settles. Cheap shots get priced as cheap shots.",
+                    )
+                }
             }
 
             RoundPhase.REBUTTAL -> {
+                val challenger = s.players.firstOrNull { it.id == s.challengerId }
                 Spacer(Modifier.height(Dim.sectionGap))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "${s.questioner?.name}: 20 seconds to tear the answer apart.",
+                        "${challenger?.name}: 20 seconds to tear the answer apart. Cite their record, " +
+                            "or their betrayal of the cause — substance survives, smears backfire.",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
@@ -839,12 +857,12 @@ private fun RoundBody(vm: GameViewModel) {
                 ) {
                     Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.height(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Speak the rebuttal")
+                    Text("Speak the cross-examination")
                 }
                 OutlinedTextField(
                     value = rebuttal,
                     onValueChange = { rebuttal = it },
-                    label = { Text("…or type the rebuttal") },
+                    label = { Text("…or type it") },
                     shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
@@ -852,36 +870,44 @@ private fun RoundBody(vm: GameViewModel) {
                 s.error?.let { ErrorLine(it) }
                 Spacer(Modifier.height(Dim.sectionGap))
                 PrimaryCta(
-                    text = "Done — back to ${s.activePlayer?.name}",
-                    onClick = { phase = RoundPhase.HANDOFF_CLOSE },
+                    text = "Submit — the court qualifies the challenge",
+                    onClick = { vm.submitRebuttal(rebuttal) },
                     enabled = rebuttal.isNotBlank(),
                 )
                 TextButton(
-                    onClick = { rebuttal = ""; vm.resolve(argument) },
+                    onClick = { vm.waiveChallenge() },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Withdraw — resolve now") }
+                ) { Text("Withdraw — let the ruling stand") }
                 Spacer(Modifier.height(Dim.sectionGap))
             }
 
-            RoundPhase.HANDOFF_CLOSE -> {
-                HandoffCard(
-                    toName = s.activePlayer?.name.orEmpty(),
-                    role = "CLOSING STATEMENT",
-                    brief = "${s.questioner?.name} has attacked your answer. " +
-                        "15 seconds to answer the rebuttal and close.",
-                    cta = "I have the floor",
-                    onTake = { phase = RoundPhase.CLOSER },
-                    onSkip = { closer = ""; vm.resolve(argument, rebuttal) },
-                    skipLabel = "No closer — let the judge weigh it as it stands",
-                )
+            RoundPhase.WAGER -> {
+                s.error?.let { ErrorLine(it) }
+                val v = s.pendingVerdict
+                val challenger = s.players.firstOrNull { it.id == s.challengerId }
+                val category = s.challengeCategory
+                if (v != null && challenger != null && category != null) {
+                    WagerCard(
+                        category = category,
+                        conditions = s.challengeConditions.orEmpty(),
+                        answererName = s.activePlayer?.name.orEmpty(),
+                        challengerName = challenger.name,
+                        cause = v.primaryIdeology,
+                        secondary = v.secondaryIdeology,
+                        terms = vm.wagerTerms(category, v.primaryIdeology),
+                        onAccept = { phase = RoundPhase.CLOSER },
+                        onCompromise = { vm.compromise() },
+                    )
+                }
             }
 
             RoundPhase.CLOSER -> {
+                val challenger = s.players.firstOrNull { it.id == s.challengerId }
                 Spacer(Modifier.height(Dim.sectionGap))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "${s.activePlayer?.name}: 15 seconds to close. Answer the rebuttal — " +
-                            "the judge weighs the whole exchange.",
+                        "${s.activePlayer?.name}: the wager is accepted. 15 seconds to answer " +
+                            "${challenger?.name}'s challenge — the court rules the whole exchange.",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
@@ -909,8 +935,8 @@ private fun RoundBody(vm: GameViewModel) {
                 s.error?.let { ErrorLine(it) }
                 Spacer(Modifier.height(Dim.sectionGap))
                 PrimaryCta(
-                    text = "Resolve — Claude weighs the exchange",
-                    onClick = { vm.resolve(argument, rebuttal, closer) },
+                    text = "To the ruling — the court weighs the clash",
+                    onClick = { vm.acceptWager(closer) },
                 )
                 Spacer(Modifier.height(Dim.sectionGap))
             }
@@ -1009,17 +1035,113 @@ private fun HandoffCard(
     }
 }
 
-/** "📰n" — a player's press credits, worn next to their avatar. */
+/** 📣 + cause dots — the causes a player champions, worn next to their avatar. */
 @Composable
-private fun PressCreditBadge(credits: Int) {
-    Text(
-        "📰$credits",
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
-        color = if (credits > 0) MaterialTheme.colorScheme.tertiary
-        else MaterialTheme.colorScheme.onSurfaceVariant,
+private fun ChampionBadge(causes: List<String>) {
+    if (causes.isEmpty()) return
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(start = 3.dp),
-    )
+    ) {
+        Text("📣", style = MaterialTheme.typography.labelSmall)
+        causes.forEach {
+            Spacer(Modifier.width(2.dp))
+            IdeologyDot(it, size = 7.dp)
+        }
+    }
+}
+
+/**
+ * The court's posted wager: the qualification of the challenge and the price of
+ * either outcome, announced BEFORE the answerer decides — accept the trial, or
+ * compromise (no wager paid, but the card deflects to the secondary).
+ */
+@Composable
+private fun WagerCard(
+    category: String,
+    conditions: String,
+    answererName: String,
+    challengerName: String,
+    cause: String,
+    secondary: String,
+    terms: Pair<String, String>,
+    onAccept: () -> Unit,
+    onCompromise: () -> Unit,
+) {
+    val tint = when (category) {
+        "CONTRADICTION" -> MaterialTheme.colorScheme.error
+        "HERESY" -> IdeologyTheme.of(cause).brand
+        else -> MaterialTheme.colorScheme.tertiary
+    }
+    Column(Modifier.fillMaxWidth().padding(vertical = Dim.sectionGap)) {
+        Text(
+            "THE COURT QUALIFIES THE CHALLENGE",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            category,
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Bold,
+            color = tint,
+        )
+        if (conditions.isNotBlank()) {
+            Spacer(Modifier.height(Dim.tight))
+            Text(
+                conditions,
+                style = MaterialTheme.typography.bodyMedium,
+                fontStyle = FontStyle.Italic,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(Dim.itemGap))
+        SectionCard {
+            Column {
+                Text(
+                    "THE WAGER — posted before trial",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = tint,
+                )
+                Spacer(Modifier.height(Dim.tight))
+                Text(
+                    "If the card FALLS: ${terms.first}.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    "If the card HOLDS: ${terms.second}.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(Dim.tight))
+                Text(
+                    "Either way, the clash makes the papers.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(Modifier.height(Dim.sectionGap))
+        Text(
+            "$answererName — your call. Face $challengerName's charge, or settle?",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(Dim.itemGap))
+        PrimaryCta(
+            text = "Accept the wager — 15s to close",
+            onClick = onAccept,
+        )
+        OutlinedButton(
+            onClick = onCompromise,
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        ) { Text("Compromise — settle; card deflected to $secondary") }
+        Text(
+            "A compromise pays no wager, but the line is lost — and the dodge makes the papers.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
 }
 
 /** A tiny tinted status chip for the turn's weather row. */

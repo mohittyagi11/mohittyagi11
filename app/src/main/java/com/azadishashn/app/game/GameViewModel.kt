@@ -14,6 +14,7 @@ import com.azadishashn.app.data.GameStore
 import com.azadishashn.app.data.OfflineContent
 import com.azadishashn.app.data.SettingsStore
 import com.azadishashn.app.model.AwardResult
+import com.azadishashn.app.model.ClashRuling
 import com.azadishashn.app.model.DossierEntry
 import com.azadishashn.app.model.Epilogue
 import com.azadishashn.app.model.Ideologies
@@ -107,8 +108,18 @@ data class GameState(
     val cardsThisRound: List<String> = emptyList(),
     /** THE PAPERS: every front page the judge has printed, oldest first. */
     val news: List<NewsItem> = emptyList(),
-    /** playerId -> press credits: spent to cross-examine, earned by keeping a card. */
-    val pressCredits: Map<Int, Int> = emptyMap(),
+    // -- The Champion's Court (a turn's cross-examination, mid-flight) --------
+    /** Provisional verdict awaiting the challenge window (null = no trial pending). */
+    val pendingVerdict: Verdict? = null,
+    /** The answer under trial, kept for the qualify/ruling calls. */
+    val pendingArgument: String = "",
+    /** Who holds standing: the topic's Champion (or runner-up). Null = nobody qualifies. */
+    val challengerId: Int? = null,
+    val pendingRebuttal: String = "",
+    /** The court's qualification: CONTRADICTION | HERESY | SMEAR (null until qualified). */
+    val challengeCategory: String? = null,
+    val challengeConditions: String? = null,
+    val compromiseHeadline: String? = null,
     // -- The questioner's tripwire (armed secretly during the question phase) --
     /** "word" | "time" | null (not armed). */
     val tripwireType: String? = null,
@@ -311,21 +322,38 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             activeIndex = idx,
             round = 1,
             starterId = firstPlayerId,
-            // Everyone starts with ONE press credit — the right to prosecute
-            // is earned after that (keep a card to restock, cap 2).
-            pressCredits = state.players.associate { it.id to 1 },
         )
         beginTurn()
     }
 
-    /** Press credits the player can spend on a cross-examination. */
-    fun pressCreditsOf(id: Int): Int = state.pressCredits[id] ?: 0
+    // -- Standing: who is heard on a cause -------------------------------------
 
-    /** The questioner stands to prosecute: one credit buys the floor. */
-    fun spendPressCredit(id: Int) {
-        val have = pressCreditsOf(id)
-        if (have <= 0) return
-        state = state.copy(pressCredits = state.pressCredits + (id to have - 1))
+    /**
+     * The CHAMPION of a cause: the player holding STRICTLY more kept cards on
+     * that line than everyone else. A tie means nobody is heard over the noise.
+     */
+    fun championOf(ideology: String): Player? {
+        val best = state.players.maxOfOrNull { it.counts[ideology] ?: 0 } ?: 0
+        if (best <= 0) return null
+        return state.players.filter { (it.counts[ideology] ?: 0) == best }.singleOrNull()
+    }
+
+    /** Causes this player currently champions — worn as 📣 badges at the table. */
+    fun championsOf(playerId: Int): List<String> =
+        Ideologies.NAMES.filter { championOf(it)?.id == playerId }
+
+    /**
+     * Who holds standing to cross-examine an answer that served [primary]:
+     * the cause's Champion — or, when the answerer IS the champion (on trial
+     * on their own turf), the runner-up. Ties or an unclaimed cause → nobody.
+     */
+    private fun challengerFor(primary: String, answererId: Int): Player? {
+        val champ = championOf(primary) ?: return null
+        if (champ.id != answererId) return champ
+        val rest = state.players.filter { it.id != answererId }
+        val best = rest.maxOfOrNull { it.counts[primary] ?: 0 } ?: 0
+        if (best <= 0) return null
+        return rest.filter { (it.counts[primary] ?: 0) == best }.singleOrNull()
     }
 
     // -- Settings ------------------------------------------------------------
@@ -427,6 +455,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             tripwireFired = false,
             crisisLine = "",
             crisisTarget = "",
+            pendingVerdict = null,
+            pendingArgument = "",
+            challengerId = null,
+            pendingRebuttal = "",
+            challengeCategory = null,
+            challengeConditions = null,
+            compromiseHeadline = null,
         )
         if (settings.hasKey) {
             // Show the questioner a theme picker; generation waits for [generate].
@@ -715,35 +750,107 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    // -- Resolve (Claude judges; rivals can't stall) -------------------------
+    // -- Resolve: the Champion's Court -----------------------------------------
+    //
+    // The answer is judged FIRST (the topic emerges), then the cause's Champion
+    // may rise; the judge qualifies their cross-examination into a category with
+    // a PREDEFINED wager, and the answerer accepts the trial or compromises.
 
-    fun resolve(argument: String, rebuttal: String = "", closer: String = "") {
+    /** The predefined tariff of a category: approval swings + a resource bounty. */
+    private data class Wager(
+        val fallAnswerer: Int,
+        val fallChallenger: Int,
+        val fallResource: Boolean,
+        val holdChallenger: Int,
+        val holdAnswerer: Int,
+        val holdResource: Boolean,
+    )
+
+    private val wagers = mapOf(
+        // Their own record betrays them — the heaviest, symmetric charge.
+        "CONTRADICTION" to Wager(-4, 4, true, -4, 4, true),
+        // The answer betrays the cause it claims — middleweight, symmetric.
+        "HERESY" to Wager(-3, 3, true, -3, 3, true),
+        // Theatre, thin on substance — cheap upside, brutal backlash. Your own
+        // words qualify you: recklessness is priced by the tariff itself.
+        "SMEAR" to Wager(-2, 2, false, -5, 3, false),
+    )
+
+    /** One line the wager card and Result can both print for a category. */
+    fun wagerTerms(category: String, cause: String): Pair<String, String> {
+        val w = wagers[category] ?: return "" to ""
+        val res = Ideologies.resourceOf(cause)
+        val fall = buildString {
+            append("answerer ${w.fallAnswerer} approval · challenger +${w.fallChallenger}")
+            if (w.fallResource) append(" and +1 $res")
+        }
+        val hold = buildString {
+            append("challenger ${w.holdChallenger} approval · answerer +${w.holdAnswerer}")
+            if (w.holdResource) append(" and +1 $res")
+        }
+        return fall to hold
+    }
+
+    private fun primaryOf(v: Verdict): String =
+        v.primaryIdeology.takeIf { it in Ideologies.NAMES } ?: Ideologies.NAMES.first()
+
+    private fun secondaryOf(v: Verdict): String {
+        val p = primaryOf(v)
+        return v.secondaryIdeology.takeIf { it in Ideologies.NAMES && it != p }
+            ?: Ideologies.NAMES.first { it != p }
+    }
+
+    private fun recordOf(active: Player): List<String> =
+        state.dossier.filter { it.playerId == active.id }
+            .takeLast(4)
+            .map { "\"${it.roundTitle}\": served ${it.ideology} — ${it.stance}" }
+
+    /** How the street reads tonight — fed to the court so conditions carry the mood. */
+    private fun nationReactionLine(active: Player): String = buildString {
+        state.current?.mood?.note?.takeIf { it.isNotBlank() }?.let { append("Mood: $it. ") }
+        val n = state.nation
+        listOf("economy" to n.economy, "liberty" to n.liberty, "stability" to n.stability, "trust" to n.trust)
+            .forEach { (name, v) ->
+                if (v < 25) append("The $name is in CRISIS. ")
+                if (v > 75) append("The $name basks in a golden age. ")
+            }
+        append("${active.name}'s approval stands at ${approvalOf(active.id)}%.")
+    }
+
+    /**
+     * The answerer rests their case: the judge rules the topic and strength.
+     * If a Champion holds standing on that cause, the challenge window opens;
+     * otherwise the verdict awards immediately.
+     */
+    fun submitAnswer(argument: String) {
         val active = state.activePlayer ?: return
         val round = state.current ?: return
 
         if (settings.hasKey && argument.isNotBlank()) {
-            // Player argued; Claude names the dominant and secondary ideologies.
             state = state.copy(loading = true, loadingKind = "judge", error = null)
-            val pastPositions = state.dossier.filter { it.playerId == active.id }
-                .takeLast(4)
-                .map { "\"${it.roundTitle}\": served ${it.ideology} — ${it.stance}" }
             viewModelScope.launch {
                 runCatching {
                     judgeClient().judge(
                         round, argument, settings.language, settings.readLangs.toList(),
-                        rebuttal = rebuttal, closer = closer,
-                        rebutterName = state.questioner?.name.orEmpty(),
-                        pastPositions = pastPositions,
+                        pastPositions = recordOf(active),
                         crisis = state.crisisLine,
                     )
                 }.onSuccess { v ->
                     // The judge is pure: the card follows what the words ACTUALLY
                     // served. The whip settles its own account in award().
-                    val primary = v.primaryIdeology.takeIf { it in Ideologies.NAMES }
-                        ?: Ideologies.NAMES.first()
-                    val secondary = v.secondaryIdeology.takeIf { it in Ideologies.NAMES && it != primary }
-                        ?: Ideologies.NAMES.first { it != primary }
-                    award(active, primary, secondary, v.strength.coerceIn(1, 10), v, prosecuted = rebuttal.isNotBlank())
+                    val challenger = challengerFor(primaryOf(v), active.id)
+                    if (challenger == null) {
+                        // The cause has no champion tonight — straight to the award.
+                        award(active, primaryOf(v), secondaryOf(v), v.strength.coerceIn(1, 10), v)
+                    } else {
+                        state = state.copy(
+                            loading = false,
+                            loadingKind = null,
+                            pendingVerdict = v,
+                            pendingArgument = argument,
+                            challengerId = challenger.id,
+                        )
+                    }
                 }.onFailure { e ->
                     state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Judging failed")
                 }
@@ -755,6 +862,94 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 ?.takeIf { it != primary }
                 ?: Ideologies.NAMES.first { it != primary }
             award(active, primary, secondary, -1, null)
+        }
+    }
+
+    /** The Champion lets the ruling stand — award the pending verdict unchanged. */
+    fun waiveChallenge() {
+        val v = state.pendingVerdict ?: return
+        val active = state.activePlayer ?: return
+        award(active, primaryOf(v), secondaryOf(v), v.strength.coerceIn(1, 10), v)
+    }
+
+    /**
+     * The Champion spoke their cross-examination; the court QUALIFIES it into a
+     * category whose wager is predefined — announced before anything settles.
+     */
+    fun submitRebuttal(rebuttal: String) {
+        val v = state.pendingVerdict ?: return
+        val active = state.activePlayer ?: return
+        val round = state.current ?: return
+        val challenger = state.players.firstOrNull { it.id == state.challengerId } ?: return
+        if (rebuttal.isBlank()) {
+            waiveChallenge(); return
+        }
+        state = state.copy(loading = true, loadingKind = "qualify", error = null, pendingRebuttal = rebuttal)
+        viewModelScope.launch {
+            runCatching {
+                judgeClient().qualifyChallenge(
+                    round, state.pendingArgument, v, rebuttal,
+                    answererName = active.name,
+                    challengerName = challenger.name,
+                    pastPositions = recordOf(active),
+                    nationReaction = nationReactionLine(active),
+                    language = settings.language,
+                )
+            }.onSuccess { q ->
+                state = state.copy(
+                    loading = false,
+                    loadingKind = null,
+                    challengeCategory = q.category.takeIf { it in wagers.keys } ?: "SMEAR",
+                    challengeConditions = q.conditions,
+                    compromiseHeadline = q.compromiseHeadline,
+                )
+            }.onFailure { e ->
+                state = state.copy(loading = false, loadingKind = null, error = e.message ?: "Qualification failed")
+            }
+        }
+    }
+
+    /**
+     * The answerer refuses the wager: settled out of court. No wager is paid,
+     * but the compromise DEFLECTS the card to the secondary — dodge the trial,
+     * lose the line. The settlement makes the papers.
+     */
+    fun compromise() {
+        val v = state.pendingVerdict ?: return
+        val active = state.activePlayer ?: return
+        award(
+            active, primaryOf(v), secondaryOf(v), v.strength.coerceIn(1, 10), v,
+            clashOutcome = "compromise",
+        )
+    }
+
+    /** The answerer stands trial: closer spoken, the court rules the clash. */
+    fun acceptWager(closer: String) {
+        val v = state.pendingVerdict ?: return
+        val active = state.activePlayer ?: return
+        val round = state.current ?: return
+        val challenger = state.players.firstOrNull { it.id == state.challengerId } ?: return
+        val category = state.challengeCategory ?: return
+        state = state.copy(loading = true, loadingKind = "clash", error = null)
+        viewModelScope.launch {
+            runCatching {
+                judgeClient().ruleClash(
+                    round, state.pendingArgument, v, category,
+                    rebuttal = state.pendingRebuttal,
+                    closer = closer,
+                    answererName = active.name,
+                    challengerName = challenger.name,
+                    language = settings.language,
+                )
+            }.onSuccess { r ->
+                award(
+                    active, primaryOf(v), secondaryOf(v), r.finalStrength.coerceIn(1, 10), v,
+                    clashOutcome = "ruled",
+                    clashRuling = r,
+                )
+            }.onFailure { e ->
+                state = state.copy(loading = false, loadingKind = null, error = e.message ?: "The ruling failed")
+            }
         }
     }
 
@@ -834,7 +1029,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         secondary: String,
         strength: Int,
         verdict: Verdict?,
-        prosecuted: Boolean = false,
+        clashOutcome: String? = null, // null | "compromise" | "ruled"
+        clashRuling: ClashRuling? = null,
     ) {
         // The SAME live-bar math the Round screen displays — mood moves the
         // bar (the questioner set that weather); the calibrated anchor follows
@@ -858,16 +1054,24 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
         // A card always lands; the baseline only decides whether it stays on [primary]
         // (keep stacking) or is redirected to [secondary] (you're hoarding [primary]).
-        val keepPrimary = if (strength < 0) {
-            held < (state.players.minOf { it.counts[primary] ?: 0 }) + 2
-        } else {
-            effStrength >= required
+        // A COMPROMISE forfeits the line outright: settle out of court, the card
+        // is deflected to the secondary no matter how strong the answer was.
+        val keepPrimary = when {
+            clashOutcome == "compromise" -> false
+            strength < 0 -> held < (state.players.minOf { it.counts[primary] ?: 0 }) + 2
+            else -> effStrength >= required
         }
         val cardIdeology = if (keepPrimary) primary else secondary
         val diverted = !keepPrimary
 
         val explanation = buildString {
-            if (strength >= 0) {
+            if (clashOutcome == "compromise") {
+                append("Settled out of court — no wager paid, but the card is DEFLECTED to $secondary. ")
+            } else if (strength >= 0) {
+                if (clashOutcome == "ruled") {
+                    append("After the clash, the court re-ruled the case at $strength/10. ")
+                    clashRuling?.reasoning?.takeIf { it.isNotBlank() }?.let { append("$it ") }
+                }
                 if (keepPrimary) {
                     append("Strength $effStrength/10 cleared the bar (needed $required). Earned 1 $primary card. ")
                 } else {
@@ -976,15 +1180,51 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             stripped + (active.id to myEndorsements)
         } else state.endorsements
 
-        // Snap poll: the verdict's swing + the whip + the crisis, and every
-        // endorsed bloc adds +1 to a POSITIVE verdict swing (your machine turns out).
+        // -- The Champion's Court settles its wager ------------------------------
+        // Predefined per category, announced before the trial: the loser pays in
+        // approval, the winner may take a resource bounty of the disputed cause.
+        val challenger = state.players.firstOrNull { it.id == state.challengerId }
+        val trialCategory = if (clashOutcome != null) state.challengeCategory else null
+        val trialOutcome = when {
+            clashOutcome == "compromise" -> "compromise"
+            clashOutcome == "ruled" && keepPrimary -> "held"
+            clashOutcome == "ruled" -> "fell"
+            else -> null
+        }
+        val wager = trialCategory?.let { wagers[it] }
+        val res = Ideologies.resourceOf(primary)
+        var answererWagerAdj = 0
+        var challengerWagerAdj = 0
+        var wagerLine: String? = null
+        if (wager != null && challenger != null && trialOutcome == "fell") {
+            answererWagerAdj = wager.fallAnswerer
+            challengerWagerAdj = wager.fallChallenger
+            wagerLine = "$trialCategory · the card FELL — ${active.name} ${wager.fallAnswerer} approval; " +
+                "${challenger.name} +${wager.fallChallenger}" +
+                (if (wager.fallResource) " and takes +1 $res" else "") + "."
+        } else if (wager != null && challenger != null && trialOutcome == "held") {
+            answererWagerAdj = wager.holdAnswerer
+            challengerWagerAdj = wager.holdChallenger
+            wagerLine = "$trialCategory · the card HELD — ${challenger.name} ${wager.holdChallenger} approval; " +
+                "${active.name} +${wager.holdAnswerer}" +
+                (if (wager.holdResource) " and takes +1 $res" else "") + "."
+        } else if (trialOutcome == "compromise") {
+            wagerLine = "Settled out of court — no wager paid; the card deflects to $secondary."
+        }
+
+        // Snap poll: the verdict's swing + the whip + the crisis + the trial's wager,
+        // and every endorsed bloc adds +1 to a POSITIVE verdict swing (your machine turns out).
         val approvalBefore = approvalOf(active.id)
         val newApproval = if (verdict != null) {
             var delta = verdict.pollDelta.coerceIn(-10, 10)
             if (delta > 0) delta += kept.size
-            delta += whipAdj + crisisPollAdj
+            delta += whipAdj + crisisPollAdj + answererWagerAdj
             (approvalBefore + delta).coerceIn(0, 100)
         } else approvalBefore
+        // The challenger pays (or collects) their side of the wager on the same poll.
+        val challengerApprovalAfter = if (challenger != null && challengerWagerAdj != 0) {
+            (approvalOf(challenger.id) + challengerWagerAdj).coerceIn(0, 100)
+        } else null
 
         // Everything cashes out into the game's REAL currencies: politics-earned
         // resource payouts the player physically takes (or returns) at the table.
@@ -1005,6 +1245,19 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 if (approvalBefore > 35 && newApproval <= 35) {
                     add(com.azadishashn.app.model.ResourceGrant("Donors flee", primary, -1, "give one back — the ship is listing"))
                 }
+                // The trial's resource bounty — physically taken by whoever won.
+                if (trialOutcome == "fell" && wager?.fallResource == true && challenger != null) {
+                    add(com.azadishashn.app.model.ResourceGrant(
+                        "Trial spoils → ${challenger.name}", primary, 1,
+                        "the Champion defended the cause — ${challenger.name} takes it",
+                    ))
+                }
+                if (trialOutcome == "held" && wager?.holdResource == true) {
+                    add(com.azadishashn.app.model.ResourceGrant(
+                        "Vindicated", primary, 1,
+                        "survived the ${trialCategory?.lowercase()} — the cause rallies to you",
+                    ))
+                }
             }
         }
         val newDossier = if (verdict != null) {
@@ -1018,44 +1271,42 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             )
         } else state.dossier
 
-        // The papers go to the archive.
+        // The papers go to the archive. A ruled clash rewrites tonight's front
+        // pages (the fight IS the story); a compromise gets its settlement leak.
+        val headlines = clashRuling?.headlines?.takeIf { it.isNotEmpty() }
+            ?: verdict?.headlines.orEmpty()
         val newNews = if (verdict != null) {
-            state.news + verdict.headlines.map {
+            val base = state.news + headlines.map {
                 NewsItem(state.round, active.name, it.outlet, it.slant, it.headline)
             }
+            val settle = state.compromiseHeadline
+            if (trialOutcome == "compromise" && !settle.isNullOrBlank()) {
+                base + NewsItem(state.round, active.name, "The Court Circular", "smells a dodge", settle)
+            } else base
         } else state.news
 
-        // Press credits are earned by FEATS, not routine: only a night worth
-        // reporting buys the right to prosecute someone else's (held cap 2).
-        val creditReasons = if (verdict == null) emptyList() else buildList {
-            if (keepPrimary && required >= 7) {
-                add("Cleared a bar of $required — a big night at the lectern")
-            }
-            if (keepPrimary && prosecuted) {
-                add("Survived a cross-examination with the card intact")
-            }
-            if (crisisOutcome == "weathered") {
-                add("Weathered a crisis without dropping the line")
-            }
-            if (whipOutcome == "rebel") {
-                add("Rebelled against the whip — gloriously")
+        val approvalUpdates = buildMap {
+            if (verdict != null) put(active.id, newApproval)
+            if (challenger != null && challengerApprovalAfter != null) {
+                put(challenger.id, challengerApprovalAfter)
             }
         }
-        val creditsGained = creditReasons.size
-            .coerceAtMost((2 - pressCreditsOf(active.id)).coerceAtLeast(0))
-        val newCredits = if (creditsGained > 0) {
-            state.pressCredits + (active.id to pressCreditsOf(active.id) + creditsGained)
-        } else state.pressCredits
-
         state = state.copy(
             players = updated,
             nation = newNation,
-            approval = if (verdict != null) state.approval + (active.id to newApproval) else state.approval,
+            approval = state.approval + approvalUpdates,
             blocSupport = mergedBlocs,
             endorsements = newEndorsementsMap,
             dossier = newDossier,
             news = newNews,
-            pressCredits = newCredits,
+            // The court adjourns: clear the turn's trial machinery.
+            pendingVerdict = null,
+            pendingArgument = "",
+            challengerId = null,
+            pendingRebuttal = "",
+            challengeCategory = null,
+            challengeConditions = null,
+            compromiseHeadline = null,
             loading = false,
             loadingKind = null,
             lastResult = AwardResult(
@@ -1073,7 +1324,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 causalChain = verdict?.causalChain.orEmpty(),
                 tradeoff = verdict?.tradeoff.orEmpty(),
                 narration = verdict?.narration.orEmpty(),
-                headlines = verdict?.headlines.orEmpty(),
+                headlines = headlines,
                 consistency = verdict?.consistency,
                 blocReactions = verdict?.blocReactions.orEmpty(),
                 pollDelta = verdict?.pollDelta ?: 0,
@@ -1089,8 +1340,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 bonusResources = grants,
                 milestone = milestone,
                 moodNote = moodNote,
-                pressCreditsGained = creditsGained,
-                pressCreditReasons = creditReasons,
+                clashCategory = trialCategory,
+                clashOutcome = trialOutcome,
+                challengerName = challenger?.name.takeIf { trialOutcome != null },
+                wagerLine = wagerLine,
             ),
             cardsThisRound = state.cardsThisRound + cardIdeology,
             screen = Screen.Result,

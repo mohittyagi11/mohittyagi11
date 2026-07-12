@@ -377,25 +377,36 @@ object Lessons {
         ),
         Lesson(
             id = CROSSEXAM,
-            title = "Cross-examination",
-            scenario = "You rest your case — and the phone goes BACK to the " +
-                "questioner. Every answer ends up in front of its prosecutor — " +
-                "but prosecuting is EARNED: it costs a press credit (📰, shown " +
-                "by every avatar). You start with one; FEATS restock it, max 2: " +
-                "clear a bar of 7+, survive a cross-examination, weather a " +
-                "crisis, or rebel against the whip at strength 7+.",
+            title = "The Champion's Court",
+            scenario = "The judge names the cause your answer served — and the " +
+                "mic passes to that cause's CHAMPION: whoever holds the most " +
+                "kept cards on the line (📣 by their avatar; the runner-up if " +
+                "that's you). Champion a cause and you ARE the press on that " +
+                "topic. If they rise, the court QUALIFIES their attack and " +
+                "posts a predefined wager BEFORE you must answer it.",
             branches = listOf(
                 LessonBranch(
-                    "Cross-examine (1 credit)",
-                    "The questioner takes the floor: 20 seconds to tear the " +
-                        "answer apart, then you get 15 to close. The judge weighs " +
-                        "the WHOLE exchange — and the clash makes the papers.",
+                    "CONTRADICTION — your record betrays you",
+                    "The heaviest charge. Card falls: you −4 approval, they +4 " +
+                        "and +1 resource. Card holds: reversed — you're vindicated.",
                     polarity = "mixed",
                 ),
                 LessonBranch(
-                    "Straight to the judge",
-                    "Free. The questioner waives (or is broke). The argument " +
-                        "stands as given.",
+                    "HERESY — you betrayed the cause you argued",
+                    "Middleweight: ±3 approval and the resource, same both ways.",
+                    polarity = "mixed",
+                ),
+                LessonBranch(
+                    "SMEAR — theatre, thin on substance",
+                    "Cheap shot: +2 if it lands, but −5 backlash if you survive " +
+                        "it. The court prices recklessness into the tariff.",
+                    polarity = "cost",
+                ),
+                LessonBranch(
+                    "COMPROMISE — refuse the wager",
+                    "Settle out of court: no wager paid, but your card is " +
+                        "DEFLECTED to your secondary — and the dodge makes the papers.",
+                    polarity = "mixed",
                 ),
             ),
         ),

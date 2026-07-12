@@ -42,6 +42,7 @@ import com.azadishashn.app.ui.components.Collapsible
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.IdeologyDistributionBar
+import com.azadishashn.app.ui.components.IdeologyDot
 import com.azadishashn.app.ui.components.NationMeter
 import com.azadishashn.app.ui.components.PrimaryCta
 import com.azadishashn.app.ui.components.RankMedallion
@@ -230,13 +231,13 @@ fun StandingsScreen(vm: GameViewModel) {
                                     }
                                 }
                             }
-                            if (s.pressCredits.isNotEmpty()) {
-                                Text(
-                                    "📰${vm.pressCreditsOf(player.id)} ",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = if (vm.pressCreditsOf(player.id) > 0) MaterialTheme.colorScheme.tertiary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                            vm.championsOf(player.id).takeIf { it.isNotEmpty() }?.let { causes ->
+                                Text("📣", style = MaterialTheme.typography.labelMedium)
+                                causes.forEach { cause ->
+                                    Spacer(Modifier.width(2.dp))
+                                    IdeologyDot(cause, size = 8.dp)
+                                }
+                                Spacer(Modifier.width(6.dp))
                             }
                             if (s.approval.containsKey(player.id)) {
                                 Text(

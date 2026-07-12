@@ -155,6 +155,8 @@ private fun BreathingDots() {
 private fun kickerFor(kind: String?): String = when (kind) {
     "twist" -> "RAISING THE STAKES"
     "judge" -> "DELIVERING THE VERDICT"
+    "qualify" -> "QUALIFYING THE CHALLENGE"
+    "clash" -> "RULING THE CLASH"
     else -> "DRAFTING THE SCENARIO"
 }
 
@@ -186,6 +188,26 @@ private fun captionsFor(kind: String?, context: String): List<String> = when (ki
         "Mapping where this stance leads in the long run…",
         "Deciding which ideology your answer truly fed…",
         "Tallying the political capital your argument earned…",
+    )
+    "qualify" -> listOf(
+        "Reading the attack for what it really is…",
+        "Weighing substance against theatre…",
+        "Checking the record for the contradiction claimed…",
+        "Pricing the disagreement before anyone pays it…",
+        "Posting the wager on the courtroom door…",
+        "Measuring the challenge against the nation's mood…",
+        "Deciding whether this is a case or a smear…",
+        "Setting the conditions of trial…",
+    )
+    "clash" -> listOf(
+        "Weighing the exchange, blow by blow…",
+        "Deciding who drew blood at the lectern…",
+        "Re-reading the answer through the challenge…",
+        "Settling the wager the table already saw…",
+        "Choosing tomorrow's front page from tonight's fight…",
+        "Testing whether the case survived its trial…",
+        "Ruling whether the card holds the line…",
+        "Counting who walks away bleeding…",
     )
     else -> listOf(
         "Scouring the archives for a dilemma with no clean answer…",
