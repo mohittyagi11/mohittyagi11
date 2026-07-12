@@ -120,6 +120,16 @@ data class Headline(
     val headline: String = "",
 )
 
+/** One archived front page — THE PAPERS remember every morning after. */
+@Serializable
+data class NewsItem(
+    val round: Int,
+    val playerName: String,     // whose answer made the news
+    val outlet: String,
+    val slant: String = "",
+    val headline: String = "",
+)
+
 /** How one stakeholder bloc received the answer. */
 @Serializable
 data class BlocReaction(
@@ -304,4 +314,6 @@ data class AwardResult(
     val milestone: String = "",
     /** How the round's mood moved the bar for this argument ("" if neutral). */
     val moodNote: String = "",
+    /** True when keeping the card restocked the answerer's press credit. */
+    val pressCreditEarned: Boolean = false,
 )

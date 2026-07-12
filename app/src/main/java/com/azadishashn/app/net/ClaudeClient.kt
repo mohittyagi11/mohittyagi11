@@ -188,6 +188,10 @@ class ClaudeClient(
         val leakLine = if (crisis.isBlank()) "" else
             "\nMID-ARGUMENT, this BREAKING news dropped on the player: \"$crisis\" — they had to " +
                 "absorb it live. Weigh how composedly the answer handled the ambush."
+        // When a cross-examination happened, the papers must cover the fight itself.
+        val clashLine = if (rebuttal.isBlank()) "" else
+            " A cross-examination HAPPENED tonight: at least ONE of the two front pages MUST " +
+                "cover the CLASH itself — name $who, and say who drew blood in the exchange."
         val user = """
             Scenario: ${round.scenario.title} — ${round.scenario.situation}
             Question: ${round.dilemma.question}
@@ -216,7 +220,7 @@ class ClaudeClient(
             8. stance_summary: ONE line recording, for the public record, the position the player took.
             9. headlines: EXACTLY 2 partisan front pages reporting this answer from OPPOSITE outlets
                (invent outlet names that fit the setting; slant = the outlet's leaning). Same answer,
-               two spins — punchy, real-tabloid energy, one flattering and one brutal.
+               two spins — punchy, real-tabloid energy, one flattering and one brutal.$clashLine
             10. consistency: how this answer sits against the player's public record above. verdict:
                first_stand (no record yet) | consistent | evolved (a pivot argued well — reward it) |
                flipflop (a naked U-turn). note: one wry line, as the press would put it.

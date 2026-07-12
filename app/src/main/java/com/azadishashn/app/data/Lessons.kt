@@ -379,19 +379,21 @@ object Lessons {
             id = CROSSEXAM,
             title = "Cross-examination",
             scenario = "You rest your case — and the phone goes BACK to the " +
-                "questioner. Every answer ends up in front of its prosecutor; " +
-                "they decide what happens next.",
+                "questioner. Every answer ends up in front of its prosecutor — " +
+                "but prosecuting is EARNED: it costs a press credit. You start " +
+                "with one; KEEPING a card restocks it (max 2).",
             branches = listOf(
                 LessonBranch(
-                    "Cross-examine",
+                    "Cross-examine (1 credit)",
                     "The questioner takes the floor: 20 seconds to tear the " +
                         "answer apart, then you get 15 to close. The judge weighs " +
-                        "the WHOLE exchange.",
+                        "the WHOLE exchange — and the clash makes the papers.",
                     polarity = "mixed",
                 ),
                 LessonBranch(
                     "Straight to the judge",
-                    "The questioner waives. The argument stands as given.",
+                    "Free. The questioner waives (or is broke). The argument " +
+                        "stands as given.",
                 ),
             ),
         ),

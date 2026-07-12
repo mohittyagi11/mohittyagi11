@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.ImportExport
+import androidx.compose.material.icons.filled.Newspaper
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +38,7 @@ import com.azadishashn.app.ui.components.AnimatedCounter
 import com.azadishashn.app.ui.components.Avatar
 import com.azadishashn.app.ui.components.AzadiScaffold
 import com.azadishashn.app.ui.components.CoachMark
+import com.azadishashn.app.ui.components.Collapsible
 import com.azadishashn.app.ui.components.IconActionButton
 import com.azadishashn.app.ui.components.IdeologyBadge
 import com.azadishashn.app.ui.components.IdeologyDistributionBar
@@ -112,6 +114,44 @@ fun StandingsScreen(vm: GameViewModel) {
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(Dim.itemGap),
             ) {
+                // THE PAPERS — every front page the game has printed, archived
+                // behind a discreet fold for whoever wants the story so far.
+                if (s.news.isNotEmpty()) {
+                    item {
+                        Collapsible(
+                            "The papers (${s.news.size})",
+                            Icons.Filled.Newspaper,
+                            initiallyExpanded = false,
+                        ) {
+                            Column {
+                                s.news.asReversed().forEach { n ->
+                                    Row(Modifier.padding(vertical = 3.dp)) {
+                                        Text(
+                                            "R${n.round}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.tertiary,
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                "“${n.headline}”",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                            Text(
+                                                "${n.outlet} · on ${n.playerName}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // End of game: the honours list + the nation's closing chapter.
                 if (!midGame && s.finished && s.dossier.isNotEmpty()) {
                     item {

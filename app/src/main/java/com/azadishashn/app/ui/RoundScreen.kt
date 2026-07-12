@@ -87,7 +87,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.delay
 
 private enum class RoundPhase { QUESTION, ANSWER, HANDOFF_REBUT, REBUTTAL, HANDOFF_CLOSE, CLOSER }
@@ -335,6 +338,35 @@ private fun RoundBody(vm: GameViewModel) {
         }
     }
 
+    // -- The tripwire watchers, alive through the WHOLE argument --------------
+    // Hoisted out of the ANSWER branch: moving to the rebuttal or closer must
+    // not defuse an armed trap (timebombs used to fizzle for fast answerers).
+    // The word watcher hears the answerer's closer too; resolve() (loading)
+    // finally stands the watchers down.
+    val arguing = phase != RoundPhase.QUESTION && !s.loading
+    val haptics = LocalHapticFeedback.current
+    if (s.tripwireType == "word" && !s.tripwireFired && arguing) {
+        LaunchedEffect(argument, closer) {
+            // Any significant word of the armed text detonates — arming a
+            // whole sentence watches each of its key words.
+            if (com.azadishashn.app.data.Tripwire.matches(s.tripwireWord, "$argument $closer")) {
+                vm.fireTripwire()
+            }
+        }
+    }
+    if (s.tripwireType == "time" && !s.tripwireFired && arguing) {
+        val fuse = remember(roundKey) { (15..50).random() }
+        LaunchedEffect(roundKey) {
+            delay(fuse * 1000L)
+            vm.fireTripwire()
+        }
+    }
+    if (s.tripwireFired) {
+        LaunchedEffect(roundKey) {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
@@ -413,66 +445,39 @@ private fun RoundBody(vm: GameViewModel) {
             questionText = if (translated) "" else round.dilemma.question,
         )
 
-        // Who's watching: the stakeholder blocs that will judge the answer.
-        if (round.blocs.isNotEmpty()) {
-            Spacer(Modifier.height(Dim.tight))
-            Text(
-                "WATCHING: ${round.blocs.joinToString("  ·  ")}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.tertiary,
-            )
-        }
-        // PUBLIC match point: the answerer is one card from a power level — the
-        // whole table (especially the questioner) should know a lunge is coming.
+        // The turn's weather, one wrapping chip row: who's watching, the match
+        // point, the mood's push and pull. Same facts, a third of the height —
+        // the WHY behind each number lives in TONIGHT'S BAR below.
         run {
             val counts = s.activePlayer?.counts.orEmpty()
             val mp = counts.entries.firstOrNull { (_, c) -> c == 1 || c == 3 || c == 5 }
-            if (mp != null) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "⚡ MATCH POINT: ${s.activePlayer?.name} is 1 card from " +
-                        "L${listOf(2, 4, 6).indexOf(mp.value + 1) + 1} ${mp.key}",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = IdeologyTheme.of(mp.key).brand,
-                )
-                CoachMark(Lessons.MATCHPOINT, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
-            }
-        }
-        // The question's mood — the wind the answerer must ride or fight.
-        round.mood?.let { m ->
-            if (m.favors.isNotBlank()) {
-                Spacer(Modifier.height(2.dp))
-                Row {
-                    Text(
-                        "MOOD: ",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "${m.favors} rides the wind (bar −1)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = IdeologyTheme.of(m.favors).brand,
-                    )
-                    Text(
-                        "  ·  ",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "${m.suspects} fights it (bar +1)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = IdeologyTheme.of(m.suspects).brand,
-                    )
+            val m = round.mood?.takeIf { it.favors.isNotBlank() }
+            if (round.blocs.isNotEmpty() || mp != null || m != null) {
+                Spacer(Modifier.height(Dim.tight))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    round.blocs.forEach { bloc ->
+                        InfoChip("👁 $bloc", MaterialTheme.colorScheme.tertiary)
+                    }
+                    if (mp != null) {
+                        InfoChip(
+                            "⚡ MATCH POINT · L${listOf(2, 4, 6).indexOf(mp.value + 1) + 1} ${mp.key}",
+                            IdeologyTheme.of(mp.key).brand,
+                        )
+                    }
+                    if (m != null) {
+                        InfoChip("▼ ${m.favors} rides the wind", IdeologyTheme.of(m.favors).brand)
+                        InfoChip("▲ ${m.suspects} fights it", IdeologyTheme.of(m.suspects).brand)
+                    }
                 }
-                if (m.note.isNotBlank()) {
-                    Text(
-                        m.note,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                if (mp != null) {
+                    CoachMark(Lessons.MATCHPOINT, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
                 }
-                CoachMark(Lessons.MOOD, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
+                if (m != null) {
+                    CoachMark(Lessons.MOOD, vm::hasSeenLesson, vm::markLessonSeen, coachBudget)
+                }
             }
         }
         // TONIGHT'S BAR — the live number each line demands of the answerer,
@@ -495,6 +500,15 @@ private fun RoundBody(vm: GameViewModel) {
         when (phase) {
             RoundPhase.QUESTION -> {
                 Spacer(Modifier.height(Dim.sectionGap))
+                // Yesterday's front page keeps the story rolling into tonight.
+                s.news.lastOrNull()?.let { n ->
+                    Text(
+                        "LAST NIGHT'S PAPERS — ${n.outlet.uppercase()}: “${n.headline}”",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                    Spacer(Modifier.height(Dim.tight))
+                }
                 Text(
                     "${s.questioner?.name}: read this out to ${s.activePlayer?.name}. " +
                         "Twist it to make the easy answer costly, or change it for a fresh scenario.",
@@ -603,31 +617,6 @@ private fun RoundBody(vm: GameViewModel) {
 
             RoundPhase.ANSWER -> {
                 Spacer(Modifier.height(Dim.sectionGap))
-
-                // The tripwire watchers: a landmine word fires the instant it's
-                // typed/dictated; a timebomb at a hidden random moment.
-                val haptics = LocalHapticFeedback.current
-                if (s.tripwireType == "word" && !s.tripwireFired) {
-                    LaunchedEffect(argument) {
-                        // Any significant word of the armed text detonates —
-                        // arming a whole sentence watches each of its key words.
-                        if (com.azadishashn.app.data.Tripwire.matches(s.tripwireWord, argument)) {
-                            vm.fireTripwire()
-                        }
-                    }
-                }
-                if (s.tripwireType == "time" && !s.tripwireFired) {
-                    val fuse = remember(roundKey) { (25..70).random() }
-                    LaunchedEffect(roundKey) {
-                        delay(fuse * 1000L)
-                        vm.fireTripwire()
-                    }
-                }
-                if (s.tripwireFired) {
-                    LaunchedEffect(roundKey) {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    }
-                }
 
                 // The whip's sealed envelope — press & HOLD so no neighbour can peek.
                 if (s.assignedIdeology != null && vm.hasKey) {
@@ -768,7 +757,14 @@ private fun RoundBody(vm: GameViewModel) {
                 PrimaryCta(
                     text = if (vm.hasKey) "Rest my case — pass to ${s.questioner?.name}" else "Resolve",
                     onClick = {
-                        if (vm.hasKey) phase = RoundPhase.HANDOFF_REBUT else vm.resolve(argument)
+                        when {
+                            !vm.hasKey -> vm.resolve(argument)
+                            // The backstop: an unexploded timebomb detonates the
+                            // moment they stand up — the phone rings mid-motion.
+                            // Resting is interrupted once; the next tap proceeds.
+                            s.tripwireType == "time" && !s.tripwireFired -> vm.fireTripwire()
+                            else -> phase = RoundPhase.HANDOFF_REBUT
+                        }
                     },
                     enabled = if (vm.hasKey) argument.isNotBlank() else s.championedOptionId != null,
                 )
@@ -785,16 +781,29 @@ private fun RoundBody(vm: GameViewModel) {
                     force = true,
                 )
                 s.error?.let { ErrorLine(it) }
+                // Cross-examination is EARNED: the prosecutor spends a press
+                // credit (start with 1; keeping a card restocks it, max 2).
+                val prosecutorId = s.questioner?.id ?: -1
+                val credits = vm.pressCreditsOf(prosecutorId)
                 HandoffCard(
                     toName = s.questioner?.name.orEmpty(),
                     role = "YOUR CALL, PROSECUTOR",
                     brief = "${s.activePlayer?.name} rests. You posed this question — " +
                         "cross-examine the answer (20 seconds to tear it apart, they get 15 to close), " +
                         "or send it straight to the judge.",
-                    cta = "Cross-examine",
-                    onTake = { phase = RoundPhase.REBUTTAL },
+                    cta = "Cross-examine (1 credit · you have $credits)",
+                    onTake = {
+                        vm.spendPressCredit(prosecutorId)
+                        phase = RoundPhase.REBUTTAL
+                    },
                     onSkip = { rebuttal = ""; vm.resolve(argument) },
                     skipLabel = "Straight to the judge — resolve now",
+                    ctaEnabled = credits > 0,
+                    ctaNote = if (credits > 0) {
+                        "The clash will make the papers."
+                    } else {
+                        "No standing to cross-examine — KEEP a card on your own turn to earn a press credit."
+                    },
                 )
             }
 
@@ -944,6 +953,8 @@ private fun HandoffCard(
     onTake: () -> Unit,
     onSkip: () -> Unit,
     skipLabel: String,
+    ctaEnabled: Boolean = true,
+    ctaNote: String = "",
 ) {
     Column(
         Modifier.fillMaxWidth().padding(vertical = 40.dp),
@@ -970,9 +981,36 @@ private fun HandoffCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(Dim.sectionGap))
-        PrimaryCta(text = "$cta — $toName", onClick = onTake)
+        PrimaryCta(text = "$cta — $toName", onClick = onTake, enabled = ctaEnabled)
+        if (ctaNote.isNotBlank()) {
+            Text(
+                ctaNote,
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                color = if (ctaEnabled) MaterialTheme.colorScheme.tertiary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+        }
         TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) { Text(skipLabel) }
     }
+}
+
+/** A tiny tinted status chip for the turn's weather row. */
+@Composable
+private fun InfoChip(text: String, tint: Color) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = tint,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(tint.copy(alpha = 0.10f))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    )
 }
 
 @Composable

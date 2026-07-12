@@ -460,13 +460,15 @@ private fun TurnFlowStrip() {
         ChainLink("she rests her case — the phone goes back")
         FlowNode(
             5, "Ravi", 1, "The prosecutor's call",
-            "He posed the question, he decides: cross-examine, or send it " +
-                "straight to the judge. Ravi prosecutes.",
+            "He posed the question, he decides: spend a press credit to " +
+                "cross-examine, or send it straight to the judge. Ravi has a " +
+                "credit (everyone starts with 1; keeping a card restocks it, " +
+                "max 2) — he prosecutes, and the clash will make the papers.",
             LaserBlue,
         )
         FlowFork(
-            "Cross-examine" to "20s rebuttal → Asha closes in 15s",
-            "Straight to the judge" to "the argument stands as given",
+            "Cross-examine (1 credit)" to "20s rebuttal → Asha closes in 15s",
+            "Straight to the judge" to "free — the argument stands as given",
         )
         ChainLink("the judge weighs the whole exchange")
         FlowNode(

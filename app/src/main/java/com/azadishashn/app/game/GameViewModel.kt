@@ -18,6 +18,7 @@ import com.azadishashn.app.model.DossierEntry
 import com.azadishashn.app.model.Epilogue
 import com.azadishashn.app.model.Ideologies
 import com.azadishashn.app.model.NationState
+import com.azadishashn.app.model.NewsItem
 import com.azadishashn.app.model.Player
 import com.azadishashn.app.model.RoundData
 import com.azadishashn.app.model.Scandal
@@ -104,6 +105,10 @@ data class GameState(
     val endorsements: Map<Int, List<String>> = emptyMap(),
     /** Ideologies that received a card in the CURRENT round — neglected fronts decay. */
     val cardsThisRound: List<String> = emptyList(),
+    /** THE PAPERS: every front page the judge has printed, oldest first. */
+    val news: List<NewsItem> = emptyList(),
+    /** playerId -> press credits: spent to cross-examine, earned by keeping a card. */
+    val pressCredits: Map<Int, Int> = emptyMap(),
     // -- The questioner's tripwire (armed secretly during the question phase) --
     /** "word" | "time" | null (not armed). */
     val tripwireType: String? = null,
@@ -306,8 +311,21 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             activeIndex = idx,
             round = 1,
             starterId = firstPlayerId,
+            // Everyone starts with ONE press credit — the right to prosecute
+            // is earned after that (keep a card to restock, cap 2).
+            pressCredits = state.players.associate { it.id to 1 },
         )
         beginTurn()
+    }
+
+    /** Press credits the player can spend on a cross-examination. */
+    fun pressCreditsOf(id: Int): Int = state.pressCredits[id] ?: 0
+
+    /** The questioner stands to prosecute: one credit buys the floor. */
+    fun spendPressCredit(id: Int) {
+        val have = pressCreditsOf(id)
+        if (have <= 0) return
+        state = state.copy(pressCredits = state.pressCredits + (id to have - 1))
     }
 
     // -- Settings ------------------------------------------------------------
@@ -999,6 +1017,18 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             )
         } else state.dossier
 
+        // The papers go to the archive; a kept card restocks the answerer's
+        // press credit (the right to prosecute is earned at the lectern).
+        val newNews = if (verdict != null) {
+            state.news + verdict.headlines.map {
+                NewsItem(state.round, active.name, it.outlet, it.slant, it.headline)
+            }
+        } else state.news
+        val creditEarned = verdict != null && keepPrimary && pressCreditsOf(active.id) < 2
+        val newCredits = if (creditEarned) {
+            state.pressCredits + (active.id to pressCreditsOf(active.id) + 1)
+        } else state.pressCredits
+
         state = state.copy(
             players = updated,
             nation = newNation,
@@ -1006,6 +1036,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             blocSupport = mergedBlocs,
             endorsements = newEndorsementsMap,
             dossier = newDossier,
+            news = newNews,
+            pressCredits = newCredits,
             loading = false,
             loadingKind = null,
             lastResult = AwardResult(
@@ -1039,6 +1071,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 bonusResources = grants,
                 milestone = milestone,
                 moodNote = moodNote,
+                pressCreditEarned = creditEarned,
             ),
             cardsThisRound = state.cardsThisRound + cardIdeology,
             screen = Screen.Result,

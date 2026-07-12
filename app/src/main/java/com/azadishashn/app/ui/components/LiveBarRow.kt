@@ -223,16 +223,17 @@ fun LiveBarRow(
             }
         }
 
-        Spacer(Modifier.height(2.dp))
-        Text(
-            if (acked.isEmpty()) {
-                "A pulsing tile is news you haven't seen — tap it for the WHY and it settles."
-            } else {
-                "The strength each line needs tonight to KEEP its card. Tap a tile for the why; a pulse means it changed."
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        // First-information caption only: once the table has acknowledged any
+        // tile, the row earns its keep without a permanent footnote.
+        if (acked.isEmpty()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "The strength each line needs tonight to KEEP its card. A pulsing tile is " +
+                    "news you haven't seen — tap it for the WHY and it settles.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
